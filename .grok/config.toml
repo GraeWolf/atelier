@@ -1,0 +1,5 @@
+[harness]
+disable_codebase_upload = true
+
+[telemetry]
+trace_upload = false

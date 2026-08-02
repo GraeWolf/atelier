@@ -1,0 +1,15 @@
+# Secrets & keys
+**/*.key
+**/*.pem
+**/*secret*
+**/.env*
+**/private/
+**/keys/
+**/signing/
+
+# Build artifacts (optional – keep agent focused)
+**/out/
+**/build/
+**/iso/
+**/*.iso
+**/*.img
