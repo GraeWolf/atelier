@@ -8,6 +8,7 @@ User-facing documentation shipped with Atelier (or linked from the installed sys
 |-----|--------|
 | [quick-start.md](quick-start.md) | After install |
 | [installer.md](installer.md) | Installing from the live ISO |
+| [nvidia.md](nvidia.md) | Proprietary NVIDIA drivers + Xlibre |
 
 ## Still planned
 

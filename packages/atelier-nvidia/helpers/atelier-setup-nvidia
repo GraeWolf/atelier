@@ -1,0 +1,61 @@
+#!/bin/sh
+# Enable Void nonfree and install proprietary NVIDIA + Atelier glue.
+# Intended for installed systems (or a live session about to install).
+# Usage: sudo atelier-setup-nvidia
+set -eu
+
+log() { printf 'atelier-setup-nvidia: %s\n' "$*"; }
+die() { printf 'atelier-setup-nvidia: error: %s\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "run as root (sudo atelier-setup-nvidia)"
+
+if [ "$(uname -m)" != "x86_64" ]; then
+	die "proprietary NVIDIA packages on Void are x86_64-only"
+fi
+
+# Detect GPU (best-effort)
+if command -v lspci >/dev/null 2>&1; then
+	if lspci -nn 2>/dev/null | grep -qi nvidia; then
+		log "NVIDIA device detected via lspci"
+	else
+		log "warning: no NVIDIA device found via lspci; continuing anyway"
+	fi
+fi
+
+# Enable nonfree repository
+if ! xbps-query -R void-repo-nonfree >/dev/null 2>&1 && \
+	! xbps-query void-repo-nonfree >/dev/null 2>&1; then
+	log "installing void-repo-nonfree"
+	xbps-install -Sy void-repo-nonfree
+else
+	# Ensure package is installed so /usr/share/xbps.d snippet is present
+	xbps-install -Sy void-repo-nonfree 2>/dev/null || true
+fi
+
+# If the host only has the share snippet, mirror into /etc/xbps.d when missing
+if [ -f /usr/share/xbps.d/10-repository-nonfree.conf ] && \
+	[ ! -f /etc/xbps.d/10-repository-nonfree.conf ]; then
+	mkdir -p /etc/xbps.d
+	# void-repo-nonfree usually activates via /usr/share/xbps.d — nothing else needed
+	log "nonfree repository configuration available"
+fi
+
+log "syncing repositories"
+xbps-install -S
+
+log "installing proprietary NVIDIA stack (nvidia) and atelier-nvidia"
+# atelier-nvidia may already be partially installed; force full set
+xbps-install -Sy nvidia atelier-nvidia
+
+log "rebuilding initramfs (best-effort) for nouveau blacklist"
+if command -v dracut >/dev/null 2>&1; then
+	dracut --force || log "warning: dracut failed; reboot may still work"
+elif [ -x /usr/bin/xbps-reconfigure ]; then
+	# linux package triggers usually rebuild initramfs
+	xbps-reconfigure -f linux 2>/dev/null || true
+fi
+
+log "done"
+log "reboot recommended, then start X (startx) or your session"
+log "optional: install Xlibre with  sudo atelier-setup-xlibre"
+log "docs: /usr/share/doc/atelier/nvidia-README.txt"

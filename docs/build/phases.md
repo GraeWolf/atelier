@@ -12,7 +12,7 @@ Phase 1 (MVP) is split into small, reviewable steps. Complete and verify each st
 | 3 | Local personal XBPS repository | Complete |
 | 4 | First bootable live ISO | Complete |
 | 5 | Custom simple GUI installer | Complete |
-| 6 | NVIDIA proprietary support | Not started |
+| 6 | NVIDIA proprietary support | Complete |
 | 7 | Documentation polish | Not started |
 
 ## Step details

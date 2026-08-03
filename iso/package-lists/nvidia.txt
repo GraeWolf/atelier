@@ -1,0 +1,12 @@
+# Optional packages for NVIDIA-focused live/install builds (not the default live.txt).
+# Proprietary drivers are large; default live ISO keeps mesa/X.Org for VM testing.
+# After install on hardware, prefer: sudo atelier-setup-nvidia
+# Or rebuild a specialized ISO with these packages added carefully.
+#
+# Requires Void nonfree repository enabled during mklive (-r .../nonfree).
+
+void-repo-nonfree
+nvidia
+atelier-nvidia
+atelier-xlibre-repo
+pciutils

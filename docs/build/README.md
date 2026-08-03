@@ -14,6 +14,7 @@ This is a core learning goal of the project. Content will grow as each Phase 1 m
 | [personal-repo.md](personal-repo.md) | Build and use the local personal XBPS repository |
 | [live-iso.md](live-iso.md) | Build the live ISO with void-mklive |
 | [installer.md](installer.md) | Graphical installer package and build notes |
+| [nvidia.md](nvidia.md) | Proprietary NVIDIA + Xlibre integration |
 
 ## Config packaging
 

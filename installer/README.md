@@ -12,6 +12,8 @@ Custom **simple** GUI installer for Atelier (not Calamares).
 | Timezone, locale, keymap (text entry) | RAID/LVM |
 | base-system + atelier-desktop + GRUB | Automatic mirror ranking |
 | Personal repo when present on live media | |
+| Optional proprietary NVIDIA (nonfree) | Shipping full nvidia.ko on default live ISO |
+| Optional Xlibre (external repo) | Guaranteed dual-GPU / Optimus polish |
 
 ## Components
 

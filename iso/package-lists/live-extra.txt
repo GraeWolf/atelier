@@ -39,3 +39,4 @@ grub-i386-efi
 setxkbmap
 xrandr
 xdg-utils
+pciutils

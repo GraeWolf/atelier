@@ -1,0 +1,23 @@
+# Template file for 'atelier-xlibre-repo'
+# Enables the external xlibre-void community repository (public key + xbps.d).
+# Does not hard-depend on the `xlibre` package so systems can enable the repo
+# before installing/replacing X.Org.
+pkgname=atelier-xlibre-repo
+version=0.1.0
+revision=1
+create_wrksrc=yes
+short_desc="Atelier Xlibre external repository configuration"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/kmccuddy/atelier"
+
+depends="xbps>=0"
+
+do_install() {
+	vinstall "${FILESDIR}/etc/xbps.d/99-repository-xlibre.conf" 644 etc/xbps.d
+	vinstall "${FILESDIR}/var/db/xbps/keys/00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist" 644 \
+		var/db/xbps/keys
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-xlibre" 755 usr/bin
+	vinstall "${FILESDIR}/usr/share/doc/atelier/xlibre-README.txt" 644 \
+		usr/share/doc/atelier
+}

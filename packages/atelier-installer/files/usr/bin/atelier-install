@@ -10,7 +10,12 @@ TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
 VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
+VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-https://repo-default.voidlinux.org/current/nonfree}"
 ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
+
+# Graphics options (set in step_graphics)
+INSTALL_NVIDIA=0
+INSTALL_XLIBRE=0
 
 # --- helpers ------------------------------------------------------------------
 
@@ -286,9 +291,52 @@ step_identity() {
 	[ -n "$KEYMAP" ] || KEYMAP=us
 }
 
+detect_nvidia_gpu() {
+	if have lspci && lspci -nn 2>/dev/null | grep -qi nvidia; then
+		return 0
+	fi
+	return 1
+}
+
+step_graphics() {
+	INSTALL_NVIDIA=0
+	INSTALL_XLIBRE=0
+
+	if detect_nvidia_gpu; then
+		if ui_confirm "NVIDIA GPU detected.
+
+Install proprietary NVIDIA drivers from Void nonfree
+(and Atelier nvidia config: blacklist nouveau, DRM modeset)?
+
+This is recommended on the primary Atelier desktop.
+Skip for VMs or troubleshooting."; then
+			INSTALL_NVIDIA=1
+		fi
+	else
+		if ui_confirm "No NVIDIA GPU detected via lspci.
+
+Install proprietary NVIDIA drivers anyway?
+(Usually answer No unless this is a mis-detect.)"; then
+			INSTALL_NVIDIA=1
+		fi
+	fi
+
+	if ui_confirm "Install Xlibre display server (PLAN default)?
+
+Uses the external xlibre-void repository and replaces X.Org server.
+You can also run 'sudo atelier-setup-xlibre' later.
+
+Continue with Xlibre install on the target?"; then
+		INSTALL_XLIBRE=1
+	fi
+}
+
 step_summary() {
 	local mode=BIOS
+	local nvidia_s=no xlibre_s=no
 	is_efi && mode=EFI
+	[ "$INSTALL_NVIDIA" -eq 1 ] && nvidia_s=yes
+	[ "$INSTALL_XLIBRE" -eq 1 ] && xlibre_s=yes
 	ui_confirm "Install summary
 
 Disk:       $DISK (WILL BE ERASED)
@@ -299,8 +347,10 @@ Timezone:   $TIMEZONE
 Locale:     $LOCALE
 Keymap:     $KEYMAP
 Target:     $TARGETDIR
+NVIDIA:     $nvidia_s
+Xlibre:     $xlibre_s
 
-Packages:   base-system, linux, atelier-desktop (if personal repo available), GRUB, NetworkManager
+Packages:   base-system, linux, atelier-desktop (if available), GRUB, NetworkManager
 
 Proceed with install?" || exit 0
 }
@@ -392,6 +442,15 @@ install_packages() {
 		REPO_ARGS=(--repository="$VOID_REPO")
 	fi
 
+	# Nonfree for proprietary NVIDIA
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+		REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
+		mkdir -p "$TARGETDIR/usr/share/xbps.d" "$TARGETDIR/etc/xbps.d"
+		printf 'repository=%s\n' "$VOID_NONFREE_REPO" \
+			>"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
+		log "enabled Void nonfree repository for NVIDIA"
+	fi
+
 	# Live etc/xbps.d may have useful mirror settings
 	if [ -d /etc/xbps.d ]; then
 		mkdir -p "$TARGETDIR/etc/xbps.d"
@@ -419,10 +478,32 @@ install_packages() {
 		log "WARN: atelier-desktop not available; installing desktop stack may be incomplete"
 	fi
 
-	# Also install GUI installer toolkit leftovers not needed — skip
+	# Graphics options
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+		pkgs+=(void-repo-nonfree nvidia)
+		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-nvidia >/dev/null 2>&1; then
+			pkgs+=(atelier-nvidia)
+		fi
+	fi
+	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ]; then
+		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-xlibre-repo >/dev/null 2>&1; then
+			pkgs+=(atelier-xlibre-repo)
+		fi
+	fi
 
 	log "xbps-install ${pkgs[*]}"
 	xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
+
+	# Xlibre from external repo after key/conf from atelier-xlibre-repo
+	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ]; then
+		log "installing xlibre from external repository"
+		if [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
+			xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
+				log "WARN: xlibre install failed — run atelier-setup-xlibre after boot"
+		else
+			log "WARN: atelier-xlibre-repo not installed; skip xlibre package for now"
+		fi
+	fi
 
 	xbps-reconfigure -r "$TARGETDIR" -f base-files >>"$LOG" 2>&1 || true
 	chroot "$TARGETDIR" xbps-reconfigure -a >>"$LOG" 2>&1 || true
@@ -525,6 +606,7 @@ main() {
 	step_welcome
 	step_select_disk
 	step_identity
+	step_graphics
 	step_summary
 
 	ui_info "Installing… This may take a long time.

@@ -131,8 +131,17 @@ xbps-query --repository=/usr/share/atelier/repo -Rs atelier
 | Black screen / no X | tty2 login, `startx`, check `xorg-minimal` / mesa in live list |
 | WSL2 cannot show GUI | Export ISO to a VM or hardware |
 
-## Out of scope (later steps)
+## NVIDIA / Xlibre
 
-- Custom graphical installer (Step 5)
-- NVIDIA proprietary + Xlibre (Step 6)
+Default live images stay on **X.Org + mesa**. Proprietary NVIDIA is handled by:
+
+- Installer prompts (`atelier-install`)
+- Post-install: `sudo atelier-setup-nvidia` and optional `sudo atelier-setup-xlibre`
+- Optional package list: `iso/package-lists/nvidia.txt`
+
+See [nvidia.md](nvidia.md).
+
+## Out of scope (later)
+
 - Public hosting of the personal repo
+- Further hardware beyond primary NVIDIA desktop

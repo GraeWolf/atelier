@@ -14,9 +14,12 @@
    - Confirm you understand the disk will be erased
    - Select the target disk
    - Set hostname, user, passwords, timezone, locale, keymap
+   - Optional: proprietary NVIDIA drivers and/or Xlibre
    - Confirm the summary
 5. Wait for packages to download and install (needs network).
 6. Reboot when finished; remove the live medium.
+
+On NVIDIA desktops you can also run `sudo atelier-setup-nvidia` after install if you skipped the option. See [nvidia.md](nvidia.md).
 
 Log file: `/tmp/atelier-install.log`
 

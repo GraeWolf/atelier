@@ -15,7 +15,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 
 **Phase 1 (MVP)** is in progress.
 
-**Current milestone:** Step 5 — Custom simple GUI installer (complete). Next: Step 6 — NVIDIA proprietary support.
+**Current milestone:** Step 6 — NVIDIA proprietary support (complete). Next: Step 7 — documentation polish.
 
 Target features for the first usable version:
 

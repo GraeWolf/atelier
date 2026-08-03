@@ -18,10 +18,18 @@ Verified against the host’s official Void `x86_64` repository (2026-08-02). Na
 
 | PLAN / role | XBPS name | Source | Notes |
 |-------------|-----------|--------|-------|
-| Xlibre | `xlibre` (expected) | **external** | Not in official Void. Community Void packaging: [xlibre-void](https://github.com/xlibre-void) (GitHub releases repo). Exact package set and install steps land when ISO work starts (Step 4+). |
-| X.Org (fallback only) | `xorg-server`, `xorg-minimal` | void | **Not** the Phase 1 target. Documented only for VM testing if Xlibre is awkward early. |
+| Xlibre | `xlibre` | **external** | [xlibre-void](https://github.com/xlibre-void/xlibre). Enable via package `atelier-xlibre-repo` + `atelier-setup-xlibre`. |
+| X.Org (live/fallback) | `xorg-minimal`, `xorg-server` | void | Default live ISO; recovery if Xlibre fails. |
 
-Do **not** list Xlibre as a hard `depends` of `atelier-desktop` until the external repo is integrated and package names are confirmed in-tree.
+### NVIDIA (primary desktop)
+
+| Role | XBPS name | Source | Notes |
+|------|-----------|--------|-------|
+| Enable nonfree | `void-repo-nonfree` | void | Ships nonfree mirror snippet |
+| Proprietary stack | `nvidia` | **void-nonfree** | Pulls libs/dkms/firmware; **x86_64 only** |
+| Atelier glue | `atelier-nvidia` | **personal** | Blacklist nouveau, modeset, xorg snippet, setup script |
+
+See [nvidia.md](nvidia.md).
 
 ## Desktop stack (PLAN §7)
 
@@ -80,6 +88,8 @@ Minimal X11 session helpers (not listed in PLAN, but needed to start/control X):
 | `atelier-config` | Tokyo Night configs → `/etc/skel`, xsessions, bashrc.d | **personal** |
 | `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
 | `atelier-installer` | Whole-disk graphical installer (`atelier-install`) | **personal** |
+| `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |
+| `atelier-xlibre-repo` | Xlibre external repo key + xbps.d | **personal** |
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 

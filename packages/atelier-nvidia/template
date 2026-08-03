@@ -1,0 +1,32 @@
+# Template file for 'atelier-nvidia'
+# Proprietary NVIDIA stack glue for Atelier desktops (Void nonfree + configs).
+# Install only on machines with supported NVIDIA GPUs.
+pkgname=atelier-nvidia
+version=0.1.0
+revision=1
+create_wrksrc=yes
+short_desc="Atelier NVIDIA proprietary driver configuration"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/kmccuddy/atelier"
+
+# void-repo-nonfree enables the nonfree mirror; nvidia is the proprietary stack.
+# Requires x86_64 and Void nonfree repository at install time.
+depends="
+ void-repo-nonfree>=0
+ nvidia>=0
+"
+
+do_install() {
+	vinstall "${FILESDIR}/etc/modprobe.d/atelier-blacklist-nouveau.conf" 644 \
+		etc/modprobe.d
+	vinstall "${FILESDIR}/etc/modprobe.d/atelier-nvidia.conf" 644 \
+		etc/modprobe.d
+	vinstall "${FILESDIR}/etc/modules-load.d/atelier-nvidia.conf" 644 \
+		etc/modules-load.d
+	vinstall "${FILESDIR}/etc/X11/xorg.conf.d/20-nvidia.conf" 644 \
+		etc/X11/xorg.conf.d
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-nvidia" 755 usr/bin
+	vinstall "${FILESDIR}/usr/share/doc/atelier/nvidia-README.txt" 644 \
+		usr/share/doc/atelier
+}

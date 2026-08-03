@@ -39,14 +39,18 @@ done
 command -v xbps-create >/dev/null 2>&1 || atelier_die "xbps-create not found (install xbps)"
 command -v xbps-rindex >/dev/null 2>&1 || atelier_die "xbps-rindex not found (install xbps)"
 
-# Package build order: base → config → desktop → installer
-PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer"
+# Package build order
+PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer atelier-nvidia atelier-xlibre-repo"
 
 if [ "$DO_SYNC" -eq 1 ]; then
 	atelier_info "Syncing configs → atelier-config FILESDIR"
 	"$ROOT/scripts/sync-atelier-config-files.sh"
 	atelier_info "Syncing installer → atelier-installer FILESDIR"
 	"$ROOT/scripts/sync-atelier-installer-files.sh"
+	atelier_info "Syncing NVIDIA configs"
+	"$ROOT/scripts/sync-atelier-nvidia-files.sh"
+	atelier_info "Syncing Xlibre repo configs"
+	"$ROOT/scripts/sync-atelier-xlibre-files.sh"
 fi
 
 if [ -d "$STAGE_ROOT" ]; then
@@ -103,6 +107,8 @@ build_one() {
 	case "$_pkgname" in
 	atelier-config) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-config/files" ;;
 	atelier-installer) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-installer/files" ;;
+	atelier-nvidia) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-nvidia/files" ;;
+	atelier-xlibre-repo) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-xlibre-repo/files" ;;
 	*) stage_empty "$_stage" ;;
 	esac
 

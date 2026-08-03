@@ -9,9 +9,9 @@ This document records the technical choices locked for the Phase 1 MVP.
 | Base | Void Linux | Rolling release |
 | Init | runit | Void default |
 | Packages | XBPS (pure) + personal repo | No foreign package formats |
-| Display server | Xlibre | External / personal packaging as needed |
+| Display server | Xlibre (external repo) | Fallback: X.Org on live/VM |
 | Window manager | bspwm | Single fixed setup |
-| Primary hardware | Desktop PC | NVIDIA proprietary required |
+| Primary hardware | Desktop PC | NVIDIA proprietary (Void nonfree) |
 | Theming | Tokyo Night (dark) | GTK, Qt, terminals, TUIs, rofi, polybar, etc. |
 
 ## ISO and installer
@@ -19,8 +19,9 @@ This document records the technical choices locked for the Phase 1 MVP.
 - **ISO build:** [void-mklive](https://github.com/void-linux/void-mklive) via `scripts/build-iso.sh`
   - Package list: `iso/package-lists/live.txt`
   - Personal repo embedded at `/usr/share/atelier/repo`
-  - First images use X.Org for VM testing; Xlibre later
-  - Docs: `docs/build/live-iso.md`
+  - Default live image: X.Org + mesa (VM-friendly)
+  - NVIDIA/Xlibre: installer options + `atelier-setup-nvidia` / `atelier-setup-xlibre`
+  - Docs: `docs/build/live-iso.md`, `docs/build/nvidia.md`
 - **Installer:** Custom simple GUI installer (`atelier-install`, package `atelier-installer`)
   - Shell + yad (zenity/dialog fallback); whole-disk only; no encryption
   - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`

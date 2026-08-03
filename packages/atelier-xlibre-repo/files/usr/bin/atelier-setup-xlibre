@@ -1,0 +1,35 @@
+#!/bin/sh
+# Enable xlibre-void external repo and install Xlibre (replaces X.Org server).
+# Usage: sudo atelier-setup-xlibre
+set -eu
+
+log() { printf 'atelier-setup-xlibre: %s\n' "$*"; }
+die() { printf 'atelier-setup-xlibre: error: %s\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "run as root (sudo atelier-setup-xlibre)"
+
+# Ensure repo package files exist (key + xbps.d)
+if [ ! -f /etc/xbps.d/99-repository-xlibre.conf ]; then
+	if xbps-query -R atelier-xlibre-repo >/dev/null 2>&1 || \
+		xbps-query --repository=/usr/share/atelier/repo -R atelier-xlibre-repo >/dev/null 2>&1; then
+		log "installing atelier-xlibre-repo"
+		xbps-install -Sy atelier-xlibre-repo || \
+			xbps-install --repository=/usr/share/atelier/repo -Sy atelier-xlibre-repo
+	else
+		die "atelier-xlibre-repo not available; install from personal repo first"
+	fi
+fi
+
+[ -f /etc/xbps.d/99-repository-xlibre.conf ] || die "missing /etc/xbps.d/99-repository-xlibre.conf"
+[ -f /var/db/xbps/keys/00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist ] || \
+	die "missing Xlibre repository public key"
+
+log "syncing repositories (includes Xlibre)"
+xbps-install -S
+
+log "installing xlibre (may replace xorg-server packages)"
+xbps-install -Sy xlibre
+
+log "done — reboot or restart the graphical session"
+log "if X fails, you can reinstall xorg-server from Void and report the issue"
+log "docs: /usr/share/doc/atelier/xlibre-README.txt"
