@@ -39,4 +39,7 @@ packages/**/files.stuck.*
 **/*secret*
 **/.env*
 **/private/
-**/keys/
+# Private key material (do not ignore public xbps repo keys under var/db/xbps/keys)
+**/private-keys/
+**/*.priv
+**/*private*key*
