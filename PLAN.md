@@ -139,4 +139,7 @@ Personal repository integrated
 Fully themed bspwm desktop + complete app list
 Documentation (build + user)
 
+Phase 1 is broken into smaller milestones (Step 0–7). See docs/build/phases.md for status and details.
+Architecture decisions for Phase 1: docs/build/architecture.md
+
 Later phases: Extra hardware support, encryption, further polish, etc.

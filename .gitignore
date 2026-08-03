@@ -1,0 +1,31 @@
+# Build artifacts (populated when package/ISO builds exist)
+*.iso
+*.img
+*.xbps
+*.xbps.sig
+
+# Local repository output (keep layout/docs; ignore generated indices and packages)
+repo/x86_64/
+repo/noarch/
+repo/*-repodata
+repo/*.xbps
+repo/*.xbps.sig
+
+# void-mklive workdirs and caches (if cloned or generated in-tree)
+iso/void-mklive/
+iso/work/
+iso/output/
+iso/*.iso
+
+# Editor / OS noise
+*~
+*.swp
+.DS_Store
+
+# Secrets and credentials — never commit
+*.key
+*.pem
+**/*secret*
+**/.env*
+**/private/
+**/keys/

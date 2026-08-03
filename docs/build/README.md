@@ -1,0 +1,22 @@
+# Build documentation
+
+Detailed, step-by-step documentation for building Atelier (packages, personal repository, live ISO).
+
+This is a core learning goal of the project. Content will grow as each Phase 1 milestone is completed.
+
+## Contents
+
+| Document | Description |
+|----------|-------------|
+| [architecture.md](architecture.md) | Locked technical choices for Phase 1 |
+| [phases.md](phases.md) | Phase 1 milestone breakdown and status |
+
+## Planned topics
+
+- Host requirements (Void on WSL2 and second machine)
+- Building personal packages and the local XBPS repository
+- Building the live ISO with void-mklive
+- Testing in a VM and on hardware
+- Publishing the personal repository (post-MVP or later in Phase 1 docs only)
+
+See also: root [PLAN.md](../../PLAN.md).
