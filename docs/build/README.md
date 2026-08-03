@@ -12,6 +12,7 @@ This is a core learning goal of the project. Content will grow as each Phase 1 m
 | [phases.md](phases.md) | Phase 1 milestone breakdown and status |
 | [package-sources.md](package-sources.md) | PLAN → XBPS name mapping, gaps, external repos |
 | [personal-repo.md](personal-repo.md) | Build and use the local personal XBPS repository |
+| [live-iso.md](live-iso.md) | Build the live ISO with void-mklive |
 
 ## Config packaging
 

@@ -16,9 +16,14 @@ This document records the technical choices locked for the Phase 1 MVP.
 
 ## ISO and installer
 
-- **ISO build:** [void-mklive](https://github.com/void-linux/void-mklive)
-- **Installer:** Custom simple GUI installer (not Calamares)
+- **ISO build:** [void-mklive](https://github.com/void-linux/void-mklive) via `scripts/build-iso.sh`
+  - Package list: `iso/package-lists/live.txt`
+  - Personal repo embedded at `/usr/share/atelier/repo`
+  - First images use X.Org for VM testing; Xlibre later
+  - Docs: `docs/build/live-iso.md`
+- **Installer:** Custom simple GUI installer (not Calamares) — Step 5
   - MVP scope is intentionally limited (e.g. whole-disk install, no encryption)
+  - Until then, live images ship `void-installer`
   - Source lives under `installer/`
 
 ## Configuration delivery

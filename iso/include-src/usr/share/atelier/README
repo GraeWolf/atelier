@@ -1,0 +1,7 @@
+Atelier live image support files.
+
+- Personal XBPS packages: /usr/share/atelier/repo
+- Repository enabled via /etc/xbps.d/10-repository-atelier.conf
+
+Rebuild packages on a development host with:
+  ./scripts/build-repo.sh

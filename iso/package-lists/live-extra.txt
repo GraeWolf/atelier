@@ -1,0 +1,35 @@
+# Extra packages for the live ISO (beyond atelier-desktop).
+# Display: X.Org for VM/first-ISO testing. Xlibre integration is later (Step 6+).
+# See docs/build/package-sources.md
+
+# Display server (temporary until Xlibre wired)
+xorg-minimal
+xorg-fonts
+mesa-dri
+xf86-video-vesa
+xf86-video-fbdev
+xf86-input-libinput
+xf86-input-evdev
+
+# Session / polkit / bus
+dbus
+elogind
+polkit
+
+# Networking (live usability)
+NetworkManager
+dhcpcd
+
+# Temporary void-installer (script bundled from void-mklive into include; not an XBPS pkg)
+# Runtime packages for the installer:
+dialog
+xtools-minimal
+xmirror
+grub
+grub-x86_64-efi
+grub-i386-efi
+
+# Useful live utilities (minimal)
+setxkbmap
+xrandr
+xdg-utils

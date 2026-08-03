@@ -1,0 +1,30 @@
+# Full package set passed to void-mklive -p for the Atelier live ISO.
+# Prefer the personal-repo metapackage; list extras for graphics and live tools.
+#
+# Built by scripts/build-iso.sh from this file + live-extra.txt if needed.
+# Prefer: atelier-desktop (pulls stack + config) from repo/out.
+
+atelier-desktop
+
+# --- live-extra (inlined for a single mklive -p source; keep in sync with live-extra.txt) ---
+xorg-minimal
+xorg-fonts
+mesa-dri
+xf86-video-vesa
+xf86-video-fbdev
+xf86-input-libinput
+xf86-input-evdev
+dbus
+elogind
+polkit
+NetworkManager
+dhcpcd
+dialog
+xtools-minimal
+xmirror
+grub
+grub-x86_64-efi
+grub-i386-efi
+setxkbmap
+xrandr
+xdg-utils

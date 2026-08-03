@@ -2,23 +2,38 @@
 
 Wrappers and assets for building the Atelier live ISO with **void-mklive**.
 
-## Planned contents
+## Quick start
+
+```bash
+# Validate prep (no root)
+./scripts/build-iso.sh --check
+
+# Build ISO (root required)
+sudo ./scripts/build-iso.sh
+```
+
+Full documentation: [docs/build/live-iso.md](../docs/build/live-iso.md)
+
+## Layout
 
 | Path | Role |
 |------|------|
-| `package-lists/` | Package sets passed to mklive / documented for builds |
-| `scripts/` | Helper scripts around void-mklive (clone, invoke, post-hooks) |
-| This README | Build overview (expanded in Step 4) |
+| `package-lists/` | Package sets for mklive / documentation |
+| `include-src/` | Static live overlay (xbps.d, profile.d) |
+| `include/` | Generated `-I` tree (gitignored) |
+| `scripts/postsetup.sh` | mklive `-x` hook |
+| `void-mklive/` | Upstream clone (gitignored) |
+| `work/` | Caches (gitignored) |
+| `output/` | Built `*.iso` (gitignored) |
 
 ## Design notes
 
-- Prefer installing Atelier **XBPS packages** (from the personal repo) over large rootfs overlays
-- Live environment should ideally show the final themed bspwm desktop
-- Personal repository must work in the live system
-- NVIDIA support is a later Phase 1 step; first ISO may target a simpler graphics path for VM testing
+- Prefer **XBPS packages** (`atelier-desktop`) over large rootfs overlays
+- Personal repo is installed into the image at `/usr/share/atelier/repo`
+- First ISO uses **X.Org** for VM testing; **Xlibre** is wired later
+- Temporary **void-installer** until the custom GUI installer (Step 5)
+- Live cmdline includes `live.autologin`; profile.d may `startx` on tty1
 
 ## Safety
 
-Do not burn/write ISOs to disks or run full system package operations without explicit approval. See `AGENTS.md`.
-
-ISO build automation lands in **Phase 1 Step 4**.
+Do not burn/write ISOs to disks without explicit approval. See `AGENTS.md`.

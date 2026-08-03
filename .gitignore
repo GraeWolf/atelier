@@ -16,8 +16,9 @@ repo/**/*.xbps
 repo/**/*-repodata
 repo/**/*.xbps.sig
 
-# void-mklive workdirs and caches (if cloned or generated in-tree)
+# void-mklive workdirs, include staging, caches (generated in-tree)
 iso/void-mklive/
+iso/include/
 iso/work/
 iso/output/
 iso/*.iso
