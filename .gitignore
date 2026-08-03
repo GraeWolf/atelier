@@ -23,6 +23,11 @@ iso/work/
 iso/output/
 iso/*.iso
 
+# Stale FILESDIR left when root-owned trees cannot be deleted
+packages/**/files.stale.*
+packages/**/files.stuck
+packages/**/files.stuck.*
+
 # Editor / OS noise
 *~
 *.swp

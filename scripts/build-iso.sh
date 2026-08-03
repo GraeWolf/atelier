@@ -134,16 +134,27 @@ run_mklive() {
 # --- main ---
 check_host_tools
 
+# Run non-mklive prep as the invoking user when under sudo so package FILESDIR
+# and repo/out are not left root-owned.
+run_as_builder() {
+	if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+		sudo -u "$SUDO_USER" -- "$@"
+	else
+		"$@"
+	fi
+}
+
 if [ "$BUILD_REPO" -eq 1 ]; then
 	atelier_info "Building personal repository"
-	"$ROOT/scripts/build-repo.sh"
+	run_as_builder "$ROOT/scripts/build-repo.sh"
 else
 	atelier_info "Skipping repo build (--skip-repo)"
 fi
 
 check_packages_resolvable
 ensure_mklive
-"$ROOT/scripts/prepare-iso-include.sh" "$MKLIVE_DIR"
+# Clone may be root-owned if ensure_mklive ran as root; prepare copies only.
+run_as_builder "$ROOT/scripts/prepare-iso-include.sh" "$MKLIVE_DIR"
 
 _pkgs=$(list_packages)
 atelier_info "Package list: $_pkgs"

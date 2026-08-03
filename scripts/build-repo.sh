@@ -39,26 +39,35 @@ done
 command -v xbps-create >/dev/null 2>&1 || atelier_die "xbps-create not found (install xbps)"
 command -v xbps-rindex >/dev/null 2>&1 || atelier_die "xbps-rindex not found (install xbps)"
 
-# Package build order: base → config → desktop (desktop depends on the others)
-PACKAGE_ORDER="atelier-base atelier-config atelier-desktop"
+# Package build order: base → config → desktop → installer
+PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer"
 
 if [ "$DO_SYNC" -eq 1 ]; then
 	atelier_info "Syncing configs → atelier-config FILESDIR"
 	"$ROOT/scripts/sync-atelier-config-files.sh"
+	atelier_info "Syncing installer → atelier-installer FILESDIR"
+	"$ROOT/scripts/sync-atelier-installer-files.sh"
 fi
 
-rm -rf "$STAGE_ROOT"
+if [ -d "$STAGE_ROOT" ]; then
+	if ! rm -rf "$STAGE_ROOT" 2>/dev/null; then
+		mv "$STAGE_ROOT" "$STAGE_ROOT.stale.$$" 2>/dev/null || \
+			atelier_die "cannot replace $STAGE_ROOT (root-owned from sudo ISO build?). Fix ownership and retry"
+	fi
+fi
 mkdir -p "$STAGE_ROOT" "$REPO_OUT"
 
-# Stage file tree for atelier-config from packages/atelier-config/files
-stage_atelier_config() {
+# Stage file tree for packages that ship files/
+stage_from_files() {
 	_stage=$1
-	_files="$PACKAGES_DIR/atelier-config/files"
-	[ -d "$_files/etc" ] || atelier_die "missing $_files (run sync-atelier-config-files.sh)"
+	_files=$2
+	[ -d "$_files" ] || atelier_die "missing $_files"
 	mkdir -p "$_stage"
-	# Copy etc/ and usr/ into stage root
-	cp -a "$_files/etc" "$_stage/"
-	cp -a "$_files/usr" "$_stage/"
+	# Copy top-level dirs (etc, usr, …) into stage root
+	for _ent in "$_files"/*; do
+		[ -e "$_ent" ] || continue
+		cp -a "$_ent" "$_stage/"
+	done
 }
 
 # Empty destdir for metapackages
@@ -92,7 +101,8 @@ build_one() {
 	mkdir -p "$_stage"
 
 	case "$_pkgname" in
-	atelier-config) stage_atelier_config "$_stage" ;;
+	atelier-config) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-config/files" ;;
+	atelier-installer) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-installer/files" ;;
 	*) stage_empty "$_stage" ;;
 	esac
 

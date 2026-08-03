@@ -11,12 +11,15 @@ packages/
 │   └── template
 ├── atelier-config/
 │   ├── template
-│   └── files/          # install tree (generated from configs/)
-└── atelier-desktop/
-    └── template
+│   └── files/          # from configs/ via sync script
+├── atelier-desktop/
+│   └── template
+└── atelier-installer/
+    ├── template
+    └── files/          # from installer/ via sync script
 ```
 
-Build integration (xbps-src / local repo) arrives in **Step 3**.
+Build with `./scripts/build-repo.sh` (Step 3 tooling).
 
 ## Current packages
 
@@ -25,13 +28,14 @@ Build integration (xbps-src / local repo) arrives in **Step 3**.
 | `atelier-base` | metapackage | Fonts (FiraCode, Nerd Symbols) + xinit/xsetroot/xrdb |
 | `atelier-config` | files | Tokyo Night session configs → `/etc/skel` + xsessions |
 | `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + `atelier-config` |
+| `atelier-installer` | files | `atelier-install` GUI + desktop entry |
 
 ## Config packaging workflow
 
-1. Edit canonical files under `configs/`
-2. Run `scripts/sync-atelier-config-files.sh`
-3. Commit both `configs/` and `packages/atelier-config/files/`
-4. Rebuild `atelier-config` when the personal repo exists
+1. Edit canonical files under `configs/` or `installer/`
+2. Run `scripts/sync-atelier-config-files.sh` / `scripts/sync-atelier-installer-files.sh`
+3. Commit sources and generated `packages/*/files/`
+4. `./scripts/build-repo.sh`
 
 ## Source of truth for names and gaps
 

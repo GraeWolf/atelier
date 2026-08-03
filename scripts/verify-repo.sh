@@ -50,7 +50,7 @@ ls "$REPO_OUT"/*.xbps >/dev/null 2>&1 || atelier_die "no .xbps files in $REPO_OU
 atelier_info "Querying local repository"
 xbps-query --repository="$REPO_OUT" -Rs 'atelier' || true
 
-for pkg in atelier-base atelier-config atelier-desktop; do
+for pkg in atelier-base atelier-config atelier-desktop atelier-installer; do
 	atelier_info "Metadata: $pkg"
 	xbps-query --repository="$REPO_OUT" -R "$pkg" || atelier_die "cannot query $pkg"
 done

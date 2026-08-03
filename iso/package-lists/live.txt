@@ -5,6 +5,7 @@
 # Prefer: atelier-desktop (pulls stack + config) from repo/out.
 
 atelier-desktop
+atelier-installer
 
 # --- live-extra (inlined for a single mklive -p source; keep in sync with live-extra.txt) ---
 xorg-minimal
@@ -20,6 +21,11 @@ polkit
 NetworkManager
 dhcpcd
 dialog
+yad
+zenity
+parted
+e2fsprogs
+dosfstools
 xtools-minimal
 xmirror
 grub

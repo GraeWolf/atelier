@@ -21,10 +21,10 @@ This document records the technical choices locked for the Phase 1 MVP.
   - Personal repo embedded at `/usr/share/atelier/repo`
   - First images use X.Org for VM testing; Xlibre later
   - Docs: `docs/build/live-iso.md`
-- **Installer:** Custom simple GUI installer (not Calamares) — Step 5
-  - MVP scope is intentionally limited (e.g. whole-disk install, no encryption)
-  - Until then, live images ship `void-installer`
-  - Source lives under `installer/`
+- **Installer:** Custom simple GUI installer (`atelier-install`, package `atelier-installer`)
+  - Shell + yad (zenity/dialog fallback); whole-disk only; no encryption
+  - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`
+  - Live images may still embed `void-installer` as a text fallback
 
 ## Configuration delivery
 

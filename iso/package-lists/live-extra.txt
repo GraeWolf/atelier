@@ -20,9 +20,15 @@ polkit
 NetworkManager
 dhcpcd
 
-# Temporary void-installer (script bundled from void-mklive into include; not an XBPS pkg)
-# Runtime packages for the installer:
+# Atelier GUI installer (atelier-installer package) runtime helpers
 dialog
+yad
+zenity
+parted
+e2fsprogs
+dosfstools
+
+# void-installer fallback + GRUB tools (text installer from void-mklive include)
 xtools-minimal
 xmirror
 grub

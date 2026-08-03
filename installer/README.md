@@ -2,25 +2,55 @@
 
 Custom **simple** GUI installer for Atelier (not Calamares).
 
-## MVP scope (Phase 1 Step 5)
+## MVP scope
 
-Intended minimum flow:
+| Supported | Not supported |
+|-----------|----------------|
+| Whole-disk erase & install | Encryption |
+| EFI (GPT+ESP) and BIOS (GPT+bios_grub) | Custom partition layouts |
+| Hostname, user, root password | Dual-boot / preserve foreign OS |
+| Timezone, locale, keymap (text entry) | RAID/LVM |
+| base-system + atelier-desktop + GRUB | Automatic mirror ranking |
+| Personal repo when present on live media | |
 
-- Disk selection
-- Simple whole-disk install (no full-disk encryption)
-- User creation, hostname, timezone/locale basics
-- Package install from official Void + personal repo
-- Bootloader setup
-- Launch entry from the live desktop (menu / icon)
+## Components
 
-## Non-goals for MVP
+| Path | Role |
+|------|------|
+| `atelier-install` | Main installer script (yad → zenity → dialog) |
+| `atelier-install.desktop` | Live desktop launcher entry |
 
-- Encryption
-- Complex custom partition layouts (unless trivially cheap later)
-- Multi-boot polish beyond basic correctness
+Packaged as **`atelier-installer`** in the personal XBPS repo (`packages/atelier-installer/`).
 
-## Implementation notes
+## Live usage
 
-Toolkit and language will be chosen at implementation time for simplicity and maintainability (e.g. shell + Zenity/YAD, or another lightweight option). Prefer clarity over cleverness.
+1. Boot the live ISO (graphical session)
+2. Run **Install Atelier Linux** from the menu, or:
 
-Work starts in **Phase 1 Step 5**, after a bootable live ISO exists.
+```bash
+atelier-install
+# or
+sudo atelier-install
+```
+
+3. Confirm disk wipe, answer prompts, wait for package download/install
+4. Reboot into the installed system
+
+Log: `/tmp/atelier-install.log`
+
+## Dependencies (runtime)
+
+- `yad` (preferred) or `zenity` or `dialog`
+- `parted`, `e2fsprogs`, `dosfstools` (EFI), `util-linux`
+- `xbps`, `grub` / `grub-x86_64-efi`, `sudo`, `polkit` (for pkexec)
+
+## Design notes
+
+- Prefer clarity over cleverness; heavy logic is sequential shell
+- Re-execs via `pkexec` / `sudo` when not root
+- Copies live personal repo to `/usr/share/atelier/repo` on the target
+- Removes live-only files (`atelier-live.sh`, `void-installer`) from the target
+
+## Temporary fallback
+
+The live image may still embed **void-installer** (text UI) as a fallback. Prefer `atelier-install` for the guided path.

@@ -11,7 +11,7 @@ Phase 1 (MVP) is split into small, reviewable steps. Complete and verify each st
 | 2 | Desktop config packages (Tokyo Night) | Complete |
 | 3 | Local personal XBPS repository | Complete |
 | 4 | First bootable live ISO | Complete |
-| 5 | Custom simple GUI installer | Not started |
+| 5 | Custom simple GUI installer | Complete |
 | 6 | NVIDIA proprietary support | Not started |
 | 7 | Documentation polish | Not started |
 

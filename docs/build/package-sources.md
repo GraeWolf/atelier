@@ -79,6 +79,7 @@ Minimal X11 session helpers (not listed in PLAN, but needed to start/control X):
 | `atelier-base` | Fonts available today + light session glue | **personal** |
 | `atelier-config` | Tokyo Night configs → `/etc/skel`, xsessions, bashrc.d | **personal** |
 | `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
+| `atelier-installer` | Whole-disk graphical installer (`atelier-install`) | **personal** |
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
@@ -87,7 +88,7 @@ Config sources live under `configs/`; sync into the package with `scripts/sync-a
 1. **brave-origin** — personal package required  
 2. **JetBrains Mono** — personal font package required  
 3. **Xlibre** — external repo integration required  
-4. **Installer GUI toolkit** (e.g. `zenity` / `yad`) — Step 5 only; not part of desktop meta  
+4. ~~Installer~~ — addressed by `atelier-installer` (yad/zenity/dialog)  
 
 ## Intentionally not added (minimalism)
 

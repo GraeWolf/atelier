@@ -15,7 +15,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 
 **Phase 1 (MVP)** is in progress.
 
-**Current milestone:** Step 4 — First bootable live ISO (tooling complete). Next: Step 5 — custom simple GUI installer.
+**Current milestone:** Step 5 — Custom simple GUI installer (complete). Next: Step 6 — NVIDIA proprietary support.
 
 Target features for the first usable version:
 

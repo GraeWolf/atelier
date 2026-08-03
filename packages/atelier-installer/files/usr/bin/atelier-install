@@ -1,0 +1,559 @@
+#!/usr/bin/env bash
+# Atelier Linux — simple graphical installer (MVP)
+# Whole-disk only, no encryption. Prefer clarity over features.
+#
+# Must run as root (re-execs via pkexec when available).
+set -euo pipefail
+
+VERSION="0.1.0"
+TITLE="Atelier Installer"
+TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
+LOG="${LOG:-/tmp/atelier-install.log}"
+VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
+ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
+
+# --- helpers ------------------------------------------------------------------
+
+die() {
+	ui_error "$*"
+	exit 1
+}
+
+log() {
+	printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# GUI: prefer yad, fall back to zenity, then dialog
+UI=none
+if have yad; then
+	UI=yad
+elif have zenity; then
+	UI=zenity
+elif have dialog; then
+	UI=dialog
+fi
+
+ui_error() {
+	local msg=$1
+	log "ERROR: $msg"
+	case $UI in
+	yad) yad --title="$TITLE" --window-icon=dialog-error --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
+	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
+	dialog) dialog --title "$TITLE" --msgbox "$msg" 10 60 ;;
+	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
+	esac
+}
+
+ui_info() {
+	local msg=$1
+	case $UI in
+	yad) yad --title="$TITLE" --window-icon=dialog-information --info --text="$msg" --width=480 --button=OK:0 ;;
+	zenity) zenity --title="$TITLE" --info --text="$msg" --width=480 ;;
+	dialog) dialog --title "$TITLE" --msgbox "$msg" 12 60 ;;
+	*) printf '%s\n' "$msg" ;;
+	esac
+}
+
+ui_confirm() {
+	local msg=$1
+	case $UI in
+	yad)
+		yad --title="$TITLE" --window-icon=dialog-question --question --text="$msg" --width=520 \
+			--button="Cancel:1" --button="Continue:0"
+		;;
+	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 ;;
+	dialog) dialog --title "$TITLE" --yesno "$msg" 12 60 ;;
+	*)
+		printf '%s [y/N] ' "$msg" >&2
+		read -r a
+		case $a in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
+		;;
+	esac
+}
+
+ui_entry() {
+	# ui_entry "label" "default"
+	local label=$1 default=${2:-}
+	case $UI in
+	yad)
+		yad --title="$TITLE" --window-icon=dialog-password --entry --text="$label" \
+			--entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0
+		;;
+	zenity) zenity --title="$TITLE" --entry --text="$label" --entry-text="$default" --width=420 ;;
+	dialog)
+		dialog --title "$TITLE" --inputbox "$label" 10 50 "$default" 2>/tmp/atelier-entry.$$
+		cat /tmp/atelier-entry.$$
+		rm -f /tmp/atelier-entry.$$
+		;;
+	*)
+		printf '%s [%s]: ' "$label" "$default" >&2
+		read -r a
+		printf '%s\n' "${a:-$default}"
+		;;
+	esac
+}
+
+ui_password() {
+	local label=$1
+	case $UI in
+	yad)
+		yad --title="$TITLE" --entry --hide-text --text="$label" --width=420 \
+			--button=Cancel:1 --button=OK:0
+		;;
+	zenity) zenity --title="$TITLE" --password --text="$label" --width=420 ;;
+	dialog)
+		dialog --title "$TITLE" --passwordbox "$label" 10 50 2>/tmp/atelier-pw.$$
+		cat /tmp/atelier-pw.$$
+		rm -f /tmp/atelier-pw.$$
+		;;
+	*)
+		printf '%s: ' "$label" >&2
+		stty -echo
+		read -r a
+		stty echo
+		printf '\n' >&2
+		printf '%s\n' "$a"
+		;;
+	esac
+}
+
+ui_list_pick() {
+	# ui_list_pick "text" "col1" "col2" ...  then pairs of id text
+	# Uses yad/zenity list; first field is hidden id when possible
+	local text=$1
+	shift
+	case $UI in
+	yad)
+		yad --title="$TITLE" --list --text="$text" --width=640 --height=360 \
+			--column="Device" --column="Details" --print-column=1 \
+			--button=Cancel:1 --button=OK:0 "$@"
+		;;
+	zenity)
+		zenity --title="$TITLE" --list --text="$text" --width=640 --height=360 \
+			--column="Device" --column="Details" "$@"
+		;;
+	dialog)
+		# Build dialog menu from pairs
+		local items=() i=0
+		while [ $# -ge 2 ]; do
+			items+=("$1" "$2")
+			shift 2
+			i=$((i + 1))
+		done
+		dialog --title "$TITLE" --menu "$text" 20 70 12 "${items[@]}" 2>/tmp/atelier-pick.$$
+		cat /tmp/atelier-pick.$$
+		rm -f /tmp/atelier-pick.$$
+		;;
+	*)
+		printf '%s\n' "$text" >&2
+		printf '%s\n' "$@" >&2
+		read -r a
+		printf '%s\n' "$a"
+		;;
+	esac
+}
+
+ensure_root() {
+	if [ "$(id -u)" -eq 0 ]; then
+		return 0
+	fi
+	if have pkexec; then
+		exec pkexec env \
+			DISPLAY="${DISPLAY:-}" \
+			XAUTHORITY="${XAUTHORITY:-}" \
+			WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
+			"$0" "$@"
+	fi
+	if have sudo; then
+		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR "$0" "$@"
+	fi
+	die "Root privileges required. Run as root, or install polkit (pkexec) / sudo."
+}
+
+is_efi() {
+	[ -d /sys/firmware/efi ]
+}
+
+# disk path /dev/sda + partnum -> /dev/sda1 ; /dev/nvme0n1 -> /dev/nvme0n1p1
+part_path() {
+	local disk=$1 num=$2 base
+	base=$(basename "$disk")
+	if printf '%s' "$base" | grep -qE '[0-9]$'; then
+		printf '%s\n' "${disk}p${num}"
+	else
+		printf '%s\n' "${disk}${num}"
+	fi
+}
+
+list_disks() {
+	# print lines: path|size|model
+	lsblk -dn -b -o NAME,SIZE,TYPE,MODEL 2>/dev/null | while read -r name size type model; do
+		[ "$type" = "disk" ] || continue
+		# skip ram / loop / zram
+		case $name in
+		loop* | ram* | zram* | sr*) continue ;;
+		esac
+		model=${model:-disk}
+		# human size
+		local hs
+		hs=$(lsblk -dn -o SIZE "/dev/$name" 2>/dev/null || echo "?")
+		printf '%s|%s|%s\n' "/dev/$name" "$hs" "$model"
+	done
+}
+
+# --- steps --------------------------------------------------------------------
+
+step_welcome() {
+	ui_confirm "Welcome to Atelier Linux installer (v${VERSION}).
+
+This MVP installer performs a WHOLE-DISK install:
+  • Erases the selected disk completely
+  • Creates a simple partition layout
+  • Installs Void base + Atelier desktop
+  • Installs GRUB bootloader
+
+NOT supported yet:
+  • Full-disk encryption
+  • Custom partition layouts
+  • Dual-boot preservation
+
+Continue?" || exit 0
+}
+
+step_select_disk() {
+	local lines=() args=() path size model
+	while IFS='|' read -r path size model; do
+		[ -n "$path" ] || continue
+		lines+=("$path")
+		args+=("$path" "$size  $model")
+	done < <(list_disks)
+
+	if [ ${#args[@]} -eq 0 ]; then
+		die "No disks found. Attach a target disk and retry."
+	fi
+
+	DISK=$(ui_list_pick "Select the disk to ERASE and install Atelier onto:" "${args[@]}") || exit 0
+	DISK=${DISK//|/}
+	DISK=$(printf '%s' "$DISK" | awk 'NF{print $1; exit}')
+	[ -b "$DISK" ] || die "Invalid disk: $DISK"
+
+	ui_confirm "ALL DATA on $DISK will be DESTROYED.
+
+Type-confirm by continuing only if you are sure.
+
+Selected disk: $DISK" || exit 0
+}
+
+step_identity() {
+	HOSTNAME=$(ui_entry "Hostname:" "atelier") || exit 0
+	HOSTNAME=${HOSTNAME// /}
+	[ -n "$HOSTNAME" ] || HOSTNAME=atelier
+
+	USERNAME=$(ui_entry "Username (regular user):" "user") || exit 0
+	USERNAME=$(printf '%s' "$USERNAME" | tr -cd 'a-z0-9_-' | head -c 32)
+	[ -n "$USERNAME" ] || die "Username required"
+	case $USERNAME in
+	root) die "Username cannot be root" ;;
+	esac
+
+	local p1 p2
+	p1=$(ui_password "Password for $USERNAME:") || exit 0
+	p2=$(ui_password "Confirm password for $USERNAME:") || exit 0
+	[ "$p1" = "$p2" ] || die "Passwords do not match"
+	[ -n "$p1" ] || die "Password cannot be empty"
+	USERPASS=$p1
+
+	p1=$(ui_password "Root password:") || exit 0
+	p2=$(ui_password "Confirm root password:") || exit 0
+	[ "$p1" = "$p2" ] || die "Root passwords do not match"
+	[ -n "$p1" ] || die "Root password cannot be empty"
+	ROOTPASS=$p1
+
+	# Defaults suitable for MVP; advanced locale UI later
+	TIMEZONE=$(ui_entry "Timezone (Zone/City):" "UTC") || exit 0
+	[ -n "$TIMEZONE" ] || TIMEZONE=UTC
+	if [ ! -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
+		log "Timezone $TIMEZONE not found on live system; will still write link if present on target"
+	fi
+
+	LOCALE=$(ui_entry "Locale:" "en_US.UTF-8") || exit 0
+	[ -n "$LOCALE" ] || LOCALE=en_US.UTF-8
+
+	KEYMAP=$(ui_entry "Console keymap:" "us") || exit 0
+	[ -n "$KEYMAP" ] || KEYMAP=us
+}
+
+step_summary() {
+	local mode=BIOS
+	is_efi && mode=EFI
+	ui_confirm "Install summary
+
+Disk:       $DISK (WILL BE ERASED)
+Firmware:   $mode
+Hostname:   $HOSTNAME
+User:       $USERNAME (sudo/wheel)
+Timezone:   $TIMEZONE
+Locale:     $LOCALE
+Keymap:     $KEYMAP
+Target:     $TARGETDIR
+
+Packages:   base-system, linux, atelier-desktop (if personal repo available), GRUB, NetworkManager
+
+Proceed with install?" || exit 0
+}
+
+partition_disk() {
+	log "Partitioning $DISK"
+	# Unmount anything on this disk
+	umount -R "$TARGETDIR" 2>/dev/null || true
+	lsblk -ln -o NAME,MOUNTPOINT "$DISK" 2>/dev/null | while read -r n m; do
+		[ -n "$m" ] && [ "$m" != "" ] || continue
+		umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true
+	done
+
+	wipefs -a "$DISK" 2>/dev/null || true
+	parted -s "$DISK" mklabel gpt
+
+	if is_efi; then
+		parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
+		parted -s "$DISK" set 1 esp on
+		parted -s "$DISK" mkpart root ext4 513MiB 100%
+		PART_ESP=$(part_path "$DISK" 1)
+		PART_ROOT=$(part_path "$DISK" 2)
+		# wait for nodes
+		sleep 1
+		udevadm settle 2>/dev/null || sleep 2
+		mkfs.vfat -F32 -n EFI "$PART_ESP"
+		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
+	else
+		parted -s "$DISK" mkpart bios_grub 1MiB 2MiB
+		parted -s "$DISK" set 1 bios_grub on
+		parted -s "$DISK" mkpart root ext4 2MiB 100%
+		PART_ESP=""
+		PART_ROOT=$(part_path "$DISK" 2)
+		sleep 1
+		udevadm settle 2>/dev/null || sleep 2
+		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
+	fi
+	log "Partitions: esp=${PART_ESP:-none} root=$PART_ROOT"
+}
+
+mount_target() {
+	mkdir -p "$TARGETDIR"
+	mount "$PART_ROOT" "$TARGETDIR"
+	if [ -n "${PART_ESP:-}" ]; then
+		mkdir -p "$TARGETDIR/boot/efi"
+		mount "$PART_ESP" "$TARGETDIR/boot/efi"
+	fi
+	for d in dev proc sys run; do
+		mkdir -p "$TARGETDIR/$d"
+		mount --rbind "/$d" "$TARGETDIR/$d"
+		mount --make-rslave "$TARGETDIR/$d" 2>/dev/null || true
+	done
+}
+
+write_fstab() {
+	local uuid_root uuid_esp
+	uuid_root=$(blkid -s UUID -o value "$PART_ROOT")
+	{
+		printf '# /etc/fstab — generated by atelier-install\n'
+		printf 'UUID=%s / ext4 defaults 0 1\n' "$uuid_root"
+		if [ -n "${PART_ESP:-}" ]; then
+			uuid_esp=$(blkid -s UUID -o value "$PART_ESP")
+			printf 'UUID=%s /boot/efi vfat defaults 0 2\n' "$uuid_esp"
+		fi
+		printf 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0\n'
+	} >"$TARGETDIR/etc/fstab"
+}
+
+install_packages() {
+	log "Installing packages into $TARGETDIR"
+	mkdir -p "$TARGETDIR/var/db/xbps/keys" "$TARGETDIR/usr/share" "$TARGETDIR/etc"
+	if [ -d /var/db/xbps/keys ]; then
+		cp -a /var/db/xbps/keys/. "$TARGETDIR/var/db/xbps/keys/" || true
+	fi
+	if [ -d /usr/share/xbps.d ]; then
+		cp -a /usr/share/xbps.d "$TARGETDIR/usr/share/" || true
+	fi
+
+	# Personal repo on target
+	if [ -d "$ATELIER_REPO_LIVE" ] && ls "$ATELIER_REPO_LIVE"/*.xbps >/dev/null 2>&1; then
+		mkdir -p "$TARGETDIR/usr/share/atelier/repo"
+		cp -a "$ATELIER_REPO_LIVE"/. "$TARGETDIR/usr/share/atelier/repo/"
+		mkdir -p "$TARGETDIR/etc/xbps.d"
+		printf 'repository=/usr/share/atelier/repo\n' >"$TARGETDIR/etc/xbps.d/10-repository-atelier.conf"
+		# Also available during install from live path
+		REPO_ARGS=(--repository="$VOID_REPO" --repository="$ATELIER_REPO_LIVE")
+	else
+		log "WARN: personal repo not found at $ATELIER_REPO_LIVE"
+		REPO_ARGS=(--repository="$VOID_REPO")
+	fi
+
+	# Live etc/xbps.d may have useful mirror settings
+	if [ -d /etc/xbps.d ]; then
+		mkdir -p "$TARGETDIR/etc/xbps.d"
+		# copy non-atelier host snippets if any (mirrors)
+		for f in /etc/xbps.d/*; do
+			[ -f "$f" ] || continue
+			case $f in
+			*atelier*) continue ;;
+			esac
+			cp -a "$f" "$TARGETDIR/etc/xbps.d/" 2>/dev/null || true
+		done
+	fi
+
+	local pkgs=(base-system linux sudo dbus elogind NetworkManager polkit)
+	if is_efi; then
+		pkgs+=(grub-x86_64-efi grub efibootmgr dosfstools)
+	else
+		pkgs+=(grub)
+	fi
+
+	# Atelier metapackage when personal repo is present
+	if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-desktop >/dev/null 2>&1; then
+		pkgs+=(atelier-desktop)
+	else
+		log "WARN: atelier-desktop not available; installing desktop stack may be incomplete"
+	fi
+
+	# Also install GUI installer toolkit leftovers not needed — skip
+
+	log "xbps-install ${pkgs[*]}"
+	xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
+
+	xbps-reconfigure -r "$TARGETDIR" -f base-files >>"$LOG" 2>&1 || true
+	chroot "$TARGETDIR" xbps-reconfigure -a >>"$LOG" 2>&1 || true
+}
+
+configure_system() {
+	log "Configuring system"
+	printf '%s\n' "$HOSTNAME" >"$TARGETDIR/etc/hostname"
+
+	if [ -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
+		ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$TARGETDIR/etc/localtime"
+	elif [ -e "$TARGETDIR/usr/share/zoneinfo/$TIMEZONE" ]; then
+		chroot "$TARGETDIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+	fi
+
+	# locale
+	if [ -f "$TARGETDIR/etc/default/libc-locales" ]; then
+		sed -i -e "/${LOCALE}/s/^#//" "$TARGETDIR/etc/default/libc-locales" || true
+	fi
+	printf 'LANG=%s\n' "$LOCALE" >"$TARGETDIR/etc/locale.conf"
+	chroot "$TARGETDIR" xbps-reconfigure -f glibc-locales >>"$LOG" 2>&1 || true
+
+	# keymap
+	if [ -f "$TARGETDIR/etc/rc.conf" ]; then
+		sed -i -e "s|#\?KEYMAP=.*|KEYMAP=$KEYMAP|g" "$TARGETDIR/etc/rc.conf" || true
+	fi
+	mkdir -p "$TARGETDIR/etc"
+	printf 'KEYMAP=%s\n' "$KEYMAP" >"$TARGETDIR/etc/vconsole.conf"
+
+	# root password
+	printf 'root:%s\n' "$ROOTPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
+
+	# user
+	local groups="wheel,users,audio,video,input,cdrom,optical,storage,network,floppy"
+	chroot "$TARGETDIR" useradd -m -s /bin/bash -G "$groups" "$USERNAME" || true
+	printf '%s:%s\n' "$USERNAME" "$USERPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
+
+	# sudo for wheel
+	if [ -d "$TARGETDIR/etc/sudoers.d" ]; then
+		printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
+		chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
+	fi
+
+	# services
+	enable_sv NetworkManager
+	enable_sv dbus
+	enable_sv elogind
+
+	# fstab
+	write_fstab
+
+	# ensure skel applied if user home empty of configs (useradd -m copies skel)
+	# Live-specific files must not remain
+	rm -f "$TARGETDIR/usr/sbin/void-installer" 2>/dev/null || true
+	rm -f "$TARGETDIR/usr/bin/void-installer" 2>/dev/null || true
+	rm -f "$TARGETDIR/etc/profile.d/atelier-live.sh" 2>/dev/null || true
+}
+
+enable_sv() {
+	local sv=$1
+	if [ -d "$TARGETDIR/etc/sv/$sv" ]; then
+		mkdir -p "$TARGETDIR/etc/runit/runsvdir/default"
+		ln -sfn "/etc/sv/$sv" "$TARGETDIR/etc/runit/runsvdir/default/$sv"
+		log "enabled service $sv"
+	else
+		log "WARN: service $sv not found on target"
+	fi
+}
+
+install_bootloader() {
+	log "Installing GRUB on $DISK"
+	if is_efi; then
+		chroot "$TARGETDIR" grub-install --target=x86_64-efi \
+			--efi-directory=/boot/efi --bootloader-id=atelier --recheck \
+			>>"$LOG" 2>&1
+	else
+		chroot "$TARGETDIR" grub-install --target=i386-pc "$DISK" >>"$LOG" 2>&1
+	fi
+	chroot "$TARGETDIR" grub-mkconfig -o /boot/grub/grub.cfg >>"$LOG" 2>&1
+}
+
+cleanup_mounts() {
+	log "Unmounting target"
+	sync
+	umount -R "$TARGETDIR" 2>/dev/null || umount -Rl "$TARGETDIR" 2>/dev/null || true
+}
+
+# --- main ---------------------------------------------------------------------
+
+main() {
+	: >"$LOG"
+	log "atelier-install $VERSION starting (UI=$UI)"
+	ensure_root "$@"
+
+	have parted || die "parted is required"
+	have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
+	have xbps-install || die "xbps-install is required"
+	have lsblk || die "util-linux (lsblk) is required"
+
+	step_welcome
+	step_select_disk
+	step_identity
+	step_summary
+
+	ui_info "Installing… This may take a long time.
+
+Progress is logged to:
+$LOG
+
+A terminal-free progress UI is limited in this MVP; do not power off."
+
+	# Run the destructive / long section with traps
+	trap 'log "FAILED — see $LOG"; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
+	partition_disk
+	mount_target
+	install_packages
+	configure_system
+	install_bootloader
+	trap - ERR
+	cleanup_mounts
+
+	ui_info "Installation complete.
+
+You can reboot into Atelier Linux now.
+Remove the live medium when rebooting.
+
+Log file: $LOG"
+	if ui_confirm "Reboot now?"; then
+		sync
+		reboot || systemctl reboot 2>/dev/null || telinit 6 2>/dev/null || true
+	fi
+}
+
+main "$@"

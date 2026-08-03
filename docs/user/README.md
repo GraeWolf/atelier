@@ -2,13 +2,17 @@
 
 User-facing documentation shipped with Atelier (or linked from the installed system).
 
-## Planned contents (Phase 1)
+## Contents
 
-- Quick start after install
+| Doc | Topic |
+|-----|--------|
+| [quick-start.md](quick-start.md) | After install |
+| [installer.md](installer.md) | Installing from the live ISO |
+
+## Still planned
+
 - Basic desktop usage (bspwm keybindings overview)
-- Light customization guide (theme-aware, keep it simple)
+- Light customization guide
 - Where configs live and how updates work via XBPS
-
-Content will be written as the desktop and installer stabilize (primarily Steps 2–7).
 
 For project goals and package list, see [PLAN.md](../../PLAN.md).

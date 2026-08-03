@@ -13,10 +13,15 @@ die() {
 }
 
 [ -d "$src" ] || die "missing $src"
-mkdir -p "$dst"
 
 # Fresh install tree under files/ (keep template outside files/)
-rm -rf "$dst/etc" "$dst/usr"
+# Rename-aside if a previous root/sudo build left unremovable files.
+if [ -d "$dst" ]; then
+	if ! rm -rf "$dst" 2>/dev/null; then
+		mv "$dst" "$dst.stale.$$" 2>/dev/null || die "cannot replace $dst (root-owned?). chown/remove and retry"
+	fi
+fi
+mkdir -p "$dst"
 mkdir -p \
 	"$dst/etc/skel/.config/bspwm" \
 	"$dst/etc/skel/.config/sxhkd" \
