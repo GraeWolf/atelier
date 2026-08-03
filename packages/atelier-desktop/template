@@ -1,0 +1,39 @@
+# Template file for 'atelier-desktop'
+# Metapackage: PLAN desktop stack + applications (Void-available).
+# Does not yet depend on: brave-origin, font-jetbrains-mono, xlibre, config pkgs.
+pkgname=atelier-desktop
+version=0.1.0
+revision=1
+metapackage=yes
+short_desc="Atelier desktop meta-package (bspwm stack and apps)"
+maintainer="Atelier Linux <atelier@localhost>"
+license="Public Domain"
+homepage="https://github.com/kmccuddy/atelier"
+
+# Depends on atelier-base + PLAN §7 packages available in official Void.
+# Gaps and external sources: docs/build/package-sources.md
+depends="
+ atelier-base
+ bspwm
+ sxhkd
+ picom
+ polybar
+ rofi
+ ghostty
+ xsecurelock
+ xss-lock
+ starship
+ fastfetch
+ btop
+ nemo
+ neovim
+ thunderbird
+ audacity
+ xfburn
+ ristretto
+ eza
+ bat
+ tldr
+ yt-dlp
+ gcc
+"

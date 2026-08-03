@@ -1,0 +1,40 @@
+# Atelier desktop package list (Phase 1)
+# PLAN §7 desktop stack + applications.
+# Prefer installing via metapackage `atelier-desktop` once the personal
+# repo is built (Step 3). This file is the flat equivalent for mklive -p.
+#
+# Gaps (not listed here until packaged): brave-origin, JetBrains Mono, Xlibre
+# See docs/build/package-sources.md
+
+# --- From base list (also install base.txt or atelier-base) ---
+font-firacode
+nerd-fonts-symbols-ttf
+xinit
+xsetroot
+xrdb
+
+# --- Desktop stack ---
+bspwm
+sxhkd
+picom
+polybar
+rofi
+ghostty
+xsecurelock
+xss-lock
+starship
+fastfetch
+btop
+
+# --- Applications ---
+nemo
+neovim
+thunderbird
+audacity
+xfburn
+ristretto
+eza
+bat
+tldr
+yt-dlp
+gcc

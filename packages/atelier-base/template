@@ -1,0 +1,21 @@
+# Template file for 'atelier-base'
+# Metapackage: fonts + minimal session glue for Atelier.
+# Config files are NOT here (Step 2 config packages).
+pkgname=atelier-base
+version=0.1.0
+revision=1
+metapackage=yes
+short_desc="Atelier base meta-package (fonts and session glue)"
+maintainer="Atelier Linux <atelier@localhost>"
+license="Public Domain"
+homepage="https://github.com/kmccuddy/atelier"
+
+# Official Void packages only (verified Step 1).
+# JetBrains Mono: personal package TBD — see docs/build/package-sources.md
+depends="
+ font-firacode
+ nerd-fonts-symbols-ttf
+ xinit
+ xsetroot
+ xrdb
+"

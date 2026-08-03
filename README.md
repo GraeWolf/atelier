@@ -15,7 +15,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 
 **Phase 1 (MVP)** is in progress.
 
-**Current milestone:** Step 0 — Repository scaffolding (complete). Next: Step 1 — package lists & metapackages.
+**Current milestone:** Step 1 — Package lists & metapackages (complete). Next: Step 2 — desktop config packages.
 
 Target features for the first usable version:
 

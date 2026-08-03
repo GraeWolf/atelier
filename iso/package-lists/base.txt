@@ -1,0 +1,14 @@
+# Atelier base package list (Phase 1)
+# Used as documentation and input for future void-mklive wrappers.
+# One package per line. Lines starting with # are comments.
+#
+# Source: official Void unless noted. See docs/build/package-sources.md
+
+# Fonts (PLAN §8 — available in Void today)
+font-firacode
+nerd-fonts-symbols-ttf
+
+# Minimal X session helpers (not listed in PLAN; required glue)
+xinit
+xsetroot
+xrdb

@@ -38,3 +38,4 @@ Prefer packages over rootfs overlays so the installed system can be updated the 
 - Product goals and package lists: `PLAN.md`
 - Agent / workflow rules: `AGENTS.md`
 - Milestone breakdown: `docs/build/phases.md`
+- Package name mapping and gaps: `docs/build/package-sources.md`
