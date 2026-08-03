@@ -1,0 +1,18 @@
+# Example xbps repository snippet for a *public* Atelier repo (future).
+# When you publish repo/out (or a subset) to a static HTTPS host, point here:
+#
+# repository=https://example.com/atelier/current
+#
+# Layout to publish (rsync/static host):
+#   repo/out/*.xbps
+#   repo/out/*-repodata
+#   (optional) repo/out/*-repodata.sig  if you sign later
+#
+# Signing is optional for MVP. If you sign later:
+#   - keep private keys OUT of git (see AGENTS.md / .gitignore)
+#   - publish only the public key / signature metadata
+#   - document key fingerprint for users
+#
+# This file is an example only — do not enable until a real URL exists.
+
+# repository=https://example.com/atelier/current

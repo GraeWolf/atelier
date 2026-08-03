@@ -13,28 +13,28 @@ homepage="https://github.com/kmccuddy/atelier"
 # Depends on atelier-base + Tokyo Night configs + PLAN §7 Void packages.
 # Gaps and external sources: docs/build/package-sources.md
 depends="
- atelier-base
- atelier-config
- bspwm
- sxhkd
- picom
- polybar
- rofi
- ghostty
- xsecurelock
- xss-lock
- starship
- fastfetch
- btop
- nemo
- neovim
- thunderbird
- audacity
- xfburn
- ristretto
- eza
- bat
- tldr
- yt-dlp
- gcc
+ atelier-base>=0
+ atelier-config>=0
+ bspwm>=0
+ sxhkd>=0
+ picom>=0
+ polybar>=0
+ rofi>=0
+ ghostty>=0
+ xsecurelock>=0
+ xss-lock>=0
+ starship>=0
+ fastfetch>=0
+ btop>=0
+ nemo>=0
+ neovim>=0
+ thunderbird>=0
+ audacity>=0
+ xfburn>=0
+ ristretto>=0
+ eza>=0
+ bat>=0
+ tldr>=0
+ yt-dlp>=0
+ gcc>=0
 "

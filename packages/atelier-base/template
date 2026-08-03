@@ -13,9 +13,9 @@ homepage="https://github.com/kmccuddy/atelier"
 # Official Void packages only (verified Step 1).
 # JetBrains Mono: personal package TBD — see docs/build/package-sources.md
 depends="
- font-firacode
- nerd-fonts-symbols-ttf
- xinit
- xsetroot
- xrdb
+ font-firacode>=0
+ nerd-fonts-symbols-ttf>=0
+ xinit>=0
+ xsetroot>=0
+ xrdb>=0
 "

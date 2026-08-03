@@ -2,29 +2,52 @@
 
 Local / build-time personal repository for Atelier packages.
 
-## Phase 1 approach
+## Quick start
 
-- Build packages from `../packages/` into a local repo tree used by ISO builds and development
-- Layout should be ready for future **public hosting** (static web host, rsync target, etc.) without a major restructure
-- Public hosting is **not** required for MVP; document how to publish when scripts exist
+```bash
+# from monorepo root
+./scripts/build-repo.sh
+./scripts/verify-repo.sh
 
-## Layout (planned)
+xbps-query --repository=$PWD/repo/out -Rs atelier
+```
+
+Full documentation: [docs/build/personal-repo.md](../docs/build/personal-repo.md)
+
+## Layout
 
 ```
 repo/
-├── conf/           # Repository configuration snippets for xbps
-├── README.md       # This file
-└── (build output)  # Generated; typically gitignored once builds exist
+├── conf/             # xbps.d examples (local + future public URL)
+├── out/              # build output (gitignored): *.xbps, *-repodata
+├── work/             # staging (gitignored)
+└── README.md
 ```
 
-Exact output paths and ignore rules will be defined when the build scripts land (Step 3).
+## Phase 1 approach
+
+- Build packages from `../packages/` into `out/`
+- Layout is ready for later public hosting (publish `out/`)
+- Public hosting is **not** required for MVP
+- Packages are **unsigned** by default (local/dev)
+
+## Enabling the repo
+
+See examples in `conf/`:
+
+| File | Use |
+|------|-----|
+| `10-repository-atelier-local.conf.example` | Absolute path to `repo/out` on a build machine |
+| `10-repository-atelier-public.conf.example` | Future HTTPS URL template |
 
 ## Security
 
 - **Never commit private signing keys, passphrases, or `.env` files**
 - Public keys and documentation may live in-repo; private keys must not
+- `out/` and `work/` are gitignored
 
 ## See also
 
 - [docs/build/architecture.md](../docs/build/architecture.md)
 - [docs/build/phases.md](../docs/build/phases.md)
+- [docs/build/personal-repo.md](../docs/build/personal-repo.md)

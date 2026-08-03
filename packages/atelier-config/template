@@ -13,10 +13,10 @@ homepage="https://github.com/kmccuddy/atelier"
 # Theming helpers + tools referenced by session configs.
 # Desktop stack packages come from atelier-desktop.
 depends="
- atelier-base
- papirus-icon-theme
- qt5ct
- qt6ct
+ atelier-base>=0
+ papirus-icon-theme>=0
+ qt5ct>=0
+ qt6ct>=0
 "
 
 do_install() {

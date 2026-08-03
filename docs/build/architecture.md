@@ -29,8 +29,10 @@ Prefer packages over rootfs overlays so the installed system can be updated the 
 
 ## Personal repository
 
-- **Phase 1:** Local / build-time XBPS repository under `repo/`
-- Layout and docs are written so public hosting (static host, rsync, etc.) can be added later without restructuring
+- **Phase 1:** Local / build-time XBPS repository under `repo/out/`
+- Built with `scripts/build-repo.sh` (`xbps-create` + `xbps-rindex`; unsigned by default)
+- Layout and docs support later public hosting (static host, rsync, etc.) without restructuring
+- See `docs/build/personal-repo.md`
 - **Never commit private signing keys or secrets** (see `AGENTS.md`)
 
 ## Source of truth

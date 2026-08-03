@@ -5,11 +5,16 @@
 *.xbps.sig
 
 # Local repository output (keep layout/docs; ignore generated indices and packages)
+repo/out/
+repo/work/
 repo/x86_64/
 repo/noarch/
 repo/*-repodata
 repo/*.xbps
 repo/*.xbps.sig
+repo/**/*.xbps
+repo/**/*-repodata
+repo/**/*.xbps.sig
 
 # void-mklive workdirs and caches (if cloned or generated in-tree)
 iso/void-mklive/

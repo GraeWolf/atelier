@@ -15,7 +15,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 
 **Phase 1 (MVP)** is in progress.
 
-**Current milestone:** Step 2 — Desktop config packages (complete). Next: Step 3 — local personal XBPS repository.
+**Current milestone:** Step 3 — Local personal XBPS repository (complete). Next: Step 4 — first bootable live ISO.
 
 Target features for the first usable version:
 

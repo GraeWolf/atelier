@@ -1,0 +1,17 @@
+# Example xbps repository snippet for a *local* Atelier repo.
+# Copy to /etc/xbps.d/ and edit the path, or:
+#   sudo cp repo/conf/10-repository-atelier-local.conf.example \
+#     /etc/xbps.d/10-repository-atelier-local.conf
+#
+# Then set the absolute path to this monorepo's repo/out directory:
+#
+# repository=/absolute/path/to/atelier/repo/out
+#
+# After enabling:
+#   sudo xbps-install -S
+#   sudo xbps-install -y atelier-desktop
+#
+# Packages in repo/out are unsigned by default (local/dev). Do not use
+# production signing keys in this repository tree.
+
+repository=/CHANGE/ME/to/atelier/repo/out

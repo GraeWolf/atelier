@@ -11,6 +11,7 @@ This is a core learning goal of the project. Content will grow as each Phase 1 m
 | [architecture.md](architecture.md) | Locked technical choices for Phase 1 |
 | [phases.md](phases.md) | Phase 1 milestone breakdown and status |
 | [package-sources.md](package-sources.md) | PLAN → XBPS name mapping, gaps, external repos |
+| [personal-repo.md](personal-repo.md) | Build and use the local personal XBPS repository |
 
 ## Config packaging
 
