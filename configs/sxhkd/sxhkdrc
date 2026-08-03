@@ -1,0 +1,90 @@
+# Atelier — sxhkd hotkeys for bspwm
+# Super (mod4) is the main modifier. Keep bindings easy to remember.
+
+# --- Terminal / launcher -----------------------------------------------------
+super + Return
+	ghostty
+
+super + d
+	rofi -show drun
+
+super + shift + d
+	rofi -show run
+
+# --- Window close / kill -----------------------------------------------------
+super + w
+	bspc node -c
+
+super + shift + w
+	bspc node -k
+
+# --- Focus (vim-like) --------------------------------------------------------
+super + {h,j,k,l}
+	bspc node -f {west,south,north,east}
+
+super + {Left,Down,Up,Right}
+	bspc node -f {west,south,north,east}
+
+# --- Swap --------------------------------------------------------------------
+super + shift + {h,j,k,l}
+	bspc node -s {west,south,north,east}
+
+# --- Resize (expand/contract) ------------------------------------------------
+super + alt + {h,j,k,l}
+	bspc node -z {left -20 0,bottom 0 20,top 0 -20,right 20 0}
+
+# --- Preselect / split -------------------------------------------------------
+super + ctrl + {h,j,k,l}
+	bspc node -p {west,south,north,east}
+
+super + ctrl + space
+	bspc node -p cancel
+
+# --- State -------------------------------------------------------------------
+super + shift + space
+	bspc node -t floating
+super + f
+	bspc node -t fullscreen
+super + t
+	bspc node -t tiled
+
+# --- Desktops ----------------------------------------------------------------
+super + {1-9,0}
+	bspc desktop -f '^{1-9,10}'
+
+super + shift + {1-9,0}
+	bspc node -d '^{1-9,10}' --follow
+
+# --- Rotate / balance --------------------------------------------------------
+super + r
+	bspc node @/ -R 90
+
+super + equal
+	bspc node @/ -B
+
+# --- Reload configs ----------------------------------------------------------
+super + Escape
+	pkill -USR1 -x sxhkd
+
+super + shift + r
+	bspc wm -r
+
+# --- Lock / quit session -----------------------------------------------------
+super + shift + l
+	xsecurelock
+
+super + shift + q
+	bspc quit
+
+# --- Common apps (PLAN set) --------------------------------------------------
+super + shift + b
+	xdg-open about:blank 2>/dev/null || true
+# Prefer brave when packaged; fall back is intentional for Step 2
+super + b
+	sh -c 'command -v brave-browser >/dev/null && exec brave-browser || command -v brave >/dev/null && exec brave || command -v chromium >/dev/null && exec chromium || exec xdg-open about:blank'
+
+super + e
+	nemo
+
+super + shift + Return
+	ghostty -e neovim

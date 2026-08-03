@@ -1,0 +1,16 @@
+/* Atelier — GTK4 color overrides (Tokyo Night on Adwaita-dark) */
+
+@define-color atelier_bg #1a1b26;
+@define-color atelier_bg_alt #292e42;
+@define-color atelier_fg #c0caf5;
+@define-color atelier_blue #7aa2f7;
+
+window {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+headerbar {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}

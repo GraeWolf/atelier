@@ -1,6 +1,6 @@
 # Template file for 'atelier-desktop'
 # Metapackage: PLAN desktop stack + applications (Void-available).
-# Does not yet depend on: brave-origin, font-jetbrains-mono, xlibre, config pkgs.
+# Does not yet depend on: brave-origin, font-jetbrains-mono, xlibre.
 pkgname=atelier-desktop
 version=0.1.0
 revision=1
@@ -10,10 +10,11 @@ maintainer="Atelier Linux <atelier@localhost>"
 license="Public Domain"
 homepage="https://github.com/kmccuddy/atelier"
 
-# Depends on atelier-base + PLAN §7 packages available in official Void.
+# Depends on atelier-base + Tokyo Night configs + PLAN §7 Void packages.
 # Gaps and external sources: docs/build/package-sources.md
 depends="
  atelier-base
+ atelier-config
  bspwm
  sxhkd
  picom

@@ -1,0 +1,67 @@
+#!/bin/sh
+# Sync configs/ → packages/atelier-config/files/ for XBPS packaging.
+# Canonical edits live under configs/. Run this before building atelier-config.
+set -eu
+
+root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+src="$root/configs"
+dst="$root/packages/atelier-config/files"
+
+die() {
+	printf '%s\n' "$*" >&2
+	exit 1
+}
+
+[ -d "$src" ] || die "missing $src"
+mkdir -p "$dst"
+
+# Fresh install tree under files/ (keep template outside files/)
+rm -rf "$dst/etc" "$dst/usr"
+mkdir -p \
+	"$dst/etc/skel/.config/bspwm" \
+	"$dst/etc/skel/.config/sxhkd" \
+	"$dst/etc/skel/.config/picom" \
+	"$dst/etc/skel/.config/polybar" \
+	"$dst/etc/skel/.config/rofi" \
+	"$dst/etc/skel/.config/ghostty" \
+	"$dst/etc/skel/.config/fastfetch" \
+	"$dst/etc/skel/.config/btop" \
+	"$dst/etc/skel/.config/gtk-3.0" \
+	"$dst/etc/skel/.config/gtk-4.0" \
+	"$dst/etc/skel/.config/qt5ct/colors" \
+	"$dst/etc/skel/.config/qt6ct/colors" \
+	"$dst/etc/skel/.config/xsecurelock" \
+	"$dst/etc/bash/bashrc.d" \
+	"$dst/usr/share/xsessions" \
+	"$dst/usr/share/doc/atelier"
+
+install -m 755 "$src/bspwm/bspwmrc"              "$dst/etc/skel/.config/bspwm/bspwmrc"
+install -m 644 "$src/sxhkd/sxhkdrc"              "$dst/etc/skel/.config/sxhkd/sxhkdrc"
+install -m 644 "$src/picom/picom.conf"           "$dst/etc/skel/.config/picom/picom.conf"
+install -m 644 "$src/polybar/config.ini"         "$dst/etc/skel/.config/polybar/config.ini"
+install -m 755 "$src/polybar/launch.sh"          "$dst/etc/skel/.config/polybar/launch.sh"
+install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/config.rasi"
+mkdir -p "$dst/etc/skel/.config/rofi/themes"
+install -m 644 "$src/rofi/themes/tokyo-night.rasi" "$dst/etc/skel/.config/rofi/themes/tokyo-night.rasi"
+install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
+install -m 644 "$src/starship/starship.toml"     "$dst/etc/skel/.config/starship.toml"
+install -m 644 "$src/fastfetch/config.jsonc"     "$dst/etc/skel/.config/fastfetch/config.jsonc"
+install -m 644 "$src/btop/btop.conf"             "$dst/etc/skel/.config/btop/btop.conf"
+install -m 644 "$src/gtk/gtk-3.0/settings.ini"   "$dst/etc/skel/.config/gtk-3.0/settings.ini"
+install -m 644 "$src/gtk/gtk-3.0/gtk.css"        "$dst/etc/skel/.config/gtk-3.0/gtk.css"
+install -m 644 "$src/gtk/gtk-4.0/settings.ini"   "$dst/etc/skel/.config/gtk-4.0/settings.ini"
+install -m 644 "$src/gtk/gtk-4.0/gtk.css"        "$dst/etc/skel/.config/gtk-4.0/gtk.css"
+install -m 644 "$src/qt/qt5ct/qt5ct.conf"        "$dst/etc/skel/.config/qt5ct/qt5ct.conf"
+install -m 644 "$src/qt/qt5ct/colors/tokyo-night.conf" \
+	"$dst/etc/skel/.config/qt5ct/colors/tokyo-night.conf"
+install -m 644 "$src/qt/qt6ct/qt6ct.conf"        "$dst/etc/skel/.config/qt6ct/qt6ct.conf"
+install -m 644 "$src/qt/qt6ct/colors/tokyo-night.conf" \
+	"$dst/etc/skel/.config/qt6ct/colors/tokyo-night.conf"
+install -m 644 "$src/xsecurelock/env.sh"         "$dst/etc/skel/.config/xsecurelock/env.sh"
+install -m 755 "$src/session/xinitrc"            "$dst/etc/skel/.xinitrc"
+install -m 644 "$src/session/Xresources"         "$dst/etc/skel/.Xresources"
+install -m 644 "$src/session/atelier.desktop"    "$dst/usr/share/xsessions/atelier.desktop"
+install -m 644 "$src/shell/bashrc.d-atelier.sh"  "$dst/etc/bash/bashrc.d/atelier.sh"
+install -m 644 "$src/colors/tokyo-night.conf"    "$dst/usr/share/doc/atelier/tokyo-night-palette.conf"
+
+printf 'Synced %s → %s\n' "$src" "$dst"

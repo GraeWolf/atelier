@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Atelier
+Comment=Atelier bspwm desktop (Tokyo Night)
+Exec=bspwm
+TryExec=bspwm
+Type=Application
+DesktopNames=Atelier

@@ -15,7 +15,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 
 **Phase 1 (MVP)** is in progress.
 
-**Current milestone:** Step 1 — Package lists & metapackages (complete). Next: Step 2 — desktop config packages.
+**Current milestone:** Step 2 — Desktop config packages (complete). Next: Step 3 — local personal XBPS repository.
 
 Target features for the first usable version:
 

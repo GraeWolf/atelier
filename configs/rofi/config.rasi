@@ -1,0 +1,12 @@
+/* Atelier — rofi main config (Tokyo Night) */
+configuration {
+	modi: "drun,run,window";
+	show-icons: true;
+	icon-theme: "Papirus-Dark";
+	font: "JetBrains Mono 11";
+	drun-display-format: "{name}";
+	disable-history: false;
+	sidebar-mode: false;
+}
+
+@theme "~/.config/rofi/themes/tokyo-night"

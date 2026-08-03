@@ -1,0 +1,73 @@
+# Template file for 'atelier-config'
+# Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
+# Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
+pkgname=atelier-config
+version=0.1.0
+revision=1
+create_wrksrc=yes
+short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/kmccuddy/atelier"
+
+# Theming helpers + tools referenced by session configs.
+# Desktop stack packages come from atelier-desktop.
+depends="
+ atelier-base
+ papirus-icon-theme
+ qt5ct
+ qt6ct
+"
+
+do_install() {
+	# Session configs for new users (/etc/skel)
+	vinstall "${FILESDIR}/etc/skel/.config/bspwm/bspwmrc" 755 \
+		etc/skel/.config/bspwm
+	vinstall "${FILESDIR}/etc/skel/.config/sxhkd/sxhkdrc" 644 \
+		etc/skel/.config/sxhkd
+	vinstall "${FILESDIR}/etc/skel/.config/picom/picom.conf" 644 \
+		etc/skel/.config/picom
+	vinstall "${FILESDIR}/etc/skel/.config/polybar/config.ini" 644 \
+		etc/skel/.config/polybar
+	vinstall "${FILESDIR}/etc/skel/.config/polybar/launch.sh" 755 \
+		etc/skel/.config/polybar
+	vinstall "${FILESDIR}/etc/skel/.config/rofi/config.rasi" 644 \
+		etc/skel/.config/rofi
+	vinstall "${FILESDIR}/etc/skel/.config/rofi/themes/tokyo-night.rasi" 644 \
+		etc/skel/.config/rofi/themes
+	vinstall "${FILESDIR}/etc/skel/.config/ghostty/config" 644 \
+		etc/skel/.config/ghostty
+	vinstall "${FILESDIR}/etc/skel/.config/starship.toml" 644 \
+		etc/skel/.config
+	vinstall "${FILESDIR}/etc/skel/.config/fastfetch/config.jsonc" 644 \
+		etc/skel/.config/fastfetch
+	vinstall "${FILESDIR}/etc/skel/.config/btop/btop.conf" 644 \
+		etc/skel/.config/btop
+	vinstall "${FILESDIR}/etc/skel/.config/gtk-3.0/settings.ini" 644 \
+		etc/skel/.config/gtk-3.0
+	vinstall "${FILESDIR}/etc/skel/.config/gtk-3.0/gtk.css" 644 \
+		etc/skel/.config/gtk-3.0
+	vinstall "${FILESDIR}/etc/skel/.config/gtk-4.0/settings.ini" 644 \
+		etc/skel/.config/gtk-4.0
+	vinstall "${FILESDIR}/etc/skel/.config/gtk-4.0/gtk.css" 644 \
+		etc/skel/.config/gtk-4.0
+	vinstall "${FILESDIR}/etc/skel/.config/qt5ct/qt5ct.conf" 644 \
+		etc/skel/.config/qt5ct
+	vinstall "${FILESDIR}/etc/skel/.config/qt5ct/colors/tokyo-night.conf" 644 \
+		etc/skel/.config/qt5ct/colors
+	vinstall "${FILESDIR}/etc/skel/.config/qt6ct/qt6ct.conf" 644 \
+		etc/skel/.config/qt6ct
+	vinstall "${FILESDIR}/etc/skel/.config/qt6ct/colors/tokyo-night.conf" 644 \
+		etc/skel/.config/qt6ct/colors
+	vinstall "${FILESDIR}/etc/skel/.config/xsecurelock/env.sh" 644 \
+		etc/skel/.config/xsecurelock
+	vinstall "${FILESDIR}/etc/skel/.xinitrc" 755 etc/skel
+	vinstall "${FILESDIR}/etc/skel/.Xresources" 644 etc/skel
+
+	# System-wide
+	vinstall "${FILESDIR}/etc/bash/bashrc.d/atelier.sh" 644 etc/bash/bashrc.d
+	vinstall "${FILESDIR}/usr/share/xsessions/atelier.desktop" 644 \
+		usr/share/xsessions
+	vinstall "${FILESDIR}/usr/share/doc/atelier/tokyo-night-palette.conf" 644 \
+		usr/share/doc/atelier
+}

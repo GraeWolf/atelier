@@ -72,22 +72,22 @@ Minimal X11 session helpers (not listed in PLAN, but needed to start/control X):
 | JetBrains Mono | *(none)* | **gap → personal** | Not in official Void under this name. Add personal `font-jetbrains-mono` (or similar) later. |
 | Nerd Font Symbols | `nerd-fonts-symbols-ttf` | void | Symbols-only; prefer over full `nerd-fonts` for size |
 
-## Metapackages (Atelier personal)
+## Metapackages / config (Atelier personal)
 
 | Package | Role | Source |
 |---------|------|--------|
 | `atelier-base` | Fonts available today + light session glue | **personal** |
-| `atelier-desktop` | Full PLAN desktop stack + apps (minus gaps) | **personal** |
+| `atelier-config` | Tokyo Night configs → `/etc/skel`, xsessions, bashrc.d | **personal** |
+| `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
 
-Config packages (Tokyo Night, bspwmrc, etc.) are **Step 2**, not these metapackages.
+Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
 ## Explicit gaps (track until closed)
 
 1. **brave-origin** — personal package required  
 2. **JetBrains Mono** — personal font package required  
 3. **Xlibre** — external repo integration required  
-4. **atelier-config-*** — Step 2  
-5. **Installer GUI toolkit** (e.g. `zenity` / `yad`) — Step 5 only; not part of desktop meta  
+4. **Installer GUI toolkit** (e.g. `zenity` / `yad`) — Step 5 only; not part of desktop meta  
 
 ## Intentionally not added (minimalism)
 

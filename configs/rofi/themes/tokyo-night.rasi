@@ -1,0 +1,72 @@
+/* Atelier — Tokyo Night theme for rofi */
+* {
+	bg:       #1a1b26;
+	bg-alt:   #292e42;
+	fg:       #c0caf5;
+	fg-alt:   #565f89;
+	blue:     #7aa2f7;
+	magenta:  #bb9af7;
+	red:      #f7768e;
+	green:    #9ece6a;
+
+	background-color: @bg;
+	text-color:       @fg;
+}
+
+window {
+	width: 40%;
+	border: 2px;
+	border-color: @blue;
+	border-radius: 8px;
+	padding: 12px;
+}
+
+mainbox {
+	children: [ inputbar, listview ];
+	spacing: 10px;
+}
+
+inputbar {
+	children: [ prompt, entry ];
+	padding: 8px;
+	background-color: @bg-alt;
+	border-radius: 6px;
+	spacing: 8px;
+}
+
+prompt {
+	text-color: @blue;
+}
+
+entry {
+	placeholder: "Search…";
+	placeholder-color: @fg-alt;
+	text-color: @fg;
+	cursor: text;
+}
+
+listview {
+	lines: 10;
+	scrollbar: false;
+	spacing: 4px;
+}
+
+element {
+	padding: 8px;
+	border-radius: 4px;
+	background-color: transparent;
+	text-color: @fg;
+}
+
+element selected {
+	background-color: @bg-alt;
+	text-color: @blue;
+}
+
+element-icon {
+	size: 1.2em;
+}
+
+element-text {
+	text-color: inherit;
+}

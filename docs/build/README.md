@@ -12,6 +12,10 @@ This is a core learning goal of the project. Content will grow as each Phase 1 m
 | [phases.md](phases.md) | Phase 1 milestone breakdown and status |
 | [package-sources.md](package-sources.md) | PLAN → XBPS name mapping, gaps, external repos |
 
+## Config packaging
+
+Edit `configs/`, then run `scripts/sync-atelier-config-files.sh` before building `atelier-config`.
+
 ## Planned topics
 
 - Host requirements (Void on WSL2 and second machine)
