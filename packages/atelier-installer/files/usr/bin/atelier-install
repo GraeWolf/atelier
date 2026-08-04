@@ -5,7 +5,7 @@
 # Must run as root (re-execs via pkexec when available).
 set -euo pipefail
 
-VERSION="0.1.1"
+VERSION="0.1.2"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -95,13 +95,16 @@ ui_info() {
 }
 
 ui_confirm() {
+	# Returns 0 for Yes, 1 for No/close. Always show explicit Yes/No (not Cancel/Continue).
 	local msg=$1
 	case $UI in
 	yad)
-		yad_run --window-icon=dialog-question --question --text="$msg" --width=520 \
-			--button="Cancel:1" --button="Continue:0"
+		# Do not mix --question with custom buttons in ways that drop choices;
+		# use a plain dialog with two labeled exit codes.
+		yad_run --window-icon=dialog-question --text="$msg" --width=520 \
+			--button="No:1" --button="Yes:0"
 		;;
-	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 ;;
+	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 --ok-label="Yes" --cancel-label="No" ;;
 	dialog) dialog --title "$TITLE" --yesno "$msg" 12 60 ;;
 	*)
 		printf '%s [y/N] ' "$msg" >&2
@@ -341,31 +344,44 @@ step_graphics() {
 	INSTALL_XLIBRE=0
 
 	if detect_nvidia_gpu; then
+		# Only prompt when hardware is present. Clear Yes/No choice.
 		if ui_confirm "NVIDIA GPU detected.
 
-Install proprietary NVIDIA drivers from Void nonfree
-(and Atelier nvidia config: blacklist nouveau, DRM modeset)?
+Install proprietary NVIDIA drivers now?
+  Yes = Void nonfree nvidia + Atelier config
+  No  = skip (you can run: sudo atelier-setup-nvidia later)
 
-This is recommended on the primary Atelier desktop.
-Skip for VMs or troubleshooting."; then
+Recommended on a real NVIDIA desktop. Choose No for testing."; then
 			INSTALL_NVIDIA=1
+			log "user chose INSTALL_NVIDIA=1"
+		else
+			log "user chose INSTALL_NVIDIA=0"
 		fi
 	else
-		if ui_confirm "No NVIDIA GPU detected via lspci.
+		# VMs / non-NVIDIA: do not offer drivers (no ambiguous prompt)
+		INSTALL_NVIDIA=0
+		log "no NVIDIA GPU via lspci; skipping NVIDIA driver install"
+		ui_info "No NVIDIA GPU detected.
 
-Install proprietary NVIDIA drivers anyway?
-(Usually answer No unless this is a mis-detect.)"; then
-			INSTALL_NVIDIA=1
-		fi
+Proprietary NVIDIA drivers will NOT be installed.
+
+On a real NVIDIA PC later, run:
+  sudo atelier-setup-nvidia"
 	fi
 
-	if ui_confirm "Install Xlibre display server (PLAN default)?
+	if ui_confirm "Install Xlibre display server?
 
-Uses the external xlibre-void repository and replaces X.Org server.
-You can also run 'sudo atelier-setup-xlibre' later.
+  Yes = use external xlibre-void repo (PLAN default)
+  No  = keep X.Org from the live/base install
 
-Continue with Xlibre install on the target?"; then
+You can also run later:
+  sudo atelier-setup-xlibre
+
+Choose No for most VMs."; then
 		INSTALL_XLIBRE=1
+		log "user chose INSTALL_XLIBRE=1"
+	else
+		log "user chose INSTALL_XLIBRE=0"
 	fi
 }
 

@@ -39,7 +39,11 @@ Log file: `/tmp/atelier-install.log`
 
 ## NVIDIA / Xlibre during install
 
-The installer can enable **Void nonfree** proprietary NVIDIA packages and/or **Xlibre** from the external community repo. You can also configure drivers later — see [nvidia.md](nvidia.md).
+- **NVIDIA GPU detected:** you get a clear **Yes / No** prompt for proprietary drivers.
+- **No NVIDIA GPU (typical VM):** drivers are **skipped** (no “install anyway?” prompt). Use `sudo atelier-setup-nvidia` later on real hardware.
+- **Xlibre:** separate **Yes / No** prompt (PLAN default display server; usually **No** in VMs).
+
+Details: [nvidia.md](nvidia.md).
 
 ## Fallback
 
