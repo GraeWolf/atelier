@@ -5,6 +5,19 @@
 # Merge X resources
 [ -f "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
 
+# --- XDG runtime dir (required by rofi pid file, pipewire, etc.) -------------
+# Plain startx often skips elogind's /run/user/$UID setup. Create a private
+# runtime directory so clients can write pid/socket files.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR}" ] || [ ! -w "${XDG_RUNTIME_DIR}" ]; then
+	if [ -d "/run/user/$(id -u)" ] && [ -w "/run/user/$(id -u)" ]; then
+		export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+	else
+		export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+		mkdir -p "$XDG_RUNTIME_DIR"
+		chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+	fi
+fi
+
 # Qt: use qt5ct / qt6ct for theming
 export QT_QPA_PLATFORMTHEME=qt5ct
 export QT_STYLE_OVERRIDE=

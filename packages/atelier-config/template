@@ -2,7 +2,7 @@
 # Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.1.2
+version=0.1.3
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
@@ -32,6 +32,8 @@ do_install() {
 	vinstall "${FILESDIR}/etc/skel/.config/polybar/launch.sh" 755 \
 		etc/skel/.config/polybar
 	vinstall "${FILESDIR}/etc/skel/.config/rofi/config.rasi" 644 \
+		etc/skel/.config/rofi
+	vinstall "${FILESDIR}/etc/skel/.config/rofi/atelier-rofi.sh" 755 \
 		etc/skel/.config/rofi
 	vinstall "${FILESDIR}/etc/skel/.config/rofi/themes/tokyo-night.rasi" 644 \
 		etc/skel/.config/rofi/themes

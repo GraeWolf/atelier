@@ -56,6 +56,17 @@ JetBrains Mono is still a planned personal package and is **not** required for a
 sudo xbps-install -S font-firacode nerd-fonts-symbols-ttf
 ```
 
+## Rofi will not open a second time
+
+If Super+d works once then fails with `Failed to create pid file: '/run/user/…/rofi.pid'`:
+
+```bash
+rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/rofi.pid" /tmp/runtime-$(id -u)/rofi.pid
+pkill -x rofi 2>/dev/null || true
+```
+
+Current Atelier configs use `~/.config/rofi/atelier-rofi.sh` to clear stale PIDs and ensure `XDG_RUNTIME_DIR` is writable. Rebuild the ISO (or update `atelier-config` and re-copy skel configs) to pick that up.
+
 ## VMs and “invisible” text
 
 Live ISOs are often tested in QEMU/VirtualBox. If the terminal or rofi looks empty:

@@ -12,8 +12,8 @@ Modifier key: **Super** (Windows / Command key).
 |------|--------|
 | Super+Enter | Terminal (ghostty; falls back to xterm) |
 | Super+Shift+Enter | Terminal with neovim |
-| Super+d | Application launcher (rofi drun) |
-| Super+Shift+d | Run command (rofi run) |
+| Super+d | Application launcher (rofi; second press closes if still open) |
+| Super+Shift+d | Run command (rofi) |
 | Super+e | File manager (nemo) |
 | Super+b | Browser (Brave if packaged; falls back to chromium/xdg-open) |
 

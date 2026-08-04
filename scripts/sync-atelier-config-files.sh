@@ -46,6 +46,7 @@ install -m 644 "$src/picom/picom.conf"           "$dst/etc/skel/.config/picom/pi
 install -m 644 "$src/polybar/config.ini"         "$dst/etc/skel/.config/polybar/config.ini"
 install -m 755 "$src/polybar/launch.sh"          "$dst/etc/skel/.config/polybar/launch.sh"
 install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/config.rasi"
+install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/etc/skel/.config/rofi/atelier-rofi.sh"
 mkdir -p "$dst/etc/skel/.config/rofi/themes"
 install -m 644 "$src/rofi/themes/tokyo-night.rasi" "$dst/etc/skel/.config/rofi/themes/tokyo-night.rasi"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
