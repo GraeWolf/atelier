@@ -7,10 +7,10 @@ super + Return
 	sh -c 'command -v ghostty >/dev/null && exec ghostty || exec xterm'
 
 super + d
-	rofi -show drun -normal-window
+	rofi -show drun
 
 super + shift + d
-	rofi -show run -normal-window
+	rofi -show run
 
 # --- Window close / kill -----------------------------------------------------
 super + w
