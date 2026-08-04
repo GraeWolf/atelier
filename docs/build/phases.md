@@ -1,6 +1,6 @@
 # Phase 1 milestones
 
-Phase 1 (MVP) is split into small, reviewable steps. Complete and verify each step before starting the next.
+Phase 1 (MVP) is split into small, reviewable steps.
 
 ## Status
 
@@ -13,48 +13,52 @@ Phase 1 (MVP) is split into small, reviewable steps. Complete and verify each st
 | 4 | First bootable live ISO | Complete |
 | 5 | Custom simple GUI installer | Complete |
 | 6 | NVIDIA proprietary support | Complete |
-| 7 | Documentation polish | Not started |
+| 7 | Documentation polish | Complete |
 
 ## Step details
 
 ### Step 0 — Repository scaffolding
-Directory layout, docs stubs, README layout overview. No packages or ISO builds.
+Directory layout, docs stubs, README layout overview.
 
 ### Step 1 — Package lists & base metapackages
-Declarative package lists from `PLAN.md` section 7; `atelier-base` / `atelier-desktop` metapackages; note official Void vs personal vs external (Xlibre) sources.
+Declarative package lists from `PLAN.md`; `atelier-base` / `atelier-desktop`; source notes.
 
 ### Step 2 — Desktop config packages
-XBPS packages for bspwm stack and Tokyo Night theming, built from `configs/`.
+Tokyo Night bspwm stack configs shipped as `atelier-config`.
 
 ### Step 3 — Local personal XBPS repository
-Build scripts and `repo/` layout usable at ISO build time; publish-ready structure for later public hosting.
+`scripts/build-repo.sh` → `repo/out/`; publish-ready layout.
 
 ### Step 4 — First bootable live ISO
-void-mklive wrappers under `iso/`; themed live desktop; personal repo integrated. Prefer packages over overlays.
+void-mklive wrappers; personal repo embedded; themed live desktop path.
 
 ### Step 5 — Custom simple GUI installer
-Minimal installer under `installer/`; whole-disk MVP; no encryption.
+`atelier-install` whole-disk MVP (no encryption).
 
 ### Step 6 — NVIDIA proprietary support
-Live and installed paths for proprietary NVIDIA with Xlibre; hardware validation on desktop machine.
+`atelier-nvidia`, `atelier-xlibre-repo`, installer options, setup scripts.
 
 ### Step 7 — Documentation polish
-Finish `docs/build/` and `docs/user/`; mark Phase 1 complete in README when success criteria are met.
+User guides + end-to-end build docs; README status updated.
 
 ## Phase 1 success criteria (from PLAN.md)
 
-- Bootable live ISO
-- Graphical installer
-- NVIDIA proprietary driver support
-- Personal extra repository integrated
-- Fully themed bspwm desktop with complete application list
-- Consistent Tokyo Night theming
-- Basic user documentation + detailed build documentation
+| Criterion | Delivery |
+|-----------|----------|
+| Bootable live ISO | `scripts/build-iso.sh` + docs |
+| Graphical installer | `atelier-installer` / `atelier-install` |
+| NVIDIA proprietary support | nonfree + `atelier-nvidia` + setup/installer |
+| Personal extra repository | `repo/out`, embedded on ISO |
+| Fully themed bspwm desktop | `atelier-desktop` + `atelier-config` |
+| Consistent Tokyo Night theming | configs across stack |
+| Basic user + detailed build docs | `docs/user/`, `docs/build/` |
+
+Remaining gaps (browser package, JetBrains font package, public repo hosting, encryption) are documented in [end-to-end.md](end-to-end.md) and [package-sources.md](package-sources.md).
 
 ## Out of scope for Phase 1
 
-- Full-disk encryption
-- Extra hardware support beyond primary NVIDIA desktop
-- Calamares
-- Public repo hosting (layout and docs only)
-- Additional window managers or desktop environments
+- Full-disk encryption  
+- Extra hardware support beyond primary NVIDIA desktop  
+- Calamares  
+- Public repo hosting (layout and docs only)  
+- Additional window managers or desktop environments  

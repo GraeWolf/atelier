@@ -1,0 +1,86 @@
+# Customization guide
+
+Atelier is opinionated but meant to stay **easy to understand and modify**. Prefer small, documented changes.
+
+## Where configs live
+
+| Area | Path |
+|------|------|
+| Window manager | `~/.config/bspwm/bspwmrc` |
+| Hotkeys | `~/.config/sxhkd/sxhkdrc` |
+| Bar | `~/.config/polybar/` |
+| Launcher | `~/.config/rofi/` |
+| Compositor | `~/.config/picom/picom.conf` |
+| Terminal | `~/.config/ghostty/config` |
+| Prompt | `~/.config/starship.toml` |
+| GTK | `~/.config/gtk-3.0/`, `gtk-4.0/` |
+| Qt | `~/.config/qt5ct/`, `qt6ct/` |
+| Session | `~/.xinitrc`, `~/.Xresources` |
+
+Defaults are installed from **`atelier-config`** into `/etc/skel` for new users. Your home directory copies are yours to edit.
+
+### Upstream source of truth (builders)
+
+In the Git repository, edit `configs/` and rebuild packages — do not treat a single machine as the only copy.
+
+## Tokyo Night palette (reference)
+
+| Role | Hex |
+|------|-----|
+| Background | `#1a1b26` |
+| Foreground | `#c0caf5` |
+| Blue | `#7aa2f7` |
+| Magenta | `#bb9af7` |
+| Red | `#f7768e` |
+| Green | `#9ece6a` |
+| Yellow | `#e0af68` |
+| Cyan | `#7dcfff` |
+| Comment | `#565f89` |
+
+Also documented in `/usr/share/doc/atelier/tokyo-night-palette.conf` when `atelier-config` is installed.
+
+## Safe first edits
+
+1. **Keybindings** — edit `~/.config/sxhkd/sxhkdrc`, then Super+Escape to reload.
+2. **Bar modules** — edit `~/.config/polybar/config.ini`, re-login or re-run launch script.
+3. **Terminal colors/font** — `~/.config/ghostty/config`.
+4. **Wallpaper** — set with a tool of your choice in `bspwmrc` (feh is not required by PLAN; add only if you want it).
+
+## Fonts
+
+- FiraCode: `font-firacode` (Void)
+- Nerd Symbols: `nerd-fonts-symbols-ttf` (Void)
+- JetBrains Mono: referenced in configs; package may be a personal gap until packaged
+
+```bash
+sudo xbps-install -S font-firacode nerd-fonts-symbols-ttf
+```
+
+## Package updates
+
+```bash
+sudo xbps-install -Su
+```
+
+Atelier metapackages:
+
+| Package | Purpose |
+|---------|---------|
+| `atelier-desktop` | Desktop stack + apps |
+| `atelier-config` | Theme and session files |
+| `atelier-nvidia` | Proprietary NVIDIA glue (optional) |
+
+Do not remove `atelier-config` unless you intend to manage all configs yourself.
+
+## What to avoid (MVP philosophy)
+
+- Adding large desktop environments or a second WM “just in case”
+- Unrelated package formats (keep pure XBPS)
+- Full-disk encryption tooling (deferred past MVP)
+- Opaque automation that hides where files live
+
+## Further reading
+
+- [desktop.md](desktop.md) — keybindings and apps  
+- [nvidia.md](nvidia.md) — graphics drivers  
+- [../build/architecture.md](../build/architecture.md) — design choices  

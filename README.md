@@ -11,22 +11,40 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 - Opinionated but easy to understand and modify
 - Clean, elegant aesthetics (Tokyo Night dark theme applied consistently)
 
-## Current Status
+## Current status
 
-**Phase 1 (MVP)** is in progress.
+**Phase 1 (MVP) tooling and documentation are complete** (Steps 0–7).
 
-**Current milestone:** Step 6 — NVIDIA proprietary support (complete). Next: Step 7 — documentation polish.
+What that means in-tree:
 
-Target features for the first usable version:
+- Bootable live ISO build path (void-mklive wrappers)
+- Graphical whole-disk installer (`atelier-install`)
+- Personal XBPS repository build and ISO integration
+- Tokyo Night themed bspwm desktop packages
+- Proprietary NVIDIA + optional Xlibre setup path
+- User documentation and detailed build documentation
 
-- Bootable live ISO with graphical installer
-- NVIDIA proprietary driver support
-- Personal package repository integrated
-- Fully themed bspwm desktop with a carefully chosen application set
-- Basic user documentation and detailed build documentation
+Milestone status: [docs/build/phases.md](docs/build/phases.md)  
+End-to-end build: [docs/build/end-to-end.md](docs/build/end-to-end.md)  
+User quick start: [docs/user/quick-start.md](docs/user/quick-start.md)
 
-Milestone breakdown and status: [docs/build/phases.md](docs/build/phases.md)  
-Architecture decisions: [docs/build/architecture.md](docs/build/architecture.md)
+Known gaps (e.g. Brave personal package, JetBrains Mono package, public repo hosting) are listed in the build docs — not forgotten, just not blocking Phase 1 packaging/docs.
+
+## Quick links
+
+| Audience | Start here |
+|----------|------------|
+| End users | [docs/user/README.md](docs/user/README.md) |
+| Builders | [docs/build/README.md](docs/build/README.md) |
+| Agents / contributors | [AGENTS.md](AGENTS.md), [PLAN.md](PLAN.md) |
+
+### Build a personal repo + ISO (summary)
+
+```bash
+./scripts/build-repo.sh
+./scripts/build-iso.sh --check
+sudo ./scripts/build-iso.sh
+```
 
 ## Repository layout
 
@@ -49,10 +67,15 @@ atelier/
 
 | Area | Choice |
 |------|--------|
+| Base | Void Linux + runit + pure XBPS |
 | ISO | void-mklive |
 | Installer | Custom simple GUI (not Calamares) |
-| Configs | XBPS config packages from `configs/` |
+| WM | bspwm (single fixed setup) |
+| Display | Xlibre (external) with X.Org live/fallback |
+| GPU | NVIDIA proprietary (Void nonfree) on primary desktop |
+| Configs | XBPS packages from `configs/` |
 | Personal repo | Local/build-time first; publish-ready layout |
+| Theme | Tokyo Night dark |
 
 ## Development
 

@@ -35,7 +35,11 @@ Log file: `/tmp/atelier-install.log`
 - Full-disk encryption
 - Custom partitions or dual-boot
 - Automatic mirror selection UI
-- NVIDIA proprietary setup (see later docs / Step 6)
+- Dual-GPU / Optimus polish
+
+## NVIDIA / Xlibre during install
+
+The installer can enable **Void nonfree** proprietary NVIDIA packages and/or **Xlibre** from the external community repo. You can also configure drivers later — see [nvidia.md](nvidia.md).
 
 ## Fallback
 

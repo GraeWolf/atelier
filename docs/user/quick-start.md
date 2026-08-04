@@ -1,14 +1,80 @@
 # Quick start
 
-*Stub — filled in when the live ISO and installer are usable.*
+Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm desktop (Tokyo Night).
 
-## After installation
+## First boot (installed system)
 
-1. Log in and start the graphical session (details TBD).
-2. Open a terminal (ghostty) and try common tools (`btop`, `fastfetch`).
-3. Launch applications via rofi (keybinding TBD).
+1. Log in with the user you created during install.
+2. If you are on a TTY (text console), start the graphical session:
+
+   ```bash
+   startx
+   ```
+
+3. You should see bspwm with polybar (Tokyo Night colors).
+
+### Live medium
+
+On the live ISO, autologin may start X for you. If not, log in (default live user is often `anon` / `voidlinux` from void-mklive) and run `startx`.
+
+To install to disk, see [installer.md](installer.md).
+
+## Everyday basics
+
+| Action | How |
+|--------|-----|
+| Open terminal | **Super+Enter** (ghostty) |
+| App launcher | **Super+d** (rofi) |
+| Run command | **Super+Shift+d** |
+| File manager | **Super+e** (nemo) |
+| Lock screen | **Super+Shift+l** |
+| Quit session | **Super+Shift+q** |
+
+More bindings: [desktop.md](desktop.md).
+
+## Try these
+
+```bash
+fastfetch    # system overview
+btop         # processes / resources
+eza -la      # modern ls (alias: ls / ll)
+```
+
+## NVIDIA desktop
+
+If the display is wrong or you skipped drivers during install:
+
+```bash
+sudo atelier-setup-nvidia
+sudo reboot
+```
+
+Details: [nvidia.md](nvidia.md).
+
+## Customize carefully
+
+Configs live under `~/.config/`. Prefer small edits; see [customization.md](customization.md).
+
+## Updates (XBPS)
+
+```bash
+sudo xbps-install -Su
+```
+
+Atelier packages from the **personal repo** (on the live image or at `/usr/share/atelier/repo` when shipped) can be queried with:
+
+```bash
+xbps-query --repository=/usr/share/atelier/repo -Rs atelier
+```
 
 ## Getting help
 
-- User docs: this directory
-- Project plan: `/usr/share/doc/atelier/` or the Git repository (exact path TBD)
+| Topic | Doc |
+|-------|-----|
+| Install from ISO | [installer.md](installer.md) |
+| Desktop & keys | [desktop.md](desktop.md) |
+| Theming / configs | [customization.md](customization.md) |
+| NVIDIA / Xlibre | [nvidia.md](nvidia.md) |
+| Building Atelier | [../build/README.md](../build/README.md) |
+
+Project plan and package philosophy: the Git repository `PLAN.md`.

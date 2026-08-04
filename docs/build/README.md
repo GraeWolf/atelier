@@ -1,31 +1,42 @@
 # Build documentation
 
-Detailed, step-by-step documentation for building Atelier (packages, personal repository, live ISO).
+Step-by-step documentation for **building** Atelier: packages, personal repository, live ISO, installer, and NVIDIA/Xlibre.
 
-This is a core learning goal of the project. Content will grow as each Phase 1 milestone is completed.
+Learning how the distro is assembled is a core project goal.
 
-## Contents
+## Start here
+
+1. **[end-to-end.md](end-to-end.md)** — full path from clone → ISO → install  
+2. **[phases.md](phases.md)** — Phase 1 milestone status  
+3. **[architecture.md](architecture.md)** — locked technical choices  
+
+## Reference
 
 | Document | Description |
 |----------|-------------|
-| [architecture.md](architecture.md) | Locked technical choices for Phase 1 |
-| [phases.md](phases.md) | Phase 1 milestone breakdown and status |
-| [package-sources.md](package-sources.md) | PLAN → XBPS name mapping, gaps, external repos |
-| [personal-repo.md](personal-repo.md) | Build and use the local personal XBPS repository |
-| [live-iso.md](live-iso.md) | Build the live ISO with void-mklive |
-| [installer.md](installer.md) | Graphical installer package and build notes |
-| [nvidia.md](nvidia.md) | Proprietary NVIDIA + Xlibre integration |
+| [package-sources.md](package-sources.md) | PLAN → XBPS names, gaps, external repos |
+| [personal-repo.md](personal-repo.md) | Build and use `repo/out` |
+| [live-iso.md](live-iso.md) | void-mklive wrappers and live image notes |
+| [installer.md](installer.md) | Graphical installer package notes |
+| [nvidia.md](nvidia.md) | Proprietary NVIDIA + Xlibre |
 
-## Config packaging
+## Config packaging cheatsheet
 
-Edit `configs/`, then run `scripts/sync-atelier-config-files.sh` before building `atelier-config`.
+```bash
+# Edit sources, then rebuild personal packages
+./scripts/sync-atelier-config-files.sh      # configs/ → atelier-config
+./scripts/sync-atelier-installer-files.sh   # installer/
+./scripts/sync-atelier-nvidia-files.sh
+./scripts/sync-atelier-xlibre-files.sh
+./scripts/build-repo.sh
+```
 
-## Planned topics
+Or simply `./scripts/build-repo.sh` (runs syncs by default).
 
-- Host requirements (Void on WSL2 and second machine)
-- Building personal packages and the local XBPS repository
-- Building the live ISO with void-mklive
-- Testing in a VM and on hardware
-- Publishing the personal repository (post-MVP or later in Phase 1 docs only)
+## Host notes
 
-See also: root [PLAN.md](../../PLAN.md).
+- Prefer **Void Linux** as the build host (including WSL2 Void for packaging).
+- ISO generation needs **root** and mklive tools (`xorriso`, `squashfs-tools`, `xz`).
+- Full GUI and NVIDIA validation: VM and/or second (desktop) machine — not WSL2 alone.
+
+See also: root [PLAN.md](../../PLAN.md), user docs in [../user/](../user/).

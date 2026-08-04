@@ -47,3 +47,5 @@ Prefer packages over rootfs overlays so the installed system can be updated the 
 - Agent / workflow rules: `AGENTS.md`
 - Milestone breakdown: `docs/build/phases.md`
 - Package name mapping and gaps: `docs/build/package-sources.md`
+- End-to-end build: `docs/build/end-to-end.md`
+- User documentation: `docs/user/`

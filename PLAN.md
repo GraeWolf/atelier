@@ -141,5 +141,7 @@ Documentation (build + user)
 
 Phase 1 is broken into smaller milestones (Step 0–7). See docs/build/phases.md for status and details.
 Architecture decisions for Phase 1: docs/build/architecture.md
+End-to-end build guide: docs/build/end-to-end.md
+User documentation: docs/user/
 
-Later phases: Extra hardware support, encryption, further polish, etc.
+Later phases: Extra hardware support, encryption, further polish, public repo hosting, remaining package gaps (e.g. brave-origin, JetBrains Mono), etc.
