@@ -1,4 +1,5 @@
 /* Atelier — Tokyo Night theme for rofi */
+/* Avoid fully transparent elements — they break input/visibility with broken compositors */
 * {
 	bg:       #1a1b26;
 	bg-alt:   #292e42;
@@ -17,44 +18,56 @@ window {
 	width: 40%;
 	border: 2px;
 	border-color: @blue;
-	border-radius: 8px;
+	border-radius: 0;
 	padding: 12px;
+	background-color: @bg;
+	transparency: "real";
 }
 
 mainbox {
 	children: [ inputbar, listview ];
 	spacing: 10px;
+	background-color: @bg;
 }
 
 inputbar {
 	children: [ prompt, entry ];
 	padding: 8px;
 	background-color: @bg-alt;
-	border-radius: 6px;
+	border-radius: 0;
 	spacing: 8px;
+	text-color: @fg;
 }
 
 prompt {
+	enabled: true;
+	background-color: transparent;
 	text-color: @blue;
 }
 
 entry {
 	placeholder: "Search…";
 	placeholder-color: @fg-alt;
+	background-color: transparent;
 	text-color: @fg;
 	cursor: text;
+	blink: true;
 }
 
 listview {
 	lines: 10;
 	scrollbar: false;
 	spacing: 4px;
+	background-color: @bg;
+	cycle: true;
+	dynamic: true;
+	fixed-height: true;
 }
 
 element {
 	padding: 8px;
-	border-radius: 4px;
-	background-color: transparent;
+	border-radius: 0;
+	background-color: @bg;
 	text-color: @fg;
 }
 
@@ -65,8 +78,13 @@ element selected {
 
 element-icon {
 	size: 1.2em;
+	background-color: transparent;
+	/* keep icons from eating the whole row in odd font situations */
 }
 
 element-text {
+	background-color: transparent;
 	text-color: inherit;
+	highlight: bold #7aa2f7;
+	vertical-align: 0.5;
 }

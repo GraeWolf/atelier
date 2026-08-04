@@ -10,7 +10,7 @@ Modifier key: **Super** (Windows / Command key).
 
 | Keys | Action |
 |------|--------|
-| Super+Enter | Terminal (ghostty) |
+| Super+Enter | Terminal (ghostty; falls back to xterm) |
 | Super+Shift+Enter | Terminal with neovim |
 | Super+d | Application launcher (rofi drun) |
 | Super+Shift+d | Run command (rofi run) |

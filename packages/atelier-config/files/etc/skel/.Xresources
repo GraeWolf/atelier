@@ -30,7 +30,7 @@
 *.color7:       #a9b1d6
 *.color15:      #c0caf5
 
-*.font:         xft:JetBrains Mono:size=11
+*.font:         xft:Fira Code:size=11
 Xft.dpi:        96
 Xft.antialias:  true
 Xft.hinting:    true

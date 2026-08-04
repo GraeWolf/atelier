@@ -2,14 +2,15 @@
 # Super (mod4) is the main modifier. Keep bindings easy to remember.
 
 # --- Terminal / launcher -----------------------------------------------------
+# Prefer ghostty; fall back to xterm if ghostty fails to start (e.g. odd GL).
 super + Return
-	ghostty
+	sh -c 'command -v ghostty >/dev/null && exec ghostty || exec xterm'
 
 super + d
-	rofi -show drun
+	rofi -show drun -normal-window
 
 super + shift + d
-	rofi -show run
+	rofi -show run -normal-window
 
 # --- Window close / kill -----------------------------------------------------
 super + w
@@ -87,4 +88,4 @@ super + e
 	nemo
 
 super + shift + Return
-	ghostty -e neovim
+	sh -c 'command -v ghostty >/dev/null && exec ghostty -e neovim || exec xterm -e neovim'

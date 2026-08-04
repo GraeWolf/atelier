@@ -6,8 +6,18 @@
 # Hotkeys
 pgrep -x sxhkd >/dev/null || sxhkd &
 
-# Compositor
-pgrep -x picom >/dev/null || picom --config "$HOME/.config/picom/picom.conf" &
+# Compositor — prefer config; fall back to plain xrender if config fails
+if ! pgrep -x picom >/dev/null 2>&1; then
+	_picom_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/picom/picom.conf"
+	if [ -f "$_picom_cfg" ]; then
+		picom --config "$_picom_cfg" -b 2>/tmp/atelier-picom.log \
+			|| picom --backend xrender -b 2>>/tmp/atelier-picom.log \
+			|| true
+	else
+		picom --backend xrender -b 2>/tmp/atelier-picom.log || true
+	fi
+	unset _picom_cfg
+fi
 
 # Status bar
 if [ -x "$HOME/.config/polybar/launch.sh" ]; then

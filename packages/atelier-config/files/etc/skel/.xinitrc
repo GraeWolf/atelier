@@ -14,6 +14,34 @@ export GTK_THEME=Adwaita-dark
 export XCURSOR_THEME=Adwaita
 export XCURSOR_SIZE=24
 
+# --- VM / weak OpenGL help ---------------------------------------------------
+# Ghostty and some GL clients render blank text under broken virtio/vbox GL.
+# Force Mesa software rasterizer in known virtual machines (no-op needed on
+# real GPUs if detection fails closed — we only set this for virt markers).
+if [ -z "${LIBGL_ALWAYS_SOFTWARE:-}" ] && [ -z "${ATELIER_FORCE_HW_GL:-}" ]; then
+	_virt=0
+	if command -v systemd-detect-virt >/dev/null 2>&1; then
+		# Works even without systemd as PID 1 on some systems; ignore failure
+		systemd-detect-virt -q 2>/dev/null && _virt=1
+	fi
+	if [ "$_virt" -eq 0 ] && command -v lspci >/dev/null 2>&1; then
+		if lspci 2>/dev/null | grep -qiE 'Virtio|VMware|VirtualBox|QEMU|Cirrus|Bochs|Standard VGA'; then
+			_virt=1
+		fi
+	fi
+	if [ "$_virt" -eq 0 ] && [ -r /sys/class/dmi/id/product_name ]; then
+		if grep -qiE 'VirtualBox|VMware|QEMU|KVM|Bochs|Cloud|HVM' /sys/class/dmi/id/product_name 2>/dev/null; then
+			_virt=1
+		fi
+	fi
+	if [ "$_virt" -eq 1 ]; then
+		export LIBGL_ALWAYS_SOFTWARE=1
+		export GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}"
+		export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
+	fi
+fi
+unset _virt
+
 # xsecurelock environment
 if [ -f "$HOME/.config/xsecurelock/env.sh" ]; then
 	# shellcheck source=/dev/null

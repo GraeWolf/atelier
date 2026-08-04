@@ -1,8 +1,11 @@
 # Atelier — ghostty (Tokyo Night)
 # https://ghostty.org/docs/config
+#
+# Font: Fira Code is shipped via atelier-base (font-firacode).
+# JetBrains Mono is planned but not yet packaged — do not require it here.
 
-font-family = JetBrains Mono
-font-family-bold = JetBrains Mono
+font-family = Fira Code
+font-family-bold = Fira Code
 font-size = 12
 
 # Tokyo Night colors
@@ -28,6 +31,10 @@ palette = 12=#7aa2f7
 palette = 13=#bb9af7
 palette = 14=#7dcfff
 palette = 15=#c0caf5
+
+# Fully opaque window — transparent terminals + broken compositors hide text
+background-opacity = 1
+minimum-contrast = 1.1
 
 window-padding-x = 8
 window-padding-y = 8

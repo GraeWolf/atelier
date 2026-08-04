@@ -48,13 +48,22 @@ Also documented in `/usr/share/doc/atelier/tokyo-night-palette.conf` when `ateli
 
 ## Fonts
 
-- FiraCode: `font-firacode` (Void)
-- Nerd Symbols: `nerd-fonts-symbols-ttf` (Void)
-- JetBrains Mono: referenced in configs; package may be a personal gap until packaged
+Configs use **Fira Code** (package `font-firacode`) and **Symbols Nerd Font** (`nerd-fonts-symbols-ttf`), both pulled by `atelier-base`.
+
+JetBrains Mono is still a planned personal package and is **not** required for a working desktop.
 
 ```bash
 sudo xbps-install -S font-firacode nerd-fonts-symbols-ttf
 ```
+
+## VMs and “invisible” text
+
+Live ISOs are often tested in QEMU/VirtualBox. If the terminal or rofi looks empty:
+
+1. Rebuild/update with current Atelier configs (picom uses `xrender`; fonts are Fira Code).
+2. Log out and `startx` again so `~/.xinitrc` can enable software OpenGL in VMs.
+3. Emergency terminal: if `xterm` is installed, Super+Enter falls back to it when ghostty fails.
+4. On bare-metal NVIDIA, prefer real drivers (`atelier-setup-nvidia`) and do **not** set `LIBGL_ALWAYS_SOFTWARE=1` (export `ATELIER_FORCE_HW_GL=1` before `startx` if auto-detect misfires).
 
 ## Package updates
 

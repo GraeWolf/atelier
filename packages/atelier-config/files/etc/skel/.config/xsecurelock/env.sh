@@ -1,7 +1,7 @@
 # Atelier — environment for xsecurelock / xss-lock
 # Sourced from ~/.xinitrc (not executed alone).
 
-export XSECURELOCK_FONT="JetBrains Mono:style=Regular:size=14"
+export XSECURELOCK_FONT="Fira Code:style=Regular:size=14"
 export XSECURELOCK_PASSWORD_PROMPT=time_hex
 export XSECURELOCK_SHOW_DATETIME=1
 export XSECURELOCK_DATETIME_FORMAT="%Y-%m-%d %H:%M"

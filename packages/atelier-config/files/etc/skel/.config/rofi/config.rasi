@@ -3,10 +3,19 @@ configuration {
 	modi: "drun,run,window";
 	show-icons: true;
 	icon-theme: "Papirus-Dark";
-	font: "JetBrains Mono 11";
+	/* Fira Code is installed via atelier-base; JetBrains Mono is not yet packaged */
+	font: "Fira Code 11";
 	drun-display-format: "{name}";
 	disable-history: false;
 	sidebar-mode: false;
+	/* Improve focus / typing in some WMs and VMs */
+	hover-select: false;
+	me-select-entry: "";
+	me-accept-entry: "MousePrimary";
+	kb-row-up: "Up,Control+k,Control+p";
+	kb-row-down: "Down,Control+j,Control+n";
+	kb-accept-entry: "Return,KP_Enter";
+	terminal: "ghostty";
 }
 
 @theme "~/.config/rofi/themes/tokyo-night"
