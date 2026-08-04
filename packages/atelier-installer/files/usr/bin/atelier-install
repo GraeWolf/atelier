@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Atelier Linux — simple graphical installer (MVP)
+# Atelier Linux - simple graphical installer (MVP)
 # Whole-disk only, no encryption. Prefer clarity over features.
 #
 # Must run as root (re-execs via pkexec when available).
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -16,6 +16,33 @@ ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
 # Graphics options (set in step_graphics)
 INSTALL_NVIDIA=0
 INSTALL_XLIBRE=0
+
+# --- locale / GUI env (yad dies on non-UTF8 locales + unicode args) ------------
+ensure_gui_env() {
+	# Prefer a UTF-8 locale so GLib/yad can parse arguments safely
+	if [ -z "${LANG:-}" ] || [ "$LANG" = "C" ] || [ "$LANG" = "POSIX" ]; then
+		if locale -a 2>/dev/null | grep -qiE 'en_US\.utf-?8'; then
+			export LANG=en_US.UTF-8
+		elif locale -a 2>/dev/null | grep -qiE 'C\.utf-?8'; then
+			export LANG=C.UTF-8
+		else
+			export LANG=C.UTF-8
+		fi
+	fi
+	export LC_ALL="${LC_ALL:-$LANG}"
+	export LC_CTYPE="${LC_CTYPE:-$LANG}"
+	# Runtime dir for pkexec/helpers
+	if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR}" ] || [ ! -w "${XDG_RUNTIME_DIR}" ]; then
+		if [ -d "/run/user/$(id -u)" ] && [ -w "/run/user/$(id -u)" ]; then
+			export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+		else
+			export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+			mkdir -p "$XDG_RUNTIME_DIR"
+			chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+		fi
+	fi
+}
+ensure_gui_env
 
 # --- helpers ------------------------------------------------------------------
 
@@ -40,11 +67,17 @@ elif have dialog; then
 	UI=dialog
 fi
 
+# yad wrappers: always pass --text as a separate arg; keep ASCII-only messages.
+yad_run() {
+	# shellcheck disable=SC2086
+	yad --title="$TITLE" --center --on-top "$@"
+}
+
 ui_error() {
 	local msg=$1
 	log "ERROR: $msg"
 	case $UI in
-	yad) yad --title="$TITLE" --window-icon=dialog-error --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
+	yad) yad_run --window-icon=dialog-error --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
 	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
 	dialog) dialog --title "$TITLE" --msgbox "$msg" 10 60 ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
@@ -54,7 +87,7 @@ ui_error() {
 ui_info() {
 	local msg=$1
 	case $UI in
-	yad) yad --title="$TITLE" --window-icon=dialog-information --info --text="$msg" --width=480 --button=OK:0 ;;
+	yad) yad_run --window-icon=dialog-information --info --text="$msg" --width=480 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --info --text="$msg" --width=480 ;;
 	dialog) dialog --title "$TITLE" --msgbox "$msg" 12 60 ;;
 	*) printf '%s\n' "$msg" ;;
@@ -65,7 +98,7 @@ ui_confirm() {
 	local msg=$1
 	case $UI in
 	yad)
-		yad --title="$TITLE" --window-icon=dialog-question --question --text="$msg" --width=520 \
+		yad_run --window-icon=dialog-question --question --text="$msg" --width=520 \
 			--button="Cancel:1" --button="Continue:0"
 		;;
 	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 ;;
@@ -83,7 +116,7 @@ ui_entry() {
 	local label=$1 default=${2:-}
 	case $UI in
 	yad)
-		yad --title="$TITLE" --window-icon=dialog-password --entry --text="$label" \
+		yad_run --window-icon=dialog-password --entry --text="$label" \
 			--entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0
 		;;
 	zenity) zenity --title="$TITLE" --entry --text="$label" --entry-text="$default" --width=420 ;;
@@ -104,7 +137,7 @@ ui_password() {
 	local label=$1
 	case $UI in
 	yad)
-		yad --title="$TITLE" --entry --hide-text --text="$label" --width=420 \
+		yad_run --entry --hide-text --text="$label" --width=420 \
 			--button=Cancel:1 --button=OK:0
 		;;
 	zenity) zenity --title="$TITLE" --password --text="$label" --width=420 ;;
@@ -125,13 +158,12 @@ ui_password() {
 }
 
 ui_list_pick() {
-	# ui_list_pick "text" "col1" "col2" ...  then pairs of id text
-	# Uses yad/zenity list; first field is hidden id when possible
+	# ui_list_pick "text" then pairs of id detail
 	local text=$1
 	shift
 	case $UI in
 	yad)
-		yad --title="$TITLE" --list --text="$text" --width=640 --height=360 \
+		yad_run --list --text="$text" --width=640 --height=360 \
 			--column="Device" --column="Details" --print-column=1 \
 			--button=Cancel:1 --button=OK:0 "$@"
 		;;
@@ -140,12 +172,10 @@ ui_list_pick() {
 			--column="Device" --column="Details" "$@"
 		;;
 	dialog)
-		# Build dialog menu from pairs
-		local items=() i=0
+		local items=()
 		while [ $# -ge 2 ]; do
 			items+=("$1" "$2")
 			shift 2
-			i=$((i + 1))
 		done
 		dialog --title "$TITLE" --menu "$text" 20 70 12 "${items[@]}" 2>/tmp/atelier-pick.$$
 		cat /tmp/atelier-pick.$$
@@ -164,16 +194,24 @@ ensure_root() {
 	if [ "$(id -u)" -eq 0 ]; then
 		return 0
 	fi
+	# Re-exec as root while keeping GUI/session env (needed when started from rofi)
 	if have pkexec; then
 		exec pkexec env \
 			DISPLAY="${DISPLAY:-}" \
 			XAUTHORITY="${XAUTHORITY:-}" \
+			XAUTHLOCALHOSTNAME="${XAUTHLOCALHOSTNAME:-}" \
 			WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
 			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
+			XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}" \
+			DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+			LANG="${LANG:-C.UTF-8}" \
+			LC_ALL="${LC_ALL:-${LANG:-C.UTF-8}}" \
+			LC_CTYPE="${LC_CTYPE:-${LANG:-C.UTF-8}}" \
 			"$0" "$@"
 	fi
 	if have sudo; then
-		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR "$0" "$@"
+		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL,LC_CTYPE \
+			"$0" "$@"
 	fi
 	die "Root privileges required. Run as root, or install polkit (pkexec) / sudo."
 }
@@ -215,15 +253,15 @@ step_welcome() {
 	ui_confirm "Welcome to Atelier Linux installer (v${VERSION}).
 
 This MVP installer performs a WHOLE-DISK install:
-  • Erases the selected disk completely
-  • Creates a simple partition layout
-  • Installs Void base + Atelier desktop
-  • Installs GRUB bootloader
+  * Erases the selected disk completely
+  * Creates a simple partition layout
+  * Installs Void base + Atelier desktop
+  * Installs GRUB bootloader
 
 NOT supported yet:
-  • Full-disk encryption
-  • Custom partition layouts
-  • Dual-boot preservation
+  * Full-disk encryption
+  * Custom partition layouts
+  * Dual-boot preservation
 
 Continue?" || exit 0
 }
@@ -409,7 +447,7 @@ write_fstab() {
 	local uuid_root uuid_esp
 	uuid_root=$(blkid -s UUID -o value "$PART_ROOT")
 	{
-		printf '# /etc/fstab — generated by atelier-install\n'
+		printf '# /etc/fstab - generated by atelier-install\n'
 		printf 'UUID=%s / ext4 defaults 0 1\n' "$uuid_root"
 		if [ -n "${PART_ESP:-}" ]; then
 			uuid_esp=$(blkid -s UUID -o value "$PART_ESP")
@@ -499,7 +537,7 @@ install_packages() {
 		log "installing xlibre from external repository"
 		if [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
 			xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
-				log "WARN: xlibre install failed — run atelier-setup-xlibre after boot"
+				log "WARN: xlibre install failed - run atelier-setup-xlibre after boot"
 		else
 			log "WARN: atelier-xlibre-repo not installed; skip xlibre package for now"
 		fi
@@ -609,7 +647,7 @@ main() {
 	step_graphics
 	step_summary
 
-	ui_info "Installing… This may take a long time.
+	ui_info "Installing... This may take a long time.
 
 Progress is logged to:
 $LOG
@@ -617,7 +655,7 @@ $LOG
 A terminal-free progress UI is limited in this MVP; do not power off."
 
 	# Run the destructive / long section with traps
-	trap 'log "FAILED — see $LOG"; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
+	trap 'log "FAILED - see $LOG"; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
 	partition_disk
 	mount_target
 	install_packages

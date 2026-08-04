@@ -3,9 +3,10 @@ Type=Application
 Name=Install Atelier Linux
 GenericName=System Installer
 Comment=Install Atelier Linux (whole-disk, simple GUI)
-Exec=atelier-install
+# Keep locale/display for yad when launched from rofi/menu
+Exec=env LANG=C.UTF-8 LC_ALL=C.UTF-8 atelier-install
 Icon=system-software-install
 Terminal=false
 Categories=System;Settings;
 Keywords=install;atelier;system;
-StartupNotify=true
+StartupNotify=false

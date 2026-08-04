@@ -6,12 +6,12 @@
 super + Return
 	sh -c 'command -v ghostty >/dev/null && exec ghostty || exec xterm'
 
-# Use wrapper so stale rofi.pid / missing XDG_RUNTIME_DIR do not block relaunch
+# Call /usr/bin/atelier-rofi (simple path - nested quotes break under sxhkd)
 super + d
-	sh -c '"${XDG_CONFIG_HOME:-$HOME/.config}/rofi/atelier-rofi.sh" drun'
+	atelier-rofi drun
 
 super + shift + d
-	sh -c '"${XDG_CONFIG_HOME:-$HOME/.config}/rofi/atelier-rofi.sh" run'
+	atelier-rofi run
 
 # --- Window close / kill -----------------------------------------------------
 super + w

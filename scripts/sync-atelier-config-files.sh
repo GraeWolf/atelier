@@ -49,6 +49,8 @@ install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/con
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/etc/skel/.config/rofi/atelier-rofi.sh"
 mkdir -p "$dst/etc/skel/.config/rofi/themes"
 install -m 644 "$src/rofi/themes/tokyo-night.rasi" "$dst/etc/skel/.config/rofi/themes/tokyo-night.rasi"
+mkdir -p "$dst/usr/bin"
+install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/usr/bin/atelier-rofi"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
 install -m 644 "$src/starship/starship.toml"     "$dst/etc/skel/.config/starship.toml"
 install -m 644 "$src/fastfetch/config.jsonc"     "$dst/etc/skel/.config/fastfetch/config.jsonc"
