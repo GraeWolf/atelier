@@ -34,7 +34,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 - **Icons:** Papirus-Dark (package depend)
 - **GTK base:** Adwaita-dark + CSS color overrides (no separate GTK theme package required for MVP)
 - **Qt:** Fusion + custom Tokyo Night color schemes via qt5ct/qt6ct
-- **Fonts:** JetBrains Mono / FiraCode / Nerd Symbols (see package-sources.md for availability)
+- **Fonts:** Fira Code + Nerd Symbols (JetBrains Mono planned; not required yet)
 
 ## Editing workflow
 
