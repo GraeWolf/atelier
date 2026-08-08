@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Atelier Linux - simple graphical installer (MVP)
-# Whole-disk only, no encryption. Prefer clarity over features.
-#
-# Must run as root (re-execs via pkexec when available).
+# Atelier Linux - graphical installer (wizard, whole-disk MVP)
+# Back/Next steps, ASCII-only UI strings for yad safety.
 set -euo pipefail
 
-VERSION="0.1.2"
+VERSION="0.2.0"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -13,25 +11,34 @@ VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
 VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-https://repo-default.voidlinux.org/current/nonfree}"
 ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
 
-# Graphics options (set in step_graphics)
+# State (wizard)
 INSTALL_NVIDIA=0
 INSTALL_XLIBRE=0
+INSTALL_BOOTLOADER=1
+PKG_EXTRA_CLI=0
+PKG_MEDIA=0
+DISK=""
+HOSTNAME="atelier"
+USERNAME="user"
+USERPASS=""
+ROOTPASS=""
+TIMEZONE="UTC"
+LOCALE="en_US.UTF-8"
+KEYMAP="us"
+PART_ESP=""
+PART_ROOT=""
 
-# --- locale / GUI env (yad dies on non-UTF8 locales + unicode args) ------------
+# --- locale / GUI env ---------------------------------------------------------
 ensure_gui_env() {
-	# Prefer a UTF-8 locale so GLib/yad can parse arguments safely
 	if [ -z "${LANG:-}" ] || [ "$LANG" = "C" ] || [ "$LANG" = "POSIX" ]; then
 		if locale -a 2>/dev/null | grep -qiE 'en_US\.utf-?8'; then
 			export LANG=en_US.UTF-8
-		elif locale -a 2>/dev/null | grep -qiE 'C\.utf-?8'; then
-			export LANG=C.UTF-8
 		else
 			export LANG=C.UTF-8
 		fi
 	fi
 	export LC_ALL="${LC_ALL:-$LANG}"
 	export LC_CTYPE="${LC_CTYPE:-$LANG}"
-	# Runtime dir for pkexec/helpers
 	if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR}" ] || [ ! -w "${XDG_RUNTIME_DIR}" ]; then
 		if [ -d "/run/user/$(id -u)" ] && [ -w "/run/user/$(id -u)" ]; then
 			export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -45,39 +52,23 @@ ensure_gui_env() {
 ensure_gui_env
 
 # --- helpers ------------------------------------------------------------------
-
-die() {
-	ui_error "$*"
-	exit 1
-}
-
-log() {
-	printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"
-}
-
+die() { ui_error "$*"; exit 1; }
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# GUI: prefer yad, fall back to zenity, then dialog
 UI=none
-if have yad; then
-	UI=yad
-elif have zenity; then
-	UI=zenity
-elif have dialog; then
-	UI=dialog
+if have yad; then UI=yad
+elif have zenity; then UI=zenity
+elif have dialog; then UI=dialog
 fi
 
-# yad wrappers: always pass --text as a separate arg; keep ASCII-only messages.
-yad_run() {
-	# shellcheck disable=SC2086
-	yad --title="$TITLE" --center --on-top "$@"
-}
+yad_run() { yad --title="$TITLE" --center --on-top "$@"; }
 
 ui_error() {
 	local msg=$1
 	log "ERROR: $msg"
 	case $UI in
-	yad) yad_run --window-icon=dialog-error --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
+	yad) yad_run --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
 	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
 	dialog) dialog --title "$TITLE" --msgbox "$msg" 10 60 ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
@@ -87,349 +78,502 @@ ui_error() {
 ui_info() {
 	local msg=$1
 	case $UI in
-	yad) yad_run --window-icon=dialog-information --info --text="$msg" --width=480 --button=OK:0 ;;
+	yad) yad_run --info --text="$msg" --width=480 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --info --text="$msg" --width=480 ;;
 	dialog) dialog --title "$TITLE" --msgbox "$msg" 12 60 ;;
 	*) printf '%s\n' "$msg" ;;
 	esac
 }
 
+# Returns: 0=yes/next/ok, 1=no/back, 2=abort (close)
 ui_confirm() {
-	# Returns 0 for Yes, 1 for No/close. Always show explicit Yes/No (not Cancel/Continue).
 	local msg=$1
 	case $UI in
-	yad)
-		# Do not mix --question with custom buttons in ways that drop choices;
-		# use a plain dialog with two labeled exit codes.
-		yad_run --window-icon=dialog-question --text="$msg" --width=520 \
-			--button="No:1" --button="Yes:0"
-		;;
-	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 --ok-label="Yes" --cancel-label="No" ;;
+	yad) yad_run --text="$msg" --width=520 --button="No:1" --button="Yes:0" ;;
+	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 --ok-label=Yes --cancel-label=No ;;
 	dialog) dialog --title "$TITLE" --yesno "$msg" 12 60 ;;
-	*)
-		printf '%s [y/N] ' "$msg" >&2
-		read -r a
-		case $a in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
-		;;
+	*) printf '%s [y/N] ' "$msg" >&2; read -r a; case $a in y|Y|yes|YES) return 0;; *) return 1;; esac ;;
 	esac
 }
 
-ui_entry() {
-	# ui_entry "label" "default"
-	local label=$1 default=${2:-}
+# Wizard page: text + Back/Next. 0=next 1=back 2=abort
+wizard_page() {
+	local msg=$1
+	local rc=0
 	case $UI in
 	yad)
-		yad_run --window-icon=dialog-password --entry --text="$label" \
-			--entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0
+		yad_run --text="$msg" --width=560 --height=280 \
+			--button="Abort:2" --button="Back:1" --button="Next:0" || rc=$?
 		;;
+	zenity)
+		# zenity has no native 3-button; Next via question "Continue?"
+		if zenity --title="$TITLE" --question --text="$msg" --width=560 \
+			--ok-label="Next" --cancel-label="Back"; then
+			rc=0
+		else
+			rc=1
+		fi
+		;;
+	dialog)
+		dialog --title "$TITLE" --yes-label Next --no-label Back --yesno "$msg" 16 70 && rc=0 || rc=1
+		;;
+	*)
+		printf '%s\n[Enter]=Next [b]=Back [q]=Abort: ' "$msg" >&2
+		read -r a
+		case $a in b|B) rc=1;; q|Q) rc=2;; *) rc=0;; esac
+		;;
+	esac
+	return "$rc"
+}
+
+ui_entry() {
+	local label=$1 default=${2:-}
+	case $UI in
+	yad) yad_run --entry --text="$label" --entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --entry --text="$label" --entry-text="$default" --width=420 ;;
 	dialog)
 		dialog --title "$TITLE" --inputbox "$label" 10 50 "$default" 2>/tmp/atelier-entry.$$
-		cat /tmp/atelier-entry.$$
-		rm -f /tmp/atelier-entry.$$
+		cat /tmp/atelier-entry.$$; rm -f /tmp/atelier-entry.$$
 		;;
-	*)
-		printf '%s [%s]: ' "$label" "$default" >&2
-		read -r a
-		printf '%s\n' "${a:-$default}"
-		;;
+	*) printf '%s [%s]: ' "$label" "$default" >&2; read -r a; printf '%s\n' "${a:-$default}" ;;
 	esac
 }
 
 ui_password() {
 	local label=$1
 	case $UI in
-	yad)
-		yad_run --entry --hide-text --text="$label" --width=420 \
-			--button=Cancel:1 --button=OK:0
-		;;
+	yad) yad_run --entry --hide-text --text="$label" --width=420 --button=Cancel:1 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --password --text="$label" --width=420 ;;
 	dialog)
 		dialog --title "$TITLE" --passwordbox "$label" 10 50 2>/tmp/atelier-pw.$$
-		cat /tmp/atelier-pw.$$
-		rm -f /tmp/atelier-pw.$$
+		cat /tmp/atelier-pw.$$; rm -f /tmp/atelier-pw.$$
 		;;
-	*)
-		printf '%s: ' "$label" >&2
-		stty -echo
-		read -r a
-		stty echo
-		printf '\n' >&2
-		printf '%s\n' "$a"
-		;;
+	*) printf '%s: ' "$label" >&2; stty -echo; read -r a; stty echo; printf '\n%s\n' "$a" >&2; printf '%s\n' "$a" ;;
 	esac
 }
 
+# List pick: returns selected first column. Args after text: pairs id detail
 ui_list_pick() {
-	# ui_list_pick "text" then pairs of id detail
-	local text=$1
-	shift
+	local text=$1; shift
 	case $UI in
 	yad)
-		yad_run --list --text="$text" --width=640 --height=360 \
-			--column="Device" --column="Details" --print-column=1 \
-			--button=Cancel:1 --button=OK:0 "$@"
+		yad_run --list --text="$text" --width=640 --height=400 \
+			--column=Id --column=Details --print-column=1 --hide-column=1 \
+			--button=Cancel:1 --button=OK:0 "$@" 2>/dev/null | awk -F'|' 'NF{print $1; exit}'
 		;;
 	zenity)
-		zenity --title="$TITLE" --list --text="$text" --width=640 --height=360 \
-			--column="Device" --column="Details" "$@"
+		zenity --title="$TITLE" --list --text="$text" --width=640 --height=400 \
+			--column=Id --column=Details --print-column=1 --hide-column=1 "$@" 2>/dev/null
 		;;
 	dialog)
 		local items=()
-		while [ $# -ge 2 ]; do
-			items+=("$1" "$2")
-			shift 2
-		done
+		while [ $# -ge 2 ]; do items+=("$1" "$2"); shift 2; done
 		dialog --title "$TITLE" --menu "$text" 20 70 12 "${items[@]}" 2>/tmp/atelier-pick.$$
-		cat /tmp/atelier-pick.$$
-		rm -f /tmp/atelier-pick.$$
+		cat /tmp/atelier-pick.$$; rm -f /tmp/atelier-pick.$$
+		;;
+	*) printf '%s\n' "$text" >&2; printf '%s\n' "$@" >&2; read -r a; printf '%s\n' "$a" ;;
+	esac
+}
+
+# Checklist: print selected tags one per line. Args: TAG "Label" on/off ...
+ui_checklist() {
+	local text=$1; shift
+	case $UI in
+	yad)
+		# yad checklist: column CHK + TAG + Label; print checked tags
+		local args=() t l s
+		while [ $# -ge 3 ]; do
+			t=$1; l=$2; s=$3; shift 3
+			if [ "$s" = on ]; then args+=(TRUE "$t" "$l"); else args+=(FALSE "$t" "$l"); fi
+		done
+		yad_run --list --checklist --text="$text" --width=560 --height=320 \
+			--column=Pick --column=Tag --column=Option --print-column=2 --separator='\n' \
+			--button=Cancel:1 --button=OK:0 "${args[@]}" 2>/dev/null | sed '/^$/d'
+		;;
+	zenity)
+		local args=() t l s
+		while [ $# -ge 3 ]; do
+			t=$1; l=$2; s=$3; shift 3
+			if [ "$s" = on ]; then args+=(TRUE "$t" "$l"); else args+=(FALSE "$t" "$l"); fi
+		done
+		zenity --title="$TITLE" --list --checklist --text="$text" --width=560 --height=320 \
+			--column=Pick --column=Tag --column=Option --print-column=2 --separator='\n' \
+			"${args[@]}" 2>/dev/null | sed '/^$/d'
 		;;
 	*)
-		printf '%s\n' "$text" >&2
-		printf '%s\n' "$@" >&2
-		read -r a
-		printf '%s\n' "$a"
+		# fallback: all off unless previously set - return empty
+		printf ''
 		;;
 	esac
 }
 
 ensure_root() {
-	if [ "$(id -u)" -eq 0 ]; then
-		return 0
-	fi
-	# Re-exec as root while keeping GUI/session env (needed when started from rofi)
+	if [ "$(id -u)" -eq 0 ]; then return 0; fi
 	if have pkexec; then
 		exec pkexec env \
-			DISPLAY="${DISPLAY:-}" \
-			XAUTHORITY="${XAUTHORITY:-}" \
+			DISPLAY="${DISPLAY:-}" XAUTHORITY="${XAUTHORITY:-}" \
 			XAUTHLOCALHOSTNAME="${XAUTHLOCALHOSTNAME:-}" \
 			WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
 			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
-			XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}" \
 			DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
-			LANG="${LANG:-C.UTF-8}" \
-			LC_ALL="${LC_ALL:-${LANG:-C.UTF-8}}" \
-			LC_CTYPE="${LC_CTYPE:-${LANG:-C.UTF-8}}" \
+			LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-${LANG:-C.UTF-8}}" \
 			"$0" "$@"
 	fi
 	if have sudo; then
-		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL,LC_CTYPE \
+		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL \
 			"$0" "$@"
 	fi
-	die "Root privileges required. Run as root, or install polkit (pkexec) / sudo."
+	die "Root privileges required (pkexec or sudo)."
 }
 
-is_efi() {
-	[ -d /sys/firmware/efi ]
-}
+is_efi() { [ -d /sys/firmware/efi ]; }
 
-# disk path /dev/sda + partnum -> /dev/sda1 ; /dev/nvme0n1 -> /dev/nvme0n1p1
 part_path() {
 	local disk=$1 num=$2 base
 	base=$(basename "$disk")
-	if printf '%s' "$base" | grep -qE '[0-9]$'; then
-		printf '%s\n' "${disk}p${num}"
-	else
-		printf '%s\n' "${disk}${num}"
-	fi
+	if printf '%s' "$base" | grep -qE '[0-9]$'; then printf '%s\n' "${disk}p${num}"
+	else printf '%s\n' "${disk}${num}"; fi
 }
 
 list_disks() {
-	# print lines: path|size|model
 	lsblk -dn -b -o NAME,SIZE,TYPE,MODEL 2>/dev/null | while read -r name size type model; do
 		[ "$type" = "disk" ] || continue
-		# skip ram / loop / zram
-		case $name in
-		loop* | ram* | zram* | sr*) continue ;;
-		esac
+		case $name in loop*|ram*|zram*|sr*) continue ;; esac
 		model=${model:-disk}
-		# human size
-		local hs
 		hs=$(lsblk -dn -o SIZE "/dev/$name" 2>/dev/null || echo "?")
 		printf '%s|%s|%s\n' "/dev/$name" "$hs" "$model"
 	done
 }
 
-# --- steps --------------------------------------------------------------------
-
-step_welcome() {
-	ui_confirm "Welcome to Atelier Linux installer (v${VERSION}).
-
-This MVP installer performs a WHOLE-DISK install:
-  * Erases the selected disk completely
-  * Creates a simple partition layout
-  * Installs Void base + Atelier desktop
-  * Installs GRUB bootloader
-
-NOT supported yet:
-  * Full-disk encryption
-  * Custom partition layouts
-  * Dual-boot preservation
-
-Continue?" || exit 0
+detect_nvidia_gpu() {
+	have lspci && lspci -nn 2>/dev/null | grep -qi nvidia
 }
 
-step_select_disk() {
-	local lines=() args=() path size model
+valid_hostname() {
+	local h=$1
+	printf '%s' "$h" | grep -qE '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
+}
+
+valid_username() {
+	local u=$1
+	[ "$u" != "root" ] || return 1
+	printf '%s' "$u" | grep -qE '^[a-z_][a-z0-9_-]{0,31}$'
+}
+
+list_timezones() {
+	if have timedatectl; then
+		timedatectl list-timezones 2>/dev/null && return 0
+	fi
+	find /usr/share/zoneinfo -type f 2>/dev/null \
+		| sed 's|^/usr/share/zoneinfo/||' \
+		| grep -vE '^(posix|right)/' \
+		| grep -vE '\.tab$|Factory|localtime|leapseconds|tzdata|zone\.tab|iso3166' \
+		| sort -u
+}
+
+# --- wizard steps: print nav code via return; mutate globals -----------------
+# Convention: return 0 next, 1 back, 2 abort
+
+step_welcome() {
+	wizard_page "Welcome to Atelier Linux installer v${VERSION}.
+
+WHOLE-DISK install only (erases one selected disk).
+No encryption, no custom partitions.
+
+Steps cover identity, locale, graphics, optional software,
+mirror, and bootloader.
+
+Next to continue."
+}
+
+step_disk() {
+	local args=() path size model rc=0 pick
 	while IFS='|' read -r path size model; do
 		[ -n "$path" ] || continue
-		lines+=("$path")
 		args+=("$path" "$size  $model")
 	done < <(list_disks)
-
 	if [ ${#args[@]} -eq 0 ]; then
-		die "No disks found. Attach a target disk and retry."
+		ui_error "No disks found."
+		return 2
 	fi
 
-	DISK=$(ui_list_pick "Select the disk to ERASE and install Atelier onto:" "${args[@]}") || exit 0
-	DISK=${DISK//|/}
+	# Show list with cancel=back
+	case $UI in
+	yad)
+		pick=$(yad_run --list --text="Select disk to ERASE and install onto:" \
+			--width=640 --height=360 --column=Device --column=Details \
+			--print-column=1 --button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
+		pick=$(printf '%s' "$pick" | awk -F'|' 'NF{print $1; exit}')
+		;;
+	*)
+		pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=1
+		;;
+	esac
+	if [ "$rc" -eq 1 ]; then return 1; fi
+	if [ "$rc" -ge 2 ]; then return 2; fi
+	DISK=${pick//|/}
 	DISK=$(printf '%s' "$DISK" | awk 'NF{print $1; exit}')
-	[ -b "$DISK" ] || die "Invalid disk: $DISK"
+	[ -b "$DISK" ] || { ui_error "Invalid disk: $DISK"; return 1; }
 
-	ui_confirm "ALL DATA on $DISK will be DESTROYED.
+	if ! ui_confirm "ALL DATA on $DISK will be DESTROYED.
 
-Type-confirm by continuing only if you are sure.
-
-Selected disk: $DISK" || exit 0
+Yes = use this disk
+No  = go back"; then
+		return 1
+	fi
+	log "DISK=$DISK"
+	return 0
 }
 
 step_identity() {
-	HOSTNAME=$(ui_entry "Hostname:" "atelier") || exit 0
-	HOSTNAME=${HOSTNAME// /}
-	[ -n "$HOSTNAME" ] || HOSTNAME=atelier
-
-	USERNAME=$(ui_entry "Username (regular user):" "user") || exit 0
-	USERNAME=$(printf '%s' "$USERNAME" | tr -cd 'a-z0-9_-' | head -c 32)
-	[ -n "$USERNAME" ] || die "Username required"
-	case $USERNAME in
-	root) die "Username cannot be root" ;;
-	esac
-
-	local p1 p2
-	p1=$(ui_password "Password for $USERNAME:") || exit 0
-	p2=$(ui_password "Confirm password for $USERNAME:") || exit 0
-	[ "$p1" = "$p2" ] || die "Passwords do not match"
-	[ -n "$p1" ] || die "Password cannot be empty"
-	USERPASS=$p1
-
-	p1=$(ui_password "Root password:") || exit 0
-	p2=$(ui_password "Confirm root password:") || exit 0
-	[ "$p1" = "$p2" ] || die "Root passwords do not match"
-	[ -n "$p1" ] || die "Root password cannot be empty"
-	ROOTPASS=$p1
-
-	# Defaults suitable for MVP; advanced locale UI later
-	TIMEZONE=$(ui_entry "Timezone (Zone/City):" "UTC") || exit 0
-	[ -n "$TIMEZONE" ] || TIMEZONE=UTC
-	if [ ! -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
-		log "Timezone $TIMEZONE not found on live system; will still write link if present on target"
-	fi
-
-	LOCALE=$(ui_entry "Locale:" "en_US.UTF-8") || exit 0
-	[ -n "$LOCALE" ] || LOCALE=en_US.UTF-8
-
-	KEYMAP=$(ui_entry "Console keymap:" "us") || exit 0
-	[ -n "$KEYMAP" ] || KEYMAP=us
+	local h u p1 p2 r1 r2
+	while true; do
+		h=$(ui_entry "Hostname:" "$HOSTNAME") || return 1
+		h=${h// /}
+		if valid_hostname "$h"; then HOSTNAME=$h; break; fi
+		ui_error "Invalid hostname. Use letters, digits, hyphens (not leading/trailing -)."
+	done
+	while true; do
+		u=$(ui_entry "Username:" "$USERNAME") || return 1
+		u=$(printf '%s' "$u" | tr -cd 'a-z0-9_-' | head -c 32)
+		if valid_username "$u"; then USERNAME=$u; break; fi
+		ui_error "Invalid username (lowercase, start with letter/_, not root)."
+	done
+	while true; do
+		p1=$(ui_password "Password for $USERNAME:") || return 1
+		p2=$(ui_password "Confirm password for $USERNAME:") || return 1
+		if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then USERPASS=$p1; break; fi
+		ui_error "Passwords empty or do not match. Try again."
+	done
+	while true; do
+		r1=$(ui_password "Root password:") || return 1
+		r2=$(ui_password "Confirm root password:") || return 1
+		if [ -n "$r1" ] && [ "$r1" = "$r2" ]; then ROOTPASS=$r1; break; fi
+		ui_error "Root passwords empty or do not match. Try again."
+	done
+	log "HOSTNAME=$HOSTNAME USERNAME=$USERNAME"
+	return 0
 }
 
-detect_nvidia_gpu() {
-	if have lspci && lspci -nn 2>/dev/null | grep -qi nvidia; then
+step_locale() {
+	local args=() tz loc km rc=0
+	# Timezone list (cap for UI)
+	while read -r tz; do
+		[ -n "$tz" ] || continue
+		args+=("$tz" "$tz")
+	done < <(list_timezones | head -n 400)
+	# Ensure current selection first
+	args=("$TIMEZONE" "$TIMEZONE (current)" "${args[@]}")
+
+	case $UI in
+	yad)
+		tz=$(yad_run --list --text="Select timezone:" --width=500 --height=400 \
+			--column=Id --column=Zone --print-column=1 --hide-column=1 \
+			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
+		tz=$(printf '%s' "$tz" | awk -F'|' 'NF{print $1; exit}')
+		;;
+	*)
+		tz=$(ui_list_pick "Select timezone:" "${args[@]}") || rc=1
+		;;
+	esac
+	[ "$rc" -eq 1 ] && return 1
+	[ "$rc" -ge 2 ] && return 2
+	TIMEZONE=${tz:-$TIMEZONE}
+
+	args=(
+		en_US.UTF-8 "English (US)"
+		en_GB.UTF-8 "English (UK)"
+		C.UTF-8 "C.UTF-8 (minimal)"
+		de_DE.UTF-8 "German"
+		fr_FR.UTF-8 "French"
+		es_ES.UTF-8 "Spanish"
+		pt_BR.UTF-8 "Portuguese (Brazil)"
+		ja_JP.UTF-8 "Japanese"
+		zh_CN.UTF-8 "Chinese (Simplified)"
+	)
+	rc=0
+	case $UI in
+	yad)
+		loc=$(yad_run --list --text="Select locale:" --width=500 --height=320 \
+			--column=Id --column=Name --print-column=1 \
+			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
+		loc=$(printf '%s' "$loc" | awk -F'|' 'NF{print $1; exit}')
+		;;
+	*) loc=$(ui_list_pick "Select locale:" "${args[@]}") || rc=1 ;;
+	esac
+	[ "$rc" -eq 1 ] && return 1
+	[ "$rc" -ge 2 ] && return 2
+	LOCALE=${loc:-$LOCALE}
+
+	args=(
+		us "US QWERTY"
+		uk "UK"
+		de "German"
+		fr "French"
+		es "Spanish"
+		it "Italian"
+		se "Swedish"
+		no "Norwegian"
+		dvorak "Dvorak"
+	)
+	rc=0
+	case $UI in
+	yad)
+		km=$(yad_run --list --text="Select console keymap:" --width=400 --height=320 \
+			--column=Id --column=Name --print-column=1 \
+			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
+		km=$(printf '%s' "$km" | awk -F'|' 'NF{print $1; exit}')
+		;;
+	*) km=$(ui_list_pick "Select keymap:" "${args[@]}") || rc=1 ;;
+	esac
+	[ "$rc" -eq 1 ] && return 1
+	[ "$rc" -ge 2 ] && return 2
+	KEYMAP=${km:-$KEYMAP}
+	log "TIMEZONE=$TIMEZONE LOCALE=$LOCALE KEYMAP=$KEYMAP"
+	return 0
+}
+
+step_graphics() {
+	INSTALL_NVIDIA=0
+	if detect_nvidia_gpu; then
+		if ui_confirm "NVIDIA GPU detected.
+
+Install proprietary NVIDIA drivers?
+  Yes = nonfree nvidia + Atelier config
+  No  = skip (sudo atelier-setup-nvidia later)"; then
+			INSTALL_NVIDIA=1
+		fi
+	else
+		log "no NVIDIA GPU; INSTALL_NVIDIA=0"
+		ui_info "No NVIDIA GPU detected.
+
+Proprietary NVIDIA drivers will NOT be installed.
+
+On a real NVIDIA PC later:
+  sudo atelier-setup-nvidia"
+	fi
+
+	INSTALL_XLIBRE=0
+	if ui_confirm "Install Xlibre display server?
+
+  Yes = external xlibre-void (PLAN default)
+  No  = keep X.Org
+
+Usually No for VMs."; then
+		INSTALL_XLIBRE=1
+	fi
+	log "INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_XLIBRE=$INSTALL_XLIBRE"
+	return 0
+}
+
+step_software() {
+	PKG_EXTRA_CLI=0
+	PKG_MEDIA=0
+	local sel
+	sel=$(ui_checklist "Optional package groups (desktop is always installed):" \
+		extra_cli "Extra CLI tools (htop, ripgrep, fd, curl, wget)" off \
+		media "Media tools (mpv, ffmpeg)" off) || return 1
+	printf '%s\n' "$sel" | grep -qx extra_cli && PKG_EXTRA_CLI=1
+	printf '%s\n' "$sel" | grep -qx media && PKG_MEDIA=1
+	log "PKG_EXTRA_CLI=$PKG_EXTRA_CLI PKG_MEDIA=$PKG_MEDIA"
+	return 0
+}
+
+step_mirror() {
+	local args pick rc=0
+	args=(
+		"https://repo-default.voidlinux.org/current" "Default (repo-default)"
+		"https://repo-fastly.voidlinux.org/current" "Fastly CDN"
+		"https://mirrors.servercentral.com/voidlinux/current" "ServerCentral"
+		"https://mirror.ps.kz/voidlinux/current" "ps.kz"
+		"https://void.webconverger.org/current" "Webconverger"
+	)
+	case $UI in
+	yad)
+		pick=$(yad_run --list --text="Select Void package mirror:" --width=640 --height=300 \
+			--column=URL --column=Name --print-column=1 \
+			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
+		pick=$(printf '%s' "$pick" | awk -F'|' 'NF{print $1; exit}')
+		;;
+	*) pick=$(ui_list_pick "Select Void mirror:" "${args[@]}") || rc=1 ;;
+	esac
+	[ "$rc" -eq 1 ] && return 1
+	[ "$rc" -ge 2 ] && return 2
+	VOID_REPO=${pick:-$VOID_REPO}
+	# nonfree sibling
+	case $VOID_REPO in
+	*/current) VOID_NONFREE_REPO="${VOID_REPO}/nonfree" ;;
+	*/current/) VOID_NONFREE_REPO="${VOID_REPO}nonfree" ;;
+	*) VOID_NONFREE_REPO="${VOID_REPO%/}/nonfree" ;;
+	esac
+	log "VOID_REPO=$VOID_REPO VOID_NONFREE_REPO=$VOID_NONFREE_REPO"
+	return 0
+}
+
+step_bootloader() {
+	INSTALL_BOOTLOADER=1
+	if ui_confirm "Install GRUB bootloader?
+
+  Yes = recommended (EFI or BIOS auto-detected)
+  No  = skip (advanced; you must install a bootloader later)
+
+Yes is recommended."; then
+		INSTALL_BOOTLOADER=1
+	else
+		INSTALL_BOOTLOADER=0
+	fi
+	log "INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+	return 0
+}
+
+step_summary() {
+	local mode=BIOS ns=no xs=no bl=yes ec=no md=no
+	is_efi && mode=EFI
+	[ "$INSTALL_NVIDIA" -eq 1 ] && ns=yes
+	[ "$INSTALL_XLIBRE" -eq 1 ] && xs=yes
+	[ "$INSTALL_BOOTLOADER" -eq 1 ] && bl=yes || bl=no
+	[ "$PKG_EXTRA_CLI" -eq 1 ] && ec=yes
+	[ "$PKG_MEDIA" -eq 1 ] && md=yes
+	if ui_confirm "Install summary - proceed?
+
+Disk:        $DISK (ERASED)
+Firmware:    $mode
+Hostname:    $HOSTNAME
+User:        $USERNAME
+Timezone:    $TIMEZONE
+Locale:      $LOCALE
+Keymap:      $KEYMAP
+NVIDIA:      $ns
+Xlibre:      $xs
+Extra CLI:   $ec
+Media:       $md
+Mirror:      $VOID_REPO
+Bootloader:  $bl
+
+Yes = start install
+No  = go back"; then
 		return 0
 	fi
 	return 1
 }
 
-step_graphics() {
-	INSTALL_NVIDIA=0
-	INSTALL_XLIBRE=0
-
-	if detect_nvidia_gpu; then
-		# Only prompt when hardware is present. Clear Yes/No choice.
-		if ui_confirm "NVIDIA GPU detected.
-
-Install proprietary NVIDIA drivers now?
-  Yes = Void nonfree nvidia + Atelier config
-  No  = skip (you can run: sudo atelier-setup-nvidia later)
-
-Recommended on a real NVIDIA desktop. Choose No for testing."; then
-			INSTALL_NVIDIA=1
-			log "user chose INSTALL_NVIDIA=1"
-		else
-			log "user chose INSTALL_NVIDIA=0"
-		fi
-	else
-		# VMs / non-NVIDIA: do not offer drivers (no ambiguous prompt)
-		INSTALL_NVIDIA=0
-		log "no NVIDIA GPU via lspci; skipping NVIDIA driver install"
-		ui_info "No NVIDIA GPU detected.
-
-Proprietary NVIDIA drivers will NOT be installed.
-
-On a real NVIDIA PC later, run:
-  sudo atelier-setup-nvidia"
-	fi
-
-	if ui_confirm "Install Xlibre display server?
-
-  Yes = use external xlibre-void repo (PLAN default)
-  No  = keep X.Org from the live/base install
-
-You can also run later:
-  sudo atelier-setup-xlibre
-
-Choose No for most VMs."; then
-		INSTALL_XLIBRE=1
-		log "user chose INSTALL_XLIBRE=1"
-	else
-		log "user chose INSTALL_XLIBRE=0"
-	fi
-}
-
-step_summary() {
-	local mode=BIOS
-	local nvidia_s=no xlibre_s=no
-	is_efi && mode=EFI
-	[ "$INSTALL_NVIDIA" -eq 1 ] && nvidia_s=yes
-	[ "$INSTALL_XLIBRE" -eq 1 ] && xlibre_s=yes
-	ui_confirm "Install summary
-
-Disk:       $DISK (WILL BE ERASED)
-Firmware:   $mode
-Hostname:   $HOSTNAME
-User:       $USERNAME (sudo/wheel)
-Timezone:   $TIMEZONE
-Locale:     $LOCALE
-Keymap:     $KEYMAP
-Target:     $TARGETDIR
-NVIDIA:     $nvidia_s
-Xlibre:     $xlibre_s
-
-Packages:   base-system, linux, atelier-desktop (if available), GRUB, NetworkManager
-
-Proceed with install?" || exit 0
-}
-
+# --- install backend ----------------------------------------------------------
 partition_disk() {
 	log "Partitioning $DISK"
-	# Unmount anything on this disk
 	umount -R "$TARGETDIR" 2>/dev/null || true
 	lsblk -ln -o NAME,MOUNTPOINT "$DISK" 2>/dev/null | while read -r n m; do
-		[ -n "$m" ] && [ "$m" != "" ] || continue
+		[ -n "$m" ] || continue
 		umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true
 	done
-
 	wipefs -a "$DISK" 2>/dev/null || true
 	parted -s "$DISK" mklabel gpt
-
 	if is_efi; then
 		parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
 		parted -s "$DISK" set 1 esp on
 		parted -s "$DISK" mkpart root ext4 513MiB 100%
 		PART_ESP=$(part_path "$DISK" 1)
 		PART_ROOT=$(part_path "$DISK" 2)
-		# wait for nodes
-		sleep 1
-		udevadm settle 2>/dev/null || sleep 2
+		sleep 1; udevadm settle 2>/dev/null || sleep 2
 		mkfs.vfat -F32 -n EFI "$PART_ESP"
 		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
 	else
@@ -438,8 +582,7 @@ partition_disk() {
 		parted -s "$DISK" mkpart root ext4 2MiB 100%
 		PART_ESP=""
 		PART_ROOT=$(part_path "$DISK" 2)
-		sleep 1
-		udevadm settle 2>/dev/null || sleep 2
+		sleep 1; udevadm settle 2>/dev/null || sleep 2
 		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
 	fi
 	log "Partitions: esp=${PART_ESP:-none} root=$PART_ROOT"
@@ -476,63 +619,43 @@ write_fstab() {
 install_packages() {
 	log "Installing packages into $TARGETDIR"
 	mkdir -p "$TARGETDIR/var/db/xbps/keys" "$TARGETDIR/usr/share" "$TARGETDIR/etc"
-	if [ -d /var/db/xbps/keys ]; then
-		cp -a /var/db/xbps/keys/. "$TARGETDIR/var/db/xbps/keys/" || true
-	fi
-	if [ -d /usr/share/xbps.d ]; then
-		cp -a /usr/share/xbps.d "$TARGETDIR/usr/share/" || true
-	fi
+	[ -d /var/db/xbps/keys ] && cp -a /var/db/xbps/keys/. "$TARGETDIR/var/db/xbps/keys/" || true
+	[ -d /usr/share/xbps.d ] && cp -a /usr/share/xbps.d "$TARGETDIR/usr/share/" || true
 
-	# Personal repo on target
+	local REPO_ARGS=(--repository="$VOID_REPO")
 	if [ -d "$ATELIER_REPO_LIVE" ] && ls "$ATELIER_REPO_LIVE"/*.xbps >/dev/null 2>&1; then
 		mkdir -p "$TARGETDIR/usr/share/atelier/repo"
 		cp -a "$ATELIER_REPO_LIVE"/. "$TARGETDIR/usr/share/atelier/repo/"
 		mkdir -p "$TARGETDIR/etc/xbps.d"
 		printf 'repository=/usr/share/atelier/repo\n' >"$TARGETDIR/etc/xbps.d/10-repository-atelier.conf"
-		# Also available during install from live path
-		REPO_ARGS=(--repository="$VOID_REPO" --repository="$ATELIER_REPO_LIVE")
+		REPO_ARGS+=(--repository="$ATELIER_REPO_LIVE")
 	else
-		log "WARN: personal repo not found at $ATELIER_REPO_LIVE"
-		REPO_ARGS=(--repository="$VOID_REPO")
+		log "WARN: personal repo missing at $ATELIER_REPO_LIVE"
 	fi
 
-	# Nonfree for proprietary NVIDIA
+	# Primary mirror for target system
+	mkdir -p "$TARGETDIR/etc/xbps.d"
+	printf 'repository=%s\n' "$VOID_REPO" >"$TARGETDIR/etc/xbps.d/00-repository-main.conf"
+
 	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
 		REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
-		mkdir -p "$TARGETDIR/usr/share/xbps.d" "$TARGETDIR/etc/xbps.d"
-		printf 'repository=%s\n' "$VOID_NONFREE_REPO" \
-			>"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
-		log "enabled Void nonfree repository for NVIDIA"
-	fi
-
-	# Live etc/xbps.d may have useful mirror settings
-	if [ -d /etc/xbps.d ]; then
-		mkdir -p "$TARGETDIR/etc/xbps.d"
-		# copy non-atelier host snippets if any (mirrors)
-		for f in /etc/xbps.d/*; do
-			[ -f "$f" ] || continue
-			case $f in
-			*atelier*) continue ;;
-			esac
-			cp -a "$f" "$TARGETDIR/etc/xbps.d/" 2>/dev/null || true
-		done
+		printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
 	fi
 
 	local pkgs=(base-system linux sudo dbus elogind NetworkManager polkit)
-	if is_efi; then
-		pkgs+=(grub-x86_64-efi grub efibootmgr dosfstools)
+	if [ "${INSTALL_BOOTLOADER:-1}" -eq 1 ]; then
+		if is_efi; then pkgs+=(grub-x86_64-efi grub efibootmgr dosfstools)
+		else pkgs+=(grub); fi
 	else
-		pkgs+=(grub)
+		is_efi && pkgs+=(dosfstools)
 	fi
 
-	# Atelier metapackage when personal repo is present
 	if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-desktop >/dev/null 2>&1; then
 		pkgs+=(atelier-desktop)
 	else
-		log "WARN: atelier-desktop not available; installing desktop stack may be incomplete"
+		log "WARN: atelier-desktop not in personal repo"
 	fi
 
-	# Graphics options
 	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
 		pkgs+=(void-repo-nonfree nvidia)
 		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-nvidia >/dev/null 2>&1; then
@@ -545,75 +668,28 @@ install_packages() {
 		fi
 	fi
 
+	# Optional groups (only if present in Void)
+	if [ "${PKG_EXTRA_CLI:-0}" -eq 1 ]; then
+		for p in htop ripgrep fd curl wget; do
+			if xbps-query --repository="$VOID_REPO" -R "$p" >/dev/null 2>&1; then pkgs+=("$p"); fi
+		done
+	fi
+	if [ "${PKG_MEDIA:-0}" -eq 1 ]; then
+		for p in mpv ffmpeg; do
+			if xbps-query --repository="$VOID_REPO" -R "$p" >/dev/null 2>&1; then pkgs+=("$p"); fi
+		done
+	fi
+
 	log "xbps-install ${pkgs[*]}"
 	xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
 
-	# Xlibre from external repo after key/conf from atelier-xlibre-repo
-	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ]; then
-		log "installing xlibre from external repository"
-		if [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
-			xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
-				log "WARN: xlibre install failed - run atelier-setup-xlibre after boot"
-		else
-			log "WARN: atelier-xlibre-repo not installed; skip xlibre package for now"
-		fi
+	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ] && [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
+		xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
+			log "WARN: xlibre install failed"
 	fi
 
 	xbps-reconfigure -r "$TARGETDIR" -f base-files >>"$LOG" 2>&1 || true
 	chroot "$TARGETDIR" xbps-reconfigure -a >>"$LOG" 2>&1 || true
-}
-
-configure_system() {
-	log "Configuring system"
-	printf '%s\n' "$HOSTNAME" >"$TARGETDIR/etc/hostname"
-
-	if [ -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
-		ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$TARGETDIR/etc/localtime"
-	elif [ -e "$TARGETDIR/usr/share/zoneinfo/$TIMEZONE" ]; then
-		chroot "$TARGETDIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
-	fi
-
-	# locale
-	if [ -f "$TARGETDIR/etc/default/libc-locales" ]; then
-		sed -i -e "/${LOCALE}/s/^#//" "$TARGETDIR/etc/default/libc-locales" || true
-	fi
-	printf 'LANG=%s\n' "$LOCALE" >"$TARGETDIR/etc/locale.conf"
-	chroot "$TARGETDIR" xbps-reconfigure -f glibc-locales >>"$LOG" 2>&1 || true
-
-	# keymap
-	if [ -f "$TARGETDIR/etc/rc.conf" ]; then
-		sed -i -e "s|#\?KEYMAP=.*|KEYMAP=$KEYMAP|g" "$TARGETDIR/etc/rc.conf" || true
-	fi
-	mkdir -p "$TARGETDIR/etc"
-	printf 'KEYMAP=%s\n' "$KEYMAP" >"$TARGETDIR/etc/vconsole.conf"
-
-	# root password
-	printf 'root:%s\n' "$ROOTPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
-
-	# user
-	local groups="wheel,users,audio,video,input,cdrom,optical,storage,network,floppy"
-	chroot "$TARGETDIR" useradd -m -s /bin/bash -G "$groups" "$USERNAME" || true
-	printf '%s:%s\n' "$USERNAME" "$USERPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
-
-	# sudo for wheel
-	if [ -d "$TARGETDIR/etc/sudoers.d" ]; then
-		printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
-		chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
-	fi
-
-	# services
-	enable_sv NetworkManager
-	enable_sv dbus
-	enable_sv elogind
-
-	# fstab
-	write_fstab
-
-	# ensure skel applied if user home empty of configs (useradd -m copies skel)
-	# Live-specific files must not remain
-	rm -f "$TARGETDIR/usr/sbin/void-installer" 2>/dev/null || true
-	rm -f "$TARGETDIR/usr/bin/void-installer" 2>/dev/null || true
-	rm -f "$TARGETDIR/etc/profile.d/atelier-live.sh" 2>/dev/null || true
 }
 
 enable_sv() {
@@ -622,17 +698,48 @@ enable_sv() {
 		mkdir -p "$TARGETDIR/etc/runit/runsvdir/default"
 		ln -sfn "/etc/sv/$sv" "$TARGETDIR/etc/runit/runsvdir/default/$sv"
 		log "enabled service $sv"
-	else
-		log "WARN: service $sv not found on target"
 	fi
 }
 
+configure_system() {
+	log "Configuring system"
+	printf '%s\n' "$HOSTNAME" >"$TARGETDIR/etc/hostname"
+	if [ -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
+		ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$TARGETDIR/etc/localtime"
+	elif [ -e "$TARGETDIR/usr/share/zoneinfo/$TIMEZONE" ]; then
+		chroot "$TARGETDIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+	fi
+	if [ -f "$TARGETDIR/etc/default/libc-locales" ]; then
+		sed -i -e "/${LOCALE}/s/^#//" "$TARGETDIR/etc/default/libc-locales" || true
+	fi
+	printf 'LANG=%s\n' "$LOCALE" >"$TARGETDIR/etc/locale.conf"
+	chroot "$TARGETDIR" xbps-reconfigure -f glibc-locales >>"$LOG" 2>&1 || true
+	if [ -f "$TARGETDIR/etc/rc.conf" ]; then
+		sed -i -e "s|#\?KEYMAP=.*|KEYMAP=$KEYMAP|g" "$TARGETDIR/etc/rc.conf" || true
+	fi
+	printf 'KEYMAP=%s\n' "$KEYMAP" >"$TARGETDIR/etc/vconsole.conf"
+	printf 'root:%s\n' "$ROOTPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
+	local groups="wheel,users,audio,video,input,cdrom,optical,storage,network,floppy"
+	chroot "$TARGETDIR" useradd -m -s /bin/bash -G "$groups" "$USERNAME" || true
+	printf '%s:%s\n' "$USERNAME" "$USERPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
+	if [ -d "$TARGETDIR/etc/sudoers.d" ]; then
+		printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
+		chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
+	fi
+	enable_sv NetworkManager
+	enable_sv dbus
+	enable_sv elogind
+	write_fstab
+	rm -f "$TARGETDIR/usr/sbin/void-installer" "$TARGETDIR/usr/bin/void-installer" \
+		"$TARGETDIR/etc/profile.d/atelier-live.sh" 2>/dev/null || true
+}
+
 install_bootloader() {
+	[ "${INSTALL_BOOTLOADER:-1}" -eq 1 ] || { log "skipping bootloader"; return 0; }
 	log "Installing GRUB on $DISK"
 	if is_efi; then
 		chroot "$TARGETDIR" grub-install --target=x86_64-efi \
-			--efi-directory=/boot/efi --bootloader-id=atelier --recheck \
-			>>"$LOG" 2>&1
+			--efi-directory=/boot/efi --bootloader-id=atelier --recheck >>"$LOG" 2>&1
 	else
 		chroot "$TARGETDIR" grub-install --target=i386-pc "$DISK" >>"$LOG" 2>&1
 	fi
@@ -645,32 +752,12 @@ cleanup_mounts() {
 	umount -R "$TARGETDIR" 2>/dev/null || umount -Rl "$TARGETDIR" 2>/dev/null || true
 }
 
-# --- main ---------------------------------------------------------------------
-
-main() {
-	: >"$LOG"
-	log "atelier-install $VERSION starting (UI=$UI)"
-	ensure_root "$@"
-
-	have parted || die "parted is required"
-	have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
-	have xbps-install || die "xbps-install is required"
-	have lsblk || die "util-linux (lsblk) is required"
-
-	step_welcome
-	step_select_disk
-	step_identity
-	step_graphics
-	step_summary
-
+run_install() {
 	ui_info "Installing... This may take a long time.
 
-Progress is logged to:
-$LOG
+Log: $LOG
 
-A terminal-free progress UI is limited in this MVP; do not power off."
-
-	# Run the destructive / long section with traps
+Do not power off."
 	trap 'log "FAILED - see $LOG"; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
 	partition_disk
 	mount_target
@@ -679,17 +766,52 @@ A terminal-free progress UI is limited in this MVP; do not power off."
 	install_bootloader
 	trap - ERR
 	cleanup_mounts
-
 	ui_info "Installation complete.
 
-You can reboot into Atelier Linux now.
-Remove the live medium when rebooting.
+Reboot into Atelier Linux and remove the live medium.
 
-Log file: $LOG"
+Log: $LOG"
 	if ui_confirm "Reboot now?"; then
 		sync
-		reboot || systemctl reboot 2>/dev/null || telinit 6 2>/dev/null || true
+		reboot || telinit 6 2>/dev/null || true
 	fi
+}
+
+# --- main wizard loop ---------------------------------------------------------
+main() {
+	: >"$LOG"
+	log "atelier-install $VERSION starting UI=$UI"
+	ensure_root "$@"
+	have parted || die "parted is required"
+	have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
+	have xbps-install || die "xbps-install is required"
+	have lsblk || die "util-linux (lsblk) is required"
+
+	# steps as names; navigate with index
+	local steps=(welcome disk identity locale graphics software mirror bootloader summary)
+	local i=0 n=${#steps[@]} rc
+	while [ "$i" -ge 0 ] && [ "$i" -lt "$n" ]; do
+		rc=0
+		case ${steps[$i]} in
+		welcome) step_welcome || rc=$? ;;
+		disk) step_disk || rc=$? ;;
+		identity) step_identity || rc=$? ;;
+		locale) step_locale || rc=$? ;;
+		graphics) step_graphics || rc=$? ;;
+		software) step_software || rc=$? ;;
+		mirror) step_mirror || rc=$? ;;
+		bootloader) step_bootloader || rc=$? ;;
+		summary) step_summary || rc=$? ;;
+		esac
+		log "step ${steps[$i]} rc=$rc"
+		case $rc in
+		0) i=$((i + 1)) ;;
+		1) i=$((i - 1)); [ "$i" -lt 0 ] && i=0 ;;
+		*) log "abort"; exit 1 ;;
+		esac
+	done
+
+	run_install
 }
 
 main "$@"

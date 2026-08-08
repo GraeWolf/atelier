@@ -5,11 +5,9 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` |
+| XBPS package | `atelier-installer` **0.2.0+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
-
-Build with the personal repo:
 
 ```bash
 ./scripts/build-repo.sh
@@ -18,31 +16,37 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Runtime stack
+## Wizard (v0.2)
 
-- GUI: **yad** (preferred), else zenity, else dialog
-- Storage: parted, mkfs.ext4, mkfs.vfat (EFI)
-- Privilege: re-exec with **pkexec** or **sudo**
+Stateful Back/Next flow (whole-disk only):
 
-## Install algorithm (summary)
+welcome → disk → identity → locale → graphics → software → mirror → bootloader → summary → install
 
-1. Collect disk + identity via GUI
-2. `wipefs` + `parted` GPT layout
-3. Format and mount under `/mnt/atelier-target` (bind dev/proc/sys/run)
-4. `xbps-install -r` from Void mirror + live personal repo
-5. Configure hostname, locale, timezone, users, services, fstab
-6. `grub-install` + `grub-mkconfig`
-7. Unmount; offer reboot
+### UI rules
 
-## Limitations (document for users)
+- **yad** preferred; zenity/dialog fallbacks
+- **ASCII-only** dialog strings (yad + C locale safety)
+- Explicit **Yes/No** or **Back/Next/Abort** exit codes
+- `ensure_gui_env` + pkexec env preservation (`DISPLAY`, `LANG`, `XDG_RUNTIME_DIR`, …)
 
-See `docs/user/installer.md` and `installer/README.md`.
+### Options wired into install phase
+
+| Variable | Effect |
+|----------|--------|
+| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos for install + target `/etc/xbps.d` |
+| `INSTALL_NVIDIA` | nonfree + nvidia + atelier-nvidia |
+| `INSTALL_XLIBRE` | atelier-xlibre-repo + xlibre |
+| `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
+| `INSTALL_BOOTLOADER` | GRUB install or skip |
+
+## Runtime dependencies
+
+yad (or zenity/dialog), parted, e2fsprogs, dosfstools, util-linux, xbps, grub*, sudo, polkit
 
 ## Testing checklist
 
-- [ ] `./scripts/build-repo.sh` produces `atelier-installer`
-- [ ] Live ISO includes package and menu entry
-- [ ] VM install (EFI) completes and reboots to bspwm
-- [ ] BIOS VM path (if available) completes
-- [ ] Target has `/usr/share/atelier/repo` and can query atelier packages
-- [ ] Live-only files absent on target (`atelier-live.sh`, void-installer)
+- [ ] Back from mid-wizard restores previous step without losing earlier answers (re-entry may re-prompt; state kept in shell vars)
+- [ ] Non-NVIDIA VM: no NVIDIA packages
+- [ ] Mirror appears in target `00-repository-main.conf`
+- [ ] Bootloader skip leaves system without GRUB step
+- [ ] Optional groups install only when checked

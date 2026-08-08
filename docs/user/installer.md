@@ -2,49 +2,61 @@
 
 ## From the live ISO
 
-1. Boot the live medium.
-2. Wait for the graphical session (or run `startx` on tty1).
-3. Start **Install Atelier Linux** from the application menu, or run:
+1. Boot the live medium and start the graphical session (`startx` if needed).
+2. Run **Install Atelier Linux** from the menu, or:
 
    ```bash
    atelier-install
    ```
 
-4. Follow the prompts:
-   - Confirm you understand the disk will be erased
-   - Select the target disk
-   - Set hostname, user, passwords, timezone, locale, keymap
-   - Optional: proprietary NVIDIA drivers and/or Xlibre
-   - Confirm the summary
-5. Wait for packages to download and install (needs network).
-6. Reboot when finished; remove the live medium.
+3. Walk the **Back / Next** wizard:
 
-On NVIDIA desktops you can also run `sudo atelier-setup-nvidia` after install if you skipped the option. See [nvidia.md](nvidia.md).
+   | Step | What you choose |
+   |------|-----------------|
+   | Welcome | Overview |
+   | Disk | Whole disk to erase |
+   | Identity | Hostname, user, passwords |
+   | Locale | Timezone, locale, keymap (lists) |
+   | Graphics | NVIDIA (if GPU present), Xlibre |
+   | Software | Optional package groups |
+   | Mirror | Void package mirror |
+   | Bootloader | Install GRUB (recommended) or skip |
+   | Summary | Review and start install |
 
-Log file: `/tmp/atelier-install.log`
+4. Wait for packages (needs network). Log: `/tmp/atelier-install.log`
+5. Reboot; remove the live medium.
 
-## What the MVP installer does
+Live user (if needed before install): **anon** / **voidlinux**
 
-- Erases the **entire** selected disk
-- Creates a simple GPT layout (EFI+root or BIOS grub+root)
-- Installs Void `base-system`, kernel, GRUB, NetworkManager, and **atelier-desktop** when the personal repository is on the live image
-- Creates your user (with `wheel`/sudo) and root password
+## What the installer does
 
-## What it does not do (yet)
+- Erases the **entire** selected disk (GPT: EFI+root or BIOS grub+root)
+- Installs Void base, kernel, NetworkManager, **atelier-desktop** when the personal repo is on the medium
+- Optional: NVIDIA proprietary, Xlibre, extra CLI/media packages
+- Writes chosen Void mirror into the target system
+- Creates your user (`wheel`/sudo) and root password
+
+## What it does not do
 
 - Full-disk encryption
-- Custom partitions or dual-boot
-- Automatic mirror selection UI
-- Dual-GPU / Optimus polish
+- Custom partitions / dual-boot
+- Automatic dual-GPU (Optimus) polish
 
-## NVIDIA / Xlibre during install
+## Graphics
 
-- **NVIDIA GPU detected:** you get a clear **Yes / No** prompt for proprietary drivers.
-- **No NVIDIA GPU (typical VM):** drivers are **skipped** (no “install anyway?” prompt). Use `sudo atelier-setup-nvidia` later on real hardware.
-- **Xlibre:** separate **Yes / No** prompt (PLAN default display server; usually **No** in VMs).
+- **NVIDIA GPU detected:** Yes/No for proprietary drivers
+- **No NVIDIA (typical VM):** drivers skipped; use `sudo atelier-setup-nvidia` on real hardware later
+- **Xlibre:** Yes/No (usually No in VMs)
 
-Details: [nvidia.md](nvidia.md).
+See [nvidia.md](nvidia.md).
+
+## Optional software groups
+
+- **Extra CLI:** htop, ripgrep, fd, curl, wget (if available in Void)
+- **Media:** mpv, ffmpeg
+
+Desktop stack from PLAN is always installed via `atelier-desktop` when present.
 
 ## Fallback
 
-Advanced users can still use **void-installer** (text UI) if it is present on the live image.
+Text UI **void-installer** may still exist on the live image for emergencies.
