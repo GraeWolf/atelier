@@ -1,9 +1,16 @@
-/* Atelier — GTK4 color overrides (Tokyo Night on Adwaita-dark) */
+/* Atelier — GTK4 color overrides (Tokyo Night on Yaru-dark)
+ *
+ * Companion to gtk-3.0/gtk.css. Prefer readable fg+bg pairs.
+ */
 
 @define-color atelier_bg #1a1b26;
 @define-color atelier_bg_alt #292e42;
+@define-color atelier_bg_deep #16161e;
 @define-color atelier_fg #c0caf5;
+@define-color atelier_fg_dim #a9b1d6;
 @define-color atelier_blue #7aa2f7;
+@define-color atelier_comment #565f89;
+@define-color atelier_border #3b4261;
 
 window {
 	background-color: @atelier_bg;
@@ -12,5 +19,58 @@ window {
 
 headerbar {
 	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+.sidebar,
+list.navigation-sidebar {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+.sidebar row:selected,
+list.navigation-sidebar row:selected {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+.view,
+listview,
+gridview,
+columnview {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+entry {
+	background-color: @atelier_bg_deep;
+	color: @atelier_fg;
+	caret-color: @atelier_fg;
+}
+
+textview,
+textview > text {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+	caret-color: @atelier_fg;
+}
+
+popover {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+tooltip {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+selection {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+notebook {
+	background-color: @atelier_bg;
 	color: @atelier_fg;
 }

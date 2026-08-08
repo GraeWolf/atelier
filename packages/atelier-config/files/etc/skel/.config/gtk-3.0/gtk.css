@@ -1,36 +1,248 @@
-/* Atelier — GTK3 color overrides (Tokyo Night on Adwaita-dark) */
-/* Keeps us theme-package-free while matching the palette. */
+/* Atelier — GTK3 color overrides (Tokyo Night on Yaru-dark)
+ *
+ * Yaru-dark is the real theme package (Void: yaru). This file only nudges
+ * colors toward Tokyo Night and keeps contrast readable in sidebars,
+ * file choosers, and views. Always set both background-color and color.
+ */
 
 @define-color atelier_bg #1a1b26;
 @define-color atelier_bg_alt #292e42;
+@define-color atelier_bg_deep #16161e;
 @define-color atelier_fg #c0caf5;
+@define-color atelier_fg_dim #a9b1d6;
 @define-color atelier_blue #7aa2f7;
 @define-color atelier_magenta #bb9af7;
 @define-color atelier_red #f7768e;
 @define-color atelier_green #9ece6a;
 @define-color atelier_comment #565f89;
+@define-color atelier_border #3b4261;
 
-window, .background {
+/* --- Windows & chrome ---------------------------------------------------- */
+
+window,
+.background,
+.csd {
 	background-color: @atelier_bg;
 	color: @atelier_fg;
 }
 
-headerbar {
+headerbar,
+.titlebar,
+headerbar.default-decoration {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+	border-color: @atelier_border;
+}
+
+headerbar label,
+headerbar .title,
+headerbar .subtitle {
+	color: @atelier_fg;
+}
+
+/* --- Sidebars / Places (Nemo, file chooser) ------------------------------ */
+
+.sidebar,
+placessidebar,
+.sidebar .view,
+.sidebar list,
+list.sidebar,
+stacksidebar list {
 	background-color: @atelier_bg_alt;
 	color: @atelier_fg;
 }
 
-.sidebar {
-	background-color: @atelier_bg_alt;
+.sidebar label,
+.sidebar row,
+placessidebar row,
+placessidebar label,
+.sidebar .cell {
+	color: @atelier_fg;
 }
 
-selection, *:selected {
+.sidebar row:selected,
+placessidebar row:selected,
+.sidebar row:selected label {
 	background-color: @atelier_blue;
 	color: @atelier_bg;
 }
 
-tooltip {
+.sidebar row:hover,
+placessidebar row:hover {
+	background-color: @atelier_border;
+	color: @atelier_fg;
+}
+
+/* --- Views (file lists, trees, icon views) ------------------------------- */
+
+.view,
+treeview,
+treeview.view,
+listview,
+iconview,
+iconview.view {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+treeview header button,
+column-header button {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg_dim;
+	border-color: @atelier_border;
+}
+
+.view:selected,
+treeview:selected,
+.view:selected:focus,
+treeview.view:selected {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+/* --- Entries & text ------------------------------------------------------ */
+
+entry,
+entry.flat {
+	background-color: @atelier_bg_deep;
+	color: @atelier_fg;
+	border-color: @atelier_border;
+	caret-color: @atelier_fg;
+}
+
+entry:focus {
+	border-color: @atelier_blue;
+}
+
+entry selection,
+textview selection,
+textview text selection {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+textview,
+textview text,
+textview.view {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+	caret-color: @atelier_fg;
+}
+
+/* --- File chooser -------------------------------------------------------- */
+
+filechooser,
+filechooser .dialog-vbox,
+filechooser stack,
+filechooser .view,
+filechooser list {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+filechooser .sidebar,
+filechooser placessidebar {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+filechooser pathbar,
+path-bar,
+.path-bar {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+}
+
+filechooser entry {
+	background-color: @atelier_bg_deep;
+	color: @atelier_fg;
+}
+
+/* --- Buttons, menus, popovers -------------------------------------------- */
+
+button {
+	color: @atelier_fg;
+}
+
+button:disabled {
+	color: @atelier_comment;
+}
+
+menu,
+.menu,
+popover,
+popover.background,
+.context-menu {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg;
+	border-color: @atelier_border;
+}
+
+menuitem,
+modelbutton,
+popover modelbutton {
+	color: @atelier_fg;
+}
+
+menuitem:hover,
+modelbutton:hover {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+/* --- Notebooks (editors with tabs / preview split) ----------------------- */
+
+notebook,
+notebook > header,
+notebook > stack {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+notebook tab {
+	background-color: @atelier_bg_alt;
+	color: @atelier_fg_dim;
+}
+
+notebook tab:checked {
+	background-color: @atelier_bg;
+	color: @atelier_fg;
+}
+
+/* --- Selection, links, tooltips, scrollbars ------------------------------ */
+
+selection,
+*:selected {
+	background-color: @atelier_blue;
+	color: @atelier_bg;
+}
+
+*:disabled {
+	color: @atelier_comment;
+}
+
+link,
+.link {
+	color: @atelier_blue;
+}
+
+tooltip,
+tooltip.background {
 	background-color: @atelier_bg_alt;
 	color: @atelier_fg;
 	border: 1px solid @atelier_comment;
+}
+
+scrollbar slider {
+	background-color: @atelier_comment;
+}
+
+scrollbar slider:hover {
+	background-color: @atelier_fg_dim;
+}
+
+/* --- Paned separators (split editors / preview) -------------------------- */
+
+paned > separator {
+	background-color: @atelier_border;
 }

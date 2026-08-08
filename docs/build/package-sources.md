@@ -55,6 +55,14 @@ Minimal X11 session helpers (not listed in PLAN, but needed to start/control X):
 | Root color / WM hooks | `xsetroot` | void |
 | X resources | `xrdb` | void |
 
+GTK / icon theming glue (not named in PLAN §7, required for consistent dark apps):
+
+| Role | XBPS name | Source | Notes |
+|------|-----------|--------|-------|
+| Dark GTK theme | `yaru` | void | Provides **Yaru-dark**; Void has no Adwaita-dark theme package. Dep of `atelier-config`. |
+| Icon theme | `papirus-icon-theme` | void | **Papirus-Dark** in configs |
+| Qt theme tools | `qt5ct`, `qt6ct` | void | Tokyo Night color schemes under `configs/qt/` |
+
 ## Applications (PLAN §7)
 
 | PLAN | XBPS name | Source | Notes |

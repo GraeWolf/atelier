@@ -22,9 +22,9 @@ fi
 export QT_QPA_PLATFORMTHEME=qt5ct
 export QT_STYLE_OVERRIDE=
 
-# GTK / icons (also set in settings.ini)
-export GTK_THEME=Adwaita-dark
-export XCURSOR_THEME=Adwaita
+# GTK / icons (also set in settings.ini; base theme package: yaru)
+export GTK_THEME=Yaru-dark
+export XCURSOR_THEME=Yaru
 export XCURSOR_SIZE=24
 
 # --- VM / weak OpenGL help ---------------------------------------------------
@@ -64,6 +64,14 @@ fi
 # dbus session (runit / elogind systems usually already have this)
 if command -v dbus-launch >/dev/null 2>&1 && [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
 	eval "$(dbus-launch --sh-syntax --exit-with-session)"
+fi
+
+# GNOME/GTK settings (Nemo and many GTK apps prefer gsettings over settings.ini)
+if command -v gsettings >/dev/null 2>&1; then
+	gsettings set org.gnome.desktop.interface gtk-theme 'Yaru-dark' 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark' 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
 fi
 
 # Starship for interactive shells started from the session (bash/zsh rc also set this)

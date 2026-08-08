@@ -33,7 +33,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 
 - **Palette:** Tokyo Night dark (`colors/tokyo-night.conf`)
 - **Icons:** Papirus-Dark (package depend)
-- **GTK base:** Adwaita-dark + CSS color overrides (no separate GTK theme package required for MVP)
+- **GTK base:** Yaru-dark (Void package `yaru`) + Tokyo Night CSS overrides in `gtk-3.0`/`gtk-4.0`
 - **Qt:** Fusion + custom Tokyo Night color schemes via qt5ct/qt6ct
 - **Fonts:** Fira Code + Nerd Symbols (JetBrains Mono planned; not required yet)
 

@@ -19,6 +19,30 @@ Atelier is opinionated but meant to stay **easy to understand and modify**. Pref
 
 Defaults are installed from **`atelier-config`** into `/etc/skel` for new users. Your home directory copies are yours to edit.
 
+### GTK theme (Yaru-dark + Tokyo Night)
+
+Void does not ship an Adwaita-dark theme package. Atelier uses:
+
+| Piece | Value |
+|-------|--------|
+| Base theme | **Yaru-dark** (package `yaru`, pulled by `atelier-config`) |
+| Icons | **Papirus-Dark** |
+| Cursor | **Yaru** |
+| Palette tweaks | `~/.config/gtk-3.0/gtk.css` (and gtk-4.0) |
+
+Session startup (`~/.xinitrc`) also sets GNOME interface keys via `gsettings` so **Nemo** and other GTK apps prefer dark mode:
+
+- `org.gnome.desktop.interface gtk-theme` → `Yaru-dark`
+- `org.gnome.desktop.interface color-scheme` → `prefer-dark`
+
+If an existing account still looks light after an update, re-copy the skel GTK configs and re-login:
+
+```bash
+cp -a /etc/skel/.config/gtk-3.0 ~/.config/
+cp -a /etc/skel/.config/gtk-4.0 ~/.config/
+# merge ~/.xinitrc from /etc/skel/.xinitrc if you have not customized it
+```
+
 ### Upstream source of truth (builders)
 
 In the Git repository, edit `configs/` and rebuild packages — do not treat a single machine as the only copy.
