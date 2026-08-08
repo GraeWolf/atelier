@@ -39,6 +39,23 @@ In the Git repository, edit `configs/` and rebuild packages — do not treat a s
 
 Also documented in `/usr/share/doc/atelier/tokyo-night-palette.conf` when `atelier-config` is installed.
 
+## Wallpaper
+
+Default background: **nord.png** via `feh`.
+
+```bash
+# shipped paths
+ls /usr/share/atelier/wallpapers/
+
+# switch to the alternate
+feh --no-fehbg --bg-fill /usr/share/atelier/wallpapers/catppuccin-mocha.png
+
+# persist for your user session (bspwmrc reads ATELIER_WALLPAPER if set, else nord)
+# or edit ~/.config/bspwm/bspwmrc WALL= line / export ATELIER_WALLPAPER in ~/.xinitrc
+```
+
+To publish a new default for everyone, put the image in repo `configs/wallpapers/`, set `nord.png` (or change bspwmrc), rebuild packages/ISO.
+
 ## Safe first edits
 
 1. **Keybindings** — edit `~/.config/sxhkd/sxhkdrc`, then Super+Escape to reload.

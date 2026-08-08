@@ -2,7 +2,7 @@
 # Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.1.4
+version=0.2.0
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
@@ -17,6 +17,7 @@ depends="
  papirus-icon-theme>=0
  qt5ct>=0
  qt6ct>=0
+ feh>=0
 "
 
 do_install() {
@@ -74,4 +75,9 @@ do_install() {
 		usr/share/xsessions
 	vinstall "${FILESDIR}/usr/share/doc/atelier/tokyo-night-palette.conf" 644 \
 		usr/share/doc/atelier
+	# Wallpapers
+	vinstall "${FILESDIR}/usr/share/atelier/wallpapers/nord.png" 644 \
+		usr/share/atelier/wallpapers
+	vinstall "${FILESDIR}/usr/share/atelier/wallpapers/catppuccin-mocha.png" 644 \
+		usr/share/atelier/wallpapers
 }

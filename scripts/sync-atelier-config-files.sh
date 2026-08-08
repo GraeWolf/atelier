@@ -38,7 +38,8 @@ mkdir -p \
 	"$dst/etc/skel/.config/xsecurelock" \
 	"$dst/etc/bash/bashrc.d" \
 	"$dst/usr/share/xsessions" \
-	"$dst/usr/share/doc/atelier"
+	"$dst/usr/share/doc/atelier" \
+	"$dst/usr/share/atelier/wallpapers"
 
 install -m 755 "$src/bspwm/bspwmrc"              "$dst/etc/skel/.config/bspwm/bspwmrc"
 install -m 644 "$src/sxhkd/sxhkdrc"              "$dst/etc/skel/.config/sxhkd/sxhkdrc"
@@ -71,5 +72,9 @@ install -m 644 "$src/session/Xresources"         "$dst/etc/skel/.Xresources"
 install -m 644 "$src/session/atelier.desktop"    "$dst/usr/share/xsessions/atelier.desktop"
 install -m 644 "$src/shell/bashrc.d-atelier.sh"  "$dst/etc/bash/bashrc.d/atelier.sh"
 install -m 644 "$src/colors/tokyo-night.conf"    "$dst/usr/share/doc/atelier/tokyo-night-palette.conf"
+install -m 644 "$src/wallpapers/nord.png" \
+	"$dst/usr/share/atelier/wallpapers/nord.png"
+install -m 644 "$src/wallpapers/catppuccin-mocha.png" \
+	"$dst/usr/share/atelier/wallpapers/catppuccin-mocha.png"
 
 printf 'Synced %s → %s\n' "$src" "$dst"

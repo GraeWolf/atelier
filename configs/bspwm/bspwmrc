@@ -30,6 +30,14 @@ if command -v xss-lock >/dev/null 2>&1; then
 	pgrep -x xss-lock >/dev/null || xss-lock --transfer-sleep-lock -- xsecurelock &
 fi
 
+# Wallpaper (default: nord; alternate: catppuccin-mocha.png in same dir)
+WALL="${ATELIER_WALLPAPER:-/usr/share/atelier/wallpapers/nord.png}"
+if [ -f "$WALL" ] && command -v feh >/dev/null 2>&1; then
+	feh --no-fehbg --bg-fill "$WALL" &
+else
+	xsetroot -solid "#1a1b26"
+fi
+
 # --- Monitors / desktops -----------------------------------------------------
 # Ten desktops on the primary monitor. Adjust if you use multi-monitor.
 bspc monitor -d 1 2 3 4 5 6 7 8 9 10
