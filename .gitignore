@@ -43,3 +43,6 @@ packages/**/files.stuck.*
 **/private-keys/
 **/*.priv
 **/*private*key*
+
+# Personal local notes (do not commit)
+LOCAL*
