@@ -46,3 +46,6 @@ packages/**/files.stuck.*
 
 # Personal local notes (do not commit)
 LOCAL*
+
+# Beginner learning notes — local only, never commit
+learning/
