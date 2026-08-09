@@ -23,8 +23,9 @@ Modifier key: **Super** (Windows / Command key).
 |------|--------|
 | Super+w | Close window |
 | Super+Shift+w | Kill window |
-| Super+h/j/k/l | Focus left/down/up/right |
-| Super+arrows | Focus (arrow keys) |
+| Super+h/j/l | Focus left/down/right |
+| Super+arrows | Focus (all directions; Up = north) |
+| Super+k | Keybind cheat sheet (floating; toggle) |
 | Super+Shift+h/j/k/l | Swap with neighbor |
 | Super+Alt+h/j/k/l | Resize |
 | Super+f | Fullscreen |

@@ -2,7 +2,7 @@
 # Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.2.7
+version=0.2.8
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
@@ -49,6 +49,11 @@ do_install() {
 	# PATH-stable launchers for sxhkd / session (must not rely on nested shell quotes)
 	vinstall "${FILESDIR}/usr/bin/atelier-rofi" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-monitors" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-keybinds" 755 usr/bin
+	vinstall "${FILESDIR}/usr/share/doc/atelier/keybinds.txt" 644 \
+		usr/share/doc/atelier
+	vinstall "${FILESDIR}/etc/skel/.config/atelier/keybinds.txt" 644 \
+		etc/skel/.config/atelier
 	vinstall "${FILESDIR}/etc/skel/.config/ghostty/config" 644 \
 		etc/skel/.config/ghostty
 	# Neovim config (Tokyo Night + vim.pack plugins; first launch fetches plugins)

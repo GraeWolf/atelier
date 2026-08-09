@@ -1,0 +1,80 @@
+#!/bin/sh
+# Atelier — floating centered keybind cheat sheet (Super+k)
+# Toggle: second Super+k closes an open cheat sheet.
+# Uses POSIX sh only (no bashisms).
+set -eu
+
+SHEET="${ATELIER_KEYBINDS_SHEET:-}"
+if [ -z "$SHEET" ]; then
+	for cand in \
+		"${XDG_CONFIG_HOME:-$HOME/.config}/atelier/keybinds.txt" \
+		"$HOME/.config/atelier/keybinds.txt" \
+		/usr/share/doc/atelier/keybinds.txt
+	do
+		if [ -f "$cand" ]; then
+			SHEET=$cand
+			break
+		fi
+	done
+fi
+
+if [ -z "${SHEET:-}" ] || [ ! -f "$SHEET" ]; then
+	printf 'atelier-keybinds: cheat sheet file not found\n' >&2
+	exit 1
+fi
+
+# Marker path used by the pager process for toggle detection
+MARKER="${XDG_RUNTIME_DIR:-/tmp}/atelier-keys-$$"
+# Toggle: any live marker or known terminal title
+if pgrep -f 'less .*keybinds\.txt' >/dev/null 2>&1 \
+	|| pgrep -f 'more .*keybinds\.txt' >/dev/null 2>&1 \
+	|| pgrep -f 'xterm .*-name atelier-keys' >/dev/null 2>&1; then
+	pkill -f 'less .*keybinds\.txt' 2>/dev/null || true
+	pkill -f 'more .*keybinds\.txt' 2>/dev/null || true
+	pkill -f 'xterm .*-name atelier-keys' 2>/dev/null || true
+	if command -v bspc >/dev/null 2>&1; then
+		for n in $(bspc query -N -n .window 2>/dev/null); do
+			if bspc query -T -n "$n" 2>/dev/null | grep -q 'Atelier keybinds'; then
+				bspc node "$n" -c 2>/dev/null || true
+			fi
+		done
+	fi
+	exit 0
+fi
+
+# Pager command (path must contain keybinds.txt for toggle pgrep)
+run_pager() {
+	if command -v less >/dev/null 2>&1; then
+		exec less -R --tilde -P 'Atelier keys  q=quit' "$SHEET"
+	fi
+	exec more "$SHEET"
+}
+
+# Prefer xterm: reliable WM_CLASS for float + center
+if command -v xterm >/dev/null 2>&1; then
+	if command -v bspc >/dev/null 2>&1; then
+		bspc rule -a XTerm:atelier-keys -o state=floating center=on focus=on \
+			rectangle=900x620+0+0
+	fi
+	exec xterm -name atelier-keys -T "Atelier keybinds" -geometry 100x38 \
+		-fa "Fira Code" -fs 11 \
+		-bg "#1a1b26" -fg "#c0caf5" \
+		-e less -R --tilde -P "Atelier keys  q=quit" "$SHEET"
+fi
+
+# ghostty (desktop default)
+if command -v ghostty >/dev/null 2>&1; then
+	if command -v bspc >/dev/null 2>&1; then
+		bspc rule -a com.mitchellh.ghostty -o state=floating center=on focus=on \
+			rectangle=900x620+0+0 2>/dev/null || true
+		bspc rule -a ghostty -o state=floating center=on focus=on \
+			rectangle=900x620+0+0 2>/dev/null || true
+	fi
+	if ghostty --help 2>&1 | grep -q -- '--title'; then
+		exec ghostty --title="Atelier keybinds" -e less -R --tilde -P "Atelier keys  q=quit" "$SHEET"
+	fi
+	exec ghostty -e less -R --tilde -P "Atelier keys  q=quit" "$SHEET"
+fi
+
+printf 'atelier-keybinds: need xterm or ghostty for a floating window\n' >&2
+run_pager

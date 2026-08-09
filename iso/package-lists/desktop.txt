@@ -27,6 +27,8 @@ fastfetch
 btop
 
 # --- Applications ---
+# less: keybind cheat sheet pager (atelier-keybinds / Super+k)
+less
 nemo
 neovim
 thunderbird

@@ -1,0 +1,46 @@
+ Atelier keybind cheat sheet
+  Super = Windows / Command key
+  Press q or Esc to close this window (or Super+k again to toggle)
+
+ ── Launch ────────────────────────────────────────────────────────────────
+  Super+Enter          Terminal (ghostty)
+  Super+Shift+Enter    Terminal + neovim
+  Super+d              App launcher (rofi)
+  Super+Shift+d        Run command (rofi)
+  Super+e              File manager (nemo)
+  Super+b              Browser (Brave if installed)
+  Super+k              This cheat sheet (toggle)
+
+ ── Windows ───────────────────────────────────────────────────────────────
+  Super+w              Close window
+  Super+Shift+w        Kill window
+  Super+h / j / l      Focus left / down / right
+  Super+arrows         Focus (all directions; Up = north)
+  Super+Shift+h/j/k/l  Swap with neighbor
+  Super+Alt+h/j/k/l    Resize
+  Super+f              Fullscreen
+  Super+t              Tiled
+  Super+Shift+Space    Floating toggle
+  Super+Ctrl+h/j/k/l   Preselect split
+  Super+Ctrl+Space     Cancel preselect
+  Super+r              Rotate tree 90°
+  Super+=              Balance tree
+
+ ── Desktops ──────────────────────────────────────────────────────────────
+  Super+1 … 6          Primary monitor desktops
+  Super+7 … 9          Secondary monitor desktops (dual-head)
+  Super+Shift+1 … 9    Send window to desktop (follow)
+
+ ── Session / system ──────────────────────────────────────────────────────
+  Super+Shift+l        Lock screen
+  Super+Shift+q        Quit bspwm
+  Super+Escape         Reload sxhkd
+  Super+Shift+r        Restart bspwm (reload session configs)
+  Super+Shift+m        Multi-monitor layout wizard
+  Super+Shift+v        Volume mixer (pavucontrol)
+  Media volume keys    Raise / lower / mute
+
+ ── Notes ─────────────────────────────────────────────────────────────────
+  Full map:  ~/.config/sxhkd/sxhkdrc
+  Desktop:   docs/user/desktop.md (on the website / package docs)
+  Theme:     Tokyo Night · bspwm

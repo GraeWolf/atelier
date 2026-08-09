@@ -53,9 +53,13 @@ install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/con
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/etc/skel/.config/rofi/atelier-rofi.sh"
 mkdir -p "$dst/etc/skel/.config/rofi/themes"
 install -m 644 "$src/rofi/themes/tokyo-night.rasi" "$dst/etc/skel/.config/rofi/themes/tokyo-night.rasi"
-mkdir -p "$dst/usr/bin"
+mkdir -p "$dst/usr/bin" "$dst/usr/share/doc/atelier" \
+	"$dst/etc/skel/.config/atelier"
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/usr/bin/atelier-rofi"
 install -m 755 "$src/session/atelier-monitors"   "$dst/usr/bin/atelier-monitors"
+install -m 755 "$src/session/atelier-keybinds"   "$dst/usr/bin/atelier-keybinds"
+install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
+install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/etc/skel/.config/atelier/keybinds.txt"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
 # Neovim (voidwolf-based; plugins install on first launch via vim.pack)
 install -m 644 "$src/nvim/init.lua"              "$dst/etc/skel/.config/nvim/init.lua"

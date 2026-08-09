@@ -40,6 +40,7 @@ depends="
  yt-dlp>=0
  gcc>=0
  feh>=0
+ less>=0
  pipewire>=0
  wireplumber>=0
  wireplumber-elogind>=0

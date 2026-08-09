@@ -20,9 +20,9 @@ super + w
 super + shift + w
 	bspc node -k
 
-# --- Focus (vim-like) --------------------------------------------------------
-super + {h,j,k,l}
-	bspc node -f {west,south,north,east}
+# --- Focus (vim-like; k reserved for Super+k keybind cheat sheet) ------------
+super + {h,j,l}
+	bspc node -f {west,south,east}
 
 super + {Left,Down,Up,Right}
 	bspc node -f {west,south,north,east}
@@ -83,6 +83,11 @@ super + shift + q
 # Multi-monitor layout wizard (writes ~/.config/atelier/monitors.conf)
 super + shift + m
 	atelier-monitors setup
+
+# Keybind cheat sheet (floating centered TUI; toggle)
+# Prefer PATH (/usr/bin from package); fall back to ~/bin for local installs
+super + k
+	sh -c 'command -v atelier-keybinds >/dev/null 2>&1 && exec atelier-keybinds; exec "$HOME/bin/atelier-keybinds"'
 
 # --- Audio (PipeWire via pactl / pavucontrol) --------------------------------
 XF86AudioRaiseVolume
