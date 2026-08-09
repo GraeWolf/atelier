@@ -32,8 +32,9 @@ palette = 13=#bb9af7
 palette = 14=#7dcfff
 palette = 15=#c0caf5
 
-# Fully opaque window — transparent terminals + broken compositors hide text
-background-opacity = 1
+# Slight transparency; picom opacity-rule also softens the window.
+# Keep high enough for readable text; browsers stay fully opaque in picom.
+background-opacity = 0.92
 minimum-contrast = 1.1
 
 window-padding-x = 8

@@ -66,8 +66,10 @@ One bar per monitor (`atelier-primary` / `atelier-secondary`).
 | Primary bar | Desktops **1–6** (pinned), CPU, mem, **net**, volume, layout, **tray** |
 | Secondary bar | Desktops **7–9** (pinned), same modules **without** tray |
 | Volume | Icon + %; **scroll** wheel changes volume; right-click → pavucontrol |
-| Network | Shows **up** / **down**; **left-click** → floating `nmtui` (needs NetworkManager) |
+| Network | Wi‑Fi or ethernet **icon** + up/down; **left-click** → floating `nmtui` |
 | Tray | **Primary only** (X11 limitation) |
+
+If the secondary bar is missing, ensure `monitor = ${env:MONITOR:}` is in the bar config and re-run `~/.config/polybar/launch.sh`.
 
 Config: `~/.config/polybar/`. Restart bars: Super+Shift+r (bspwm reload) or re-login.
 
@@ -75,6 +77,19 @@ Config: `~/.config/polybar/`. Restart bars: Super+Shift+r (bspwm reload) or re-l
 # manual restart
 ~/.config/polybar/launch.sh
 ```
+
+## Compositor (picom)
+
+Picom starts with the session (`bspwmrc`).
+
+| Goal | How |
+|------|-----|
+| Less tearing / smoother video | `backend = glx`, `vsync = true`, fullscreen unredirect |
+| Transparent terminals | Ghostty `background-opacity` + picom `opacity-rule` for ghostty/xterm |
+| Opaque browsers | picom forces opacity 100% for Firefox/Brave/Chromium/Chrome |
+
+Skip: `export ATELIER_SKIP_PICOM=1` before starting the session.  
+Log: `/tmp/atelier-picom.log` if picom fails to start.
 
 ## Applications (default set)
 

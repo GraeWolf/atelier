@@ -6,18 +6,21 @@
 # Hotkeys
 pgrep -x sxhkd >/dev/null || sxhkd &
 
-# Compositor — prefer config; fall back to plain xrender if config fails
-if ! pgrep -x picom >/dev/null 2>&1; then
-	_picom_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/picom/picom.conf"
+# Compositor: terminal transparency, opaque browsers, vsync (less tearing).
+# picom.conf prefers glx; fall back to xrender if glx fails (VMs).
+_picom_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/picom/picom.conf"
+if [ -z "${ATELIER_SKIP_PICOM:-}" ]; then
+	pkill -x picom 2>/dev/null || true
+	sleep 0.1
 	if [ -f "$_picom_cfg" ]; then
 		picom --config "$_picom_cfg" -b 2>/tmp/atelier-picom.log \
-			|| picom --backend xrender -b 2>>/tmp/atelier-picom.log \
+			|| picom --backend xrender --vsync -b 2>>/tmp/atelier-picom.log \
 			|| true
 	else
-		picom --backend xrender -b 2>/tmp/atelier-picom.log || true
+		picom --backend xrender --vsync -b 2>/tmp/atelier-picom.log || true
 	fi
-	unset _picom_cfg
 fi
+unset _picom_cfg
 
 # Status bar
 if [ -x "$HOME/.config/polybar/launch.sh" ]; then
