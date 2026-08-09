@@ -14,6 +14,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `rofi/` | `~/.config/rofi/` | Launcher |
 | `picom/picom.conf` | `~/.config/picom/` | Compositor |
 | `ghostty/config` | `~/.config/ghostty/` | Terminal |
+| `nvim/` | `~/.config/nvim/` | Neovim (voidwolf-based; Tokyo Night) |
 | `gtk/` | `~/.config/gtk-3.0`, `gtk-4.0` | GTK theme overrides |
 | `qt/` | `~/.config/qt5ct`, `qt6ct` | Qt theming via qt5ct/qt6ct |
 | `starship/starship.toml` | `~/.config/starship.toml` | Prompt |

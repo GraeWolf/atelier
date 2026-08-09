@@ -29,6 +29,7 @@ mkdir -p \
 	"$dst/etc/skel/.config/polybar" \
 	"$dst/etc/skel/.config/rofi" \
 	"$dst/etc/skel/.config/ghostty" \
+	"$dst/etc/skel/.config/nvim/lua" \
 	"$dst/etc/skel/.config/fastfetch" \
 	"$dst/etc/skel/.config/btop" \
 	"$dst/etc/skel/.config/gtk-3.0" \
@@ -56,6 +57,15 @@ mkdir -p "$dst/usr/bin"
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/usr/bin/atelier-rofi"
 install -m 755 "$src/session/atelier-monitors"   "$dst/usr/bin/atelier-monitors"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
+# Neovim (voidwolf-based; plugins install on first launch via vim.pack)
+install -m 644 "$src/nvim/init.lua"              "$dst/etc/skel/.config/nvim/init.lua"
+install -m 644 "$src/nvim/nvim-pack-lock.json"   "$dst/etc/skel/.config/nvim/nvim-pack-lock.json"
+install -m 644 "$src/nvim/lua/options.lua"       "$dst/etc/skel/.config/nvim/lua/options.lua"
+install -m 644 "$src/nvim/lua/keymaps.lua"       "$dst/etc/skel/.config/nvim/lua/keymaps.lua"
+install -m 644 "$src/nvim/lua/commands.lua"      "$dst/etc/skel/.config/nvim/lua/commands.lua"
+install -m 644 "$src/nvim/lua/pack.lua"          "$dst/etc/skel/.config/nvim/lua/pack.lua"
+install -m 644 "$src/nvim/lua/treesitter.lua"    "$dst/etc/skel/.config/nvim/lua/treesitter.lua"
+install -m 644 "$src/nvim/lua/lsp.lua"           "$dst/etc/skel/.config/nvim/lua/lsp.lua"
 install -m 644 "$src/starship/starship.toml"     "$dst/etc/skel/.config/starship.toml"
 install -m 644 "$src/fastfetch/config.jsonc"     "$dst/etc/skel/.config/fastfetch/config.jsonc"
 install -m 644 "$src/btop/btop.conf"             "$dst/etc/skel/.config/btop/btop.conf"

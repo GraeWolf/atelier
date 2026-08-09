@@ -2,7 +2,7 @@
 # Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.2.6
+version=0.2.7
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
@@ -51,6 +51,23 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-monitors" 755 usr/bin
 	vinstall "${FILESDIR}/etc/skel/.config/ghostty/config" 644 \
 		etc/skel/.config/ghostty
+	# Neovim config (Tokyo Night + vim.pack plugins; first launch fetches plugins)
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/init.lua" 644 \
+		etc/skel/.config/nvim
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/nvim-pack-lock.json" 644 \
+		etc/skel/.config/nvim
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/options.lua" 644 \
+		etc/skel/.config/nvim/lua
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/keymaps.lua" 644 \
+		etc/skel/.config/nvim/lua
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/commands.lua" 644 \
+		etc/skel/.config/nvim/lua
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/pack.lua" 644 \
+		etc/skel/.config/nvim/lua
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/treesitter.lua" 644 \
+		etc/skel/.config/nvim/lua
+	vinstall "${FILESDIR}/etc/skel/.config/nvim/lua/lsp.lua" 644 \
+		etc/skel/.config/nvim/lua
 	vinstall "${FILESDIR}/etc/skel/.config/starship.toml" 644 \
 		etc/skel/.config
 	vinstall "${FILESDIR}/etc/skel/.config/fastfetch/config.jsonc" 644 \

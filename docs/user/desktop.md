@@ -99,7 +99,7 @@ Log: `/tmp/atelier-picom.log` if picom fails to start.
 |-----|------|
 | ghostty | Terminal |
 | nemo | Files |
-| neovim | Editor |
+| neovim | Editor (Atelier config under `~/.config/nvim`; plugins on first launch) |
 | thunderbird | Mail |
 | audacity | Audio edit |
 | xfburn | CD/DVD burn |

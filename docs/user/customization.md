@@ -12,6 +12,7 @@ Atelier is opinionated but meant to stay **easy to understand and modify**. Pref
 | Launcher | `~/.config/rofi/` |
 | Compositor | `~/.config/picom/picom.conf` |
 | Terminal | `~/.config/ghostty/config` |
+| Neovim | `~/.config/nvim/` (voidwolf-based; leader = Space) |
 | Prompt | `~/.config/starship.toml` |
 | GTK | `~/.config/gtk-3.0/`, `gtk-4.0/` |
 | Qt | `~/.config/qt5ct/`, `qt6ct/` |
