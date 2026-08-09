@@ -27,7 +27,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 |---------|------|------|
 | `atelier-base` | metapackage | Fonts (FiraCode, Nerd Symbols) + xinit/xsetroot/xrdb |
 | `atelier-config` | files | Tokyo Night session configs → `/etc/skel` + xsessions |
-| `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + `atelier-config` |
+| `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + PipeWire audio + `atelier-config` |
 | `atelier-installer` | files | `atelier-install` GUI + desktop entry |
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |

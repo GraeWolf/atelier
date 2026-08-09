@@ -47,8 +47,10 @@ Modifier key: **Super** (Windows / Command key).
 | Super+Shift+l | Lock (xsecurelock) |
 | Super+Shift+q | Quit bspwm (end session) |
 | Super+Shift+m | Multi-monitor layout wizard |
+| Super+Shift+v | Volume mixer (pavucontrol) |
 | Super+Escape | Reload sxhkd |
 | Super+Shift+r | Restart bspwm |
+| Media volume keys | Raise / lower / mute (via `pactl`) |
 
 Full map: `~/.config/sxhkd/sxhkdrc` (from package `atelier-config`).
 
@@ -72,6 +74,27 @@ Config: `~/.config/polybar/config.ini`. Restart via bspwm reload or re-login.
 | eza, bat, tldr, yt-dlp, gcc | CLI tools |
 
 Browser: **brave-origin** is planned as a personal package; until then the Super+b binding falls back.
+
+## Sound
+
+Atelier uses **PipeWire** (with PulseAudio compatibility). Daemons start from `~/.xinitrc` after dbus:
+
+- `pipewire`
+- `wireplumber`
+- `pipewire-pulse`
+
+| Check | Command / action |
+|-------|------------------|
+| Server up? | `pactl info` (should mention PipeWire) |
+| GUI mixer | Super+Shift+v or `pavucontrol` |
+| Polybar volume | Module `pulseaudio` in the top bar |
+| No sound after update | Log out and `startx` again so xinitrc starts PipeWire |
+| Wrong output (HDMI vs speakers) | Pick default sink in pavucontrol |
+| Permission denied on devices | User should be in group `audio` (`groups`) |
+
+Skip session audio startup: `export ATELIER_SKIP_AUDIO=1` before `startx`.
+
+Packages come from `atelier-desktop` (`pipewire`, `wireplumber`, `alsa-pipewire`, `pavucontrol`, `sof-firmware`, …).
 
 ## Monitors (1–2 displays MVP)
 

@@ -82,6 +82,20 @@ super + shift + q
 super + shift + m
 	atelier-monitors setup
 
+# --- Audio (PipeWire via pactl / pavucontrol) --------------------------------
+XF86AudioRaiseVolume
+	pactl set-sink-volume @DEFAULT_SINK@ +5%
+
+XF86AudioLowerVolume
+	pactl set-sink-volume @DEFAULT_SINK@ -5%
+
+XF86AudioMute
+	pactl set-sink-mute @DEFAULT_SINK@ toggle
+
+# Volume mixer GUI
+super + shift + v
+	pavucontrol
+
 # --- Common apps (PLAN set) --------------------------------------------------
 super + shift + b
 	xdg-open about:blank 2>/dev/null || true

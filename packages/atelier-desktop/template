@@ -2,7 +2,7 @@
 # Metapackage: PLAN desktop stack + applications (Void-available).
 # Does not yet depend on: brave-origin, font-jetbrains-mono, xlibre.
 pkgname=atelier-desktop
-version=0.1.1
+version=0.1.2
 revision=1
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
@@ -12,6 +12,7 @@ homepage="https://github.com/kmccuddy/atelier"
 
 # Depends on atelier-base + Tokyo Night configs + PLAN §7 Void packages.
 # Gaps and external sources: docs/build/package-sources.md
+# Audio: PipeWire stack (polybar pulse module, audacity, system sound).
 depends="
  atelier-base>=0
  atelier-config>=0
@@ -38,4 +39,13 @@ depends="
  yt-dlp>=0
  gcc>=0
  feh>=0
+ pipewire>=0
+ wireplumber>=0
+ wireplumber-elogind>=0
+ alsa-pipewire>=0
+ pulseaudio-utils>=0
+ pavucontrol>=0
+ sof-firmware>=0
+ alsa-utils>=0
+ rtkit>=0
 "

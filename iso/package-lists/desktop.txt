@@ -38,3 +38,15 @@ bat
 tldr
 yt-dlp
 gcc
+feh
+
+# --- Audio (PipeWire; polybar pulse module + audacity) ---
+pipewire
+wireplumber
+wireplumber-elogind
+alsa-pipewire
+pulseaudio-utils
+pavucontrol
+sof-firmware
+alsa-utils
+rtkit

@@ -108,15 +108,33 @@ Config sources live under `configs/`; sync into the package with `scripts/sync-a
 3. **Xlibre** — external repo integration required  
 4. ~~Installer~~ — addressed by `atelier-installer` (yad/zenity/dialog)  
 
+## Audio stack (PipeWire)
+
+Desktop sound is **required** for a usable session (polybar volume module, Audacity, browsers, etc.). Atelier uses **PipeWire** with PulseAudio compatibility (not the classic `pulseaudio` server).
+
+| Role | XBPS name | Source | Notes |
+|------|-----------|--------|-------|
+| Server + `pipewire-pulse` | `pipewire` | void | Started from `~/.xinitrc` |
+| Session manager | `wireplumber` | void | |
+| elogind integration | `wireplumber-elogind` | void | Void/runit |
+| ALSA → PipeWire | `alsa-pipewire` | void | |
+| CLI (`pactl`) | `pulseaudio-utils` | void | Also pulled by `pipewire` |
+| GUI mixer | `pavucontrol` | void | Super+Shift+v |
+| Intel SOF firmware | `sof-firmware` | void | Common laptops/desktops |
+| ALSA tools | `alsa-utils` | void | Diagnostics |
+| Realtime scheduling | `rtkit` | void | Recommended |
+
+Do **not** install the full `pulseaudio` package alongside this stack.  
+Bluetooth audio (`libspa-bluetooth`, etc.) is optional later.
+
 ## Intentionally not added (minimalism)
 
 Unless later requested or proven required for a listed app to run:
 
 - Display managers (lightdm/sddm) — session start approach TBD with Xlibre  
-- feh, dunst, extra screenshots tools  
+- dunst, extra screenshots tools  
 - Full `xorg` / `xorg-video-drivers` metapackage (NVIDIA is Step 6; Xlibre is external)  
-- PipeWire / PulseAudio as hard depends (audio stack may be pulled by apps; revisit if live session needs it)  
-- NetworkManager (Void live often uses dhcpcd/wpa; revisit for installer UX)
+- NetworkManager on every install (live ISO includes it; revisit for installer UX)
 
 ## How to re-verify
 

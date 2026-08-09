@@ -66,6 +66,18 @@ if command -v dbus-launch >/dev/null 2>&1 && [ -z "$DBUS_SESSION_BUS_ADDRESS" ];
 	eval "$(dbus-launch --sh-syntax --exit-with-session)"
 fi
 
+# Audio: PipeWire (+ session manager + PulseAudio compatibility for polybar/apps)
+# Requires packages from atelier-desktop. Skip with ATELIER_SKIP_AUDIO=1.
+if [ -z "${ATELIER_SKIP_AUDIO:-}" ] && command -v pipewire >/dev/null 2>&1; then
+	pgrep -u "$(id -u)" -x pipewire >/dev/null 2>&1 || pipewire &
+	if command -v wireplumber >/dev/null 2>&1; then
+		pgrep -u "$(id -u)" -x wireplumber >/dev/null 2>&1 || wireplumber &
+	fi
+	if command -v pipewire-pulse >/dev/null 2>&1; then
+		pgrep -u "$(id -u)" -x pipewire-pulse >/dev/null 2>&1 || pipewire-pulse &
+	fi
+fi
+
 # GNOME/GTK settings (Nemo and many GTK apps prefer gsettings over settings.ini)
 if command -v gsettings >/dev/null 2>&1; then
 	gsettings set org.gnome.desktop.interface gtk-theme 'Yaru-dark' 2>/dev/null || true
