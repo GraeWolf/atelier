@@ -80,5 +80,15 @@ export STARSHIP_CONFIG="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
 # Root window color (Tokyo Night bg)
 xsetroot -solid "#1a1b26"
 
+# Multi-monitor layout (MVP: 1-2 displays) — before WM so bspwm sees geometry
+# Skip: ATELIER_SKIP_MONITORS=1   Force prompt: ATELIER_MONITORS_FORCE=1
+if [ -z "${ATELIER_SKIP_MONITORS:-}" ]; then
+	if command -v atelier-monitors >/dev/null 2>&1; then
+		atelier-monitors apply || true
+	elif [ -x "$HOME/.config/atelier/atelier-monitors" ]; then
+		"$HOME/.config/atelier/atelier-monitors" apply || true
+	fi
+fi
+
 # Hand off to bspwm (must be last — replaces the shell)
 exec bspwm

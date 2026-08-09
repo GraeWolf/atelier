@@ -46,6 +46,7 @@ Modifier key: **Super** (Windows / Command key).
 |------|--------|
 | Super+Shift+l | Lock (xsecurelock) |
 | Super+Shift+q | Quit bspwm (end session) |
+| Super+Shift+m | Multi-monitor layout wizard |
 | Super+Escape | Reload sxhkd |
 | Super+Shift+r | Restart bspwm |
 
@@ -71,6 +72,31 @@ Config: `~/.config/polybar/config.ini`. Restart via bspwm reload or re-login.
 | eza, bat, tldr, yt-dlp, gcc | CLI tools |
 
 Browser: **brave-origin** is planned as a personal package; until then the Super+b binding falls back.
+
+## Monitors (1–2 displays MVP)
+
+Layout is applied **before** bspwm starts (`atelier-monitors apply` from `~/.xinitrc`).
+
+| Situation | What happens |
+|-----------|----------------|
+| One monitor | Auto; no prompt |
+| Two monitors, first time (or cables changed) | Rofi asks primary + side (left/right/above/below) |
+| Two monitors, saved config still valid | Applies `~/.config/atelier/monitors.conf` silently |
+| Three or more | MVP: enable outputs with `xrandr --auto` only |
+
+Workspaces: one screen → desktops **1–10**; two screens → primary **1–5**, secondary **6–10**.
+
+Re-run anytime: **Super+Shift+m** or `atelier-monitors setup`.
+
+```bash
+# skip layout on next login
+export ATELIER_SKIP_MONITORS=1
+
+# force the wizard on next login
+export ATELIER_MONITORS_FORCE=1
+```
+
+Log: `~/.cache/atelier/monitors.log`
 
 ## Tips
 

@@ -1,0 +1,407 @@
+#!/bin/sh
+# Atelier — multi-monitor layout (MVP: 1 or 2 displays)
+#
+# Usage:
+#   atelier-monitors apply   # session start (default): apply conf or prompt if needed
+#   atelier-monitors setup   # force interactive setup, write conf, apply
+#
+# Env:
+#   ATELIER_SKIP_MONITORS=1   skip entirely
+#   ATELIER_MONITORS_FORCE=1  force setup UI on apply (when 2 heads)
+#
+# Config: ${XDG_CONFIG_HOME:-$HOME/.config}/atelier/monitors.conf
+set -eu
+
+cmd=${1:-apply}
+
+CONF_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/atelier"
+CONF="${CONF_DIR}/monitors.conf"
+CACHE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/atelier"
+LOG="${CACHE_DIR}/monitors.log"
+
+log() {
+	mkdir -p "$CACHE_DIR" 2>/dev/null || true
+	printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')" "$*" >>"$LOG" 2>/dev/null || true
+}
+
+die() {
+	log "error: $*"
+	printf 'atelier-monitors: %s\n' "$*" >&2
+	exit 1
+}
+
+have() {
+	command -v "$1" >/dev/null 2>&1
+}
+
+# --- xrandr helpers ----------------------------------------------------------
+
+need_xrandr() {
+	have xrandr || die "xrandr not found (install package xrandr)"
+	[ -n "${DISPLAY:-}" ] || die "DISPLAY is not set"
+}
+
+# Print connected output names, one per line
+list_connected() {
+	xrandr --query 2>/dev/null | awk '/ connected/{ print $1 }'
+}
+
+# NAME (RES) lines for picker UI
+list_connected_labels() {
+	xrandr --query 2>/dev/null | awk '
+		/ connected/ {
+			name = $1
+			res = "?"
+			for (i = 3; i <= NF; i++) {
+				if ($i ~ /^[0-9]+x[0-9]+/) {
+					split($i, a, "+")
+					res = a[1]
+					break
+				}
+			}
+			printf "%s (%s)\n", name, res
+		}'
+}
+
+count_connected() {
+	list_connected | awk 'NF { n++ } END { print n+0 }'
+}
+
+fingerprint() {
+	list_connected | sort | awk 'BEGIN { s="" } { if (s!="") s=s ","; s=s $0 } END { print s }'
+}
+
+label_to_name() {
+	# "DP-0 (1920x1080)" -> "DP-0"
+	printf '%s\n' "$1" | awk '{ print $1 }'
+}
+
+# --- config ------------------------------------------------------------------
+
+# Sets PRIMARY SECONDARY POSITION OUTPUTS (may be empty)
+load_conf() {
+	PRIMARY=
+	SECONDARY=
+	POSITION=
+	OUTPUTS=
+	[ -f "$CONF" ] || return 1
+	# shellcheck disable=SC2162
+	while IFS= read -r line || [ -n "$line" ]; do
+		case "$line" in
+		'' | \#*) continue ;;
+		esac
+		key=${line%%=*}
+		val=${line#*=}
+		val=${val%%#*}
+		# trim spaces
+		key=$(printf '%s' "$key" | tr -d ' \t\r')
+		val=$(printf '%s' "$val" | tr -d ' \t\r')
+		case "$key" in
+		PRIMARY) PRIMARY=$val ;;
+		SECONDARY) SECONDARY=$val ;;
+		POSITION) POSITION=$val ;;
+		OUTPUTS) OUTPUTS=$val ;;
+		esac
+	done <"$CONF"
+	return 0
+}
+
+write_conf() {
+	# args: primary secondary position
+	_p=$1
+	_s=$2
+	_pos=$3
+	_fp=$(fingerprint)
+	mkdir -p "$CONF_DIR"
+	cat >"$CONF" <<EOF
+# atelier-monitors — generated layout (MVP: 1-2 monitors)
+# Re-run: atelier-monitors setup
+PRIMARY=${_p}
+SECONDARY=${_s}
+POSITION=${_pos}
+OUTPUTS=${_fp}
+EOF
+	log "wrote conf PRIMARY=${_p} SECONDARY=${_s} POSITION=${_pos} OUTPUTS=${_fp}"
+}
+
+write_conf_single() {
+	_p=$1
+	_fp=$(fingerprint)
+	mkdir -p "$CONF_DIR"
+	cat >"$CONF" <<EOF
+# atelier-monitors — single monitor
+# Re-run: atelier-monitors setup
+PRIMARY=${_p}
+SECONDARY=
+POSITION=
+OUTPUTS=${_fp}
+EOF
+	log "wrote single-monitor conf PRIMARY=${_p}"
+}
+
+conf_valid_for_dual() {
+	# requires PRIMARY SECONDARY POSITION and matching OUTPUTS fingerprint
+	[ -n "${PRIMARY:-}" ] && [ -n "${SECONDARY:-}" ] && [ -n "${POSITION:-}" ] || return 1
+	case "$POSITION" in
+	left-of | right-of | above | below) ;;
+	*) return 1 ;;
+	esac
+	_fp=$(fingerprint)
+	[ "${OUTPUTS:-}" = "$_fp" ] || return 1
+	# both names still connected
+	list_connected | grep -qx "$PRIMARY" || return 1
+	list_connected | grep -qx "$SECONDARY" || return 1
+	[ "$PRIMARY" != "$SECONDARY" ] || return 1
+	return 0
+}
+
+# --- apply xrandr ------------------------------------------------------------
+
+apply_single() {
+	_name=$1
+	log "apply single ${_name}"
+	xrandr --output "$_name" --primary --auto || return 1
+}
+
+apply_dual() {
+	_p=$1
+	_s=$2
+	_pos=$3
+	log "apply dual primary=${_p} secondary=${_s} position=${_pos}"
+	case "$_pos" in
+	left-of)
+		xrandr --output "$_p" --primary --auto \
+			--output "$_s" --auto --left-of "$_p"
+		;;
+	right-of)
+		xrandr --output "$_p" --primary --auto \
+			--output "$_s" --auto --right-of "$_p"
+		;;
+	above)
+		xrandr --output "$_p" --primary --auto \
+			--output "$_s" --auto --above "$_p"
+		;;
+	below)
+		xrandr --output "$_p" --primary --auto \
+			--output "$_s" --auto --below "$_p"
+		;;
+	*)
+		log "invalid POSITION=${_pos}"
+		return 1
+		;;
+	esac
+}
+
+apply_dual_fallback() {
+	# No UI / no conf: enable both, primary = first listed
+	_first=
+	_second=
+	# shellcheck disable=SC2162
+	while IFS= read -r _o; do
+		[ -n "$_o" ] || continue
+		if [ -z "$_first" ]; then
+			_first=$_o
+		elif [ -z "$_second" ]; then
+			_second=$_o
+		fi
+	done <<EOF
+$(list_connected)
+EOF
+	[ -n "$_first" ] || return 1
+	if [ -z "$_second" ]; then
+		apply_single "$_first"
+		return
+	fi
+	log "fallback dual: primary=${_first} secondary=${_second} (right-of default)"
+	xrandr --output "$_first" --primary --auto \
+		--output "$_second" --auto --right-of "$_first" || true
+}
+
+# --- UI ----------------------------------------------------------------------
+
+pick_line() {
+	# pick_line "Prompt" lines on stdin -> selected line on stdout
+	_prompt=$1
+	_input=$(cat)
+	[ -n "$_input" ] || return 1
+
+	if have rofi; then
+		printf '%s\n' "$_input" | rofi -dmenu -i -p "$_prompt" -l 8 2>/dev/null
+		return $?
+	fi
+	if have yad; then
+		# yad list: print full line
+		_idx=1
+		_yad_args=
+		# shellcheck disable=SC2162
+		while IFS= read -r _line; do
+			[ -n "$_line" ] || continue
+			_yad_args="$_yad_args $_idx '$_line'"
+			_idx=$((_idx + 1))
+		done <<EOF
+$_input
+EOF
+		# shellcheck disable=SC2086
+		_out=$(eval "yad --list --title='Atelier monitors' --text='$_prompt' \
+			--column='#' --column='Monitor' --hide-column=1 --print-column=2 \
+			--width=420 --height=280 --button=OK:0 --button=Cancel:1 \
+			$_yad_args" 2>/dev/null) || return 1
+		printf '%s\n' "$_out" | tr -d '|' | sed 's/[[:space:]]*$//'
+		return 0
+	fi
+	return 1
+}
+
+interactive_dual_setup() {
+	_labels=$(list_connected_labels)
+	_n=$(printf '%s\n' "$_labels" | awk 'NF{n++} END{print n+0}')
+	[ "$_n" -eq 2 ] || {
+		log "interactive_dual_setup needs exactly 2 outputs (have ${_n})"
+		return 1
+	}
+
+	_pick1=$(printf '%s\n' "$_labels" | pick_line "Primary monitor") || return 1
+	_prim=$(label_to_name "$_pick1")
+	[ -n "$_prim" ] || return 1
+
+	_sec=
+	# shellcheck disable=SC2162
+	while IFS= read -r _lab; do
+		_n2=$(label_to_name "$_lab")
+		if [ "$_n2" != "$_prim" ]; then
+			_sec=$_n2
+			break
+		fi
+	done <<EOF
+$_labels
+EOF
+	[ -n "$_sec" ] || return 1
+
+	_pos_label=$(printf '%s\n' \
+		"Left of primary" \
+		"Right of primary" \
+		"Above primary" \
+		"Below primary" | pick_line "Secondary position") || return 1
+
+	case "$_pos_label" in
+	Left*) _pos=left-of ;;
+	Right*) _pos=right-of ;;
+	Above*) _pos=above ;;
+	Below*) _pos=below ;;
+	*) return 1 ;;
+	esac
+
+	write_conf "$_prim" "$_sec" "$_pos"
+	apply_dual "$_prim" "$_sec" "$_pos"
+}
+
+maybe_reload_bspwm() {
+	if pgrep -x bspwm >/dev/null 2>&1; then
+		log "reloading bspwm after layout change"
+		bspc wm -r 2>/dev/null || true
+	fi
+}
+
+# --- commands ----------------------------------------------------------------
+
+do_apply() {
+	need_xrandr
+	_n=$(count_connected)
+	log "apply: connected=${_n} force=${ATELIER_MONITORS_FORCE:-}"
+
+	if [ "$_n" -eq 0 ]; then
+		log "no connected outputs"
+		return 0
+	fi
+
+	if [ "$_n" -eq 1 ]; then
+		_only=$(list_connected | head -n1)
+		apply_single "$_only" || true
+		write_conf_single "$_only"
+		return 0
+	fi
+
+	if [ "$_n" -eq 2 ]; then
+		if [ -z "${ATELIER_MONITORS_FORCE:-}" ] && load_conf && conf_valid_for_dual; then
+			apply_dual "$PRIMARY" "$SECONDARY" "$POSITION" || apply_dual_fallback
+			return 0
+		fi
+		if interactive_dual_setup; then
+			return 0
+		fi
+		log "no UI or setup cancelled; fallback layout"
+		apply_dual_fallback
+		return 0
+	fi
+
+	# 3+: MVP — enable all auto; prefer conf primary if still present
+	log "MVP: ${_n} outputs — auto layout only"
+	if load_conf && [ -n "${PRIMARY:-}" ] && list_connected | grep -qx "$PRIMARY"; then
+		xrandr --output "$PRIMARY" --primary --auto || true
+	fi
+	# shellcheck disable=SC2162
+	while IFS= read -r _o; do
+		[ -n "$_o" ] || continue
+		xrandr --output "$_o" --auto 2>/dev/null || true
+	done <<EOF
+$(list_connected)
+EOF
+}
+
+do_setup() {
+	need_xrandr
+	_n=$(count_connected)
+	log "setup: connected=${_n}"
+
+	if [ "$_n" -eq 0 ]; then
+		die "no connected monitors"
+	fi
+	if [ "$_n" -eq 1 ]; then
+		_only=$(list_connected | head -n1)
+		apply_single "$_only"
+		write_conf_single "$_only"
+		maybe_reload_bspwm
+		return 0
+	fi
+	if [ "$_n" -eq 2 ]; then
+		if interactive_dual_setup; then
+			maybe_reload_bspwm
+			return 0
+		fi
+		die "setup cancelled or no picker UI (install rofi or yad)"
+	fi
+	die "MVP supports 1-2 monitors (found ${_n}). Configure extra outputs with xrandr manually."
+}
+
+# --- main --------------------------------------------------------------------
+
+if [ -n "${ATELIER_SKIP_MONITORS:-}" ]; then
+	log "skipped (ATELIER_SKIP_MONITORS)"
+	exit 0
+fi
+
+case "$cmd" in
+apply)
+	do_apply || log "apply finished with errors"
+	exit 0
+	;;
+setup)
+	do_setup
+	;;
+-h | --help | help)
+	cat <<'EOF'
+atelier-monitors — Atelier multi-monitor layout (MVP: 1-2 displays)
+
+  atelier-monitors apply   Apply saved layout (session start). Prompt if needed.
+  atelier-monitors setup   Force interactive setup, save, apply, reload bspwm.
+
+Config: ~/.config/atelier/monitors.conf
+Log:    ~/.cache/atelier/monitors.log
+
+Env: ATELIER_SKIP_MONITORS=1  ATELIER_MONITORS_FORCE=1
+EOF
+	;;
+*)
+	die "unknown command: $cmd (try: apply | setup | help)"
+	;;
+esac

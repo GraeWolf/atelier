@@ -39,8 +39,55 @@ else
 fi
 
 # --- Monitors / desktops -----------------------------------------------------
-# Ten desktops on the primary monitor. Adjust if you use multi-monitor.
-bspc monitor -d 1 2 3 4 5 6 7 8 9 10
+# Layout (primary + side) is applied by atelier-monitors in ~/.xinitrc before
+# bspwm starts. Here we only assign workspaces.
+#   1 monitor  → desktops 1-10
+#   2 monitors → primary 1-5, secondary 6-10
+# Reconfigure anytime: Super+Shift+m  or  atelier-monitors setup
+bspc config remove_disabled_monitors  true
+bspc config remove_unplugged_monitors true
+
+_prim=""
+if command -v xrandr >/dev/null 2>&1; then
+	_prim=$(xrandr --query 2>/dev/null | awk '/ connected primary/{ print $1; exit }')
+fi
+
+# Order: primary first, then remaining bspwm monitor names
+_ordered=""
+_seen_prim=0
+for _m in $(bspc query -M --names 2>/dev/null); do
+	[ -n "$_m" ] || continue
+	if [ -n "$_prim" ] && [ "$_m" = "$_prim" ]; then
+		_ordered="$_prim $_ordered"
+		_seen_prim=1
+	else
+		_ordered="$_ordered $_m"
+	fi
+done
+if [ -n "$_prim" ] && [ "$_seen_prim" -eq 0 ]; then
+	# primary name may not match yet; still put known names after
+	_ordered="$_prim $_ordered"
+fi
+# shellcheck disable=SC2086
+set -- $_ordered
+
+if [ "$#" -le 1 ]; then
+	if [ -n "${1:-}" ]; then
+		bspc monitor "$1" -d 1 2 3 4 5 6 7 8 9 10
+	else
+		bspc monitor -d 1 2 3 4 5 6 7 8 9 10
+	fi
+else
+	bspc monitor "$1" -d 1 2 3 4 5
+	bspc monitor "$2" -d 6 7 8 9 10
+	shift 2
+	_n=11
+	for _m in "$@"; do
+		bspc monitor "$_m" -d "$_n"
+		_n=$((_n + 1))
+	done
+fi
+unset _prim _ordered _seen_prim _m _n
 
 # --- Gaps, borders, colors (Tokyo Night) -------------------------------------
 bspc config border_width         2

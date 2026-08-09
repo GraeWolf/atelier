@@ -16,6 +16,7 @@ Atelier is opinionated but meant to stay **easy to understand and modify**. Pref
 | GTK | `~/.config/gtk-3.0/`, `gtk-4.0/` |
 | Qt | `~/.config/qt5ct/`, `qt6ct/` |
 | Session | `~/.xinitrc`, `~/.Xresources` |
+| Monitors | `~/.config/atelier/monitors.conf` (via `atelier-monitors`) |
 
 Defaults are installed from **`atelier-config`** into `/etc/skel` for new users. Your home directory copies are yours to edit.
 

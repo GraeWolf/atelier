@@ -78,6 +78,10 @@ super + shift + l
 super + shift + q
 	bspc quit
 
+# Multi-monitor layout wizard (writes ~/.config/atelier/monitors.conf)
+super + shift + m
+	atelier-monitors setup
+
 # --- Common apps (PLAN set) --------------------------------------------------
 super + shift + b
 	xdg-open about:blank 2>/dev/null || true
