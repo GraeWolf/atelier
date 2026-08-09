@@ -46,6 +46,8 @@ install -m 644 "$src/sxhkd/sxhkdrc"              "$dst/etc/skel/.config/sxhkd/sx
 install -m 644 "$src/picom/picom.conf"           "$dst/etc/skel/.config/picom/picom.conf"
 install -m 644 "$src/polybar/config.ini"         "$dst/etc/skel/.config/polybar/config.ini"
 install -m 755 "$src/polybar/launch.sh"          "$dst/etc/skel/.config/polybar/launch.sh"
+install -m 755 "$src/polybar/net-status.sh"      "$dst/etc/skel/.config/polybar/net-status.sh"
+install -m 755 "$src/polybar/nmtui-float.sh"     "$dst/etc/skel/.config/polybar/nmtui-float.sh"
 install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/config.rasi"
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/etc/skel/.config/rofi/atelier-rofi.sh"
 mkdir -p "$dst/etc/skel/.config/rofi/themes"

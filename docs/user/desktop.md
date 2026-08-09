@@ -37,8 +37,11 @@ Modifier key: **Super** (Windows / Command key).
 
 | Keys | Action |
 |------|--------|
-| Super+1 … Super+9, Super+0 | Switch to desktop 1–10 |
-| Super+Shift+1 … 0 | Send window to desktop (follow) |
+| Super+1 … Super+6 | Switch to primary-monitor desktops 1–6 |
+| Super+7 … Super+9 | Switch to secondary-monitor desktops 7–9 (dual-head) |
+| Super+Shift+1 … 9 | Send window to that desktop (follow focus) |
+
+On a **single** monitor, desktops **1–9** all live on that screen.
 
 ### Session
 
@@ -56,8 +59,22 @@ Full map: `~/.config/sxhkd/sxhkdrc` (from package `atelier-config`).
 
 ## Polybar
 
-The top bar shows workspaces, date/time, CPU, memory, audio, and keyboard layout.  
-Config: `~/.config/polybar/config.ini`. Restart via bspwm reload or re-login.
+One bar per monitor (`atelier-primary` / `atelier-secondary`).
+
+| Area | Behavior |
+|------|----------|
+| Primary bar | Desktops **1–6** (pinned), CPU, mem, **net**, volume, layout, **tray** |
+| Secondary bar | Desktops **7–9** (pinned), same modules **without** tray |
+| Volume | Icon + %; **scroll** wheel changes volume; right-click → pavucontrol |
+| Network | Shows **up** / **down**; **left-click** → floating `nmtui` (needs NetworkManager) |
+| Tray | **Primary only** (X11 limitation) |
+
+Config: `~/.config/polybar/`. Restart bars: Super+Shift+r (bspwm reload) or re-login.
+
+```bash
+# manual restart
+~/.config/polybar/launch.sh
+```
 
 ## Applications (default set)
 
@@ -87,7 +104,7 @@ Atelier uses **PipeWire** (with PulseAudio compatibility). Daemons start from `~
 |-------|------------------|
 | Server up? | `pactl info` (should mention PipeWire) |
 | GUI mixer | Super+Shift+v or `pavucontrol` |
-| Polybar volume | Module `pulseaudio` in the top bar |
+| Polybar volume | Icon + % on the bar; scroll to change; right-click → pavucontrol |
 | No sound after update | Log out and `startx` again so xinitrc starts PipeWire |
 | Wrong output (HDMI vs speakers) | Pick default sink in pavucontrol |
 | Permission denied on devices | User should be in group `audio` (`groups`) |
@@ -107,9 +124,14 @@ Layout is applied **before** bspwm starts (`atelier-monitors apply` from `~/.xin
 | Two monitors, saved config still valid | Applies `~/.config/atelier/monitors.conf` silently |
 | Three or more | MVP: enable outputs with `xrandr --auto` only |
 
-Workspaces: one screen → desktops **1–10**; two screens → primary **1–5**, secondary **6–10**.
+Workspaces after layout:
 
-Re-run anytime: **Super+Shift+m** or `atelier-monitors setup`.
+| Setup | Desktops |
+|-------|----------|
+| One screen | **1–9** on that monitor |
+| Two screens | Primary **1–6**, secondary **7–9** |
+
+Re-run layout wizard: **Super+Shift+m** or `atelier-monitors setup`.
 
 ```bash
 # skip layout on next login
