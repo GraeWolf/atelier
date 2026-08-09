@@ -31,6 +31,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | `atelier-installer` | files | `atelier-install` GUI + desktop entry |
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |
+| `atelier-void-repo` | files | GraeWolf personal Void repo (public key + xbps.d) |
 
 ## Config packaging workflow
 
@@ -54,7 +55,9 @@ Flat lists for ISO tooling: [iso/package-lists/](../iso/package-lists/).
 
 ## Planned personal packages (gaps)
 
-- `brave-origin` (or similar) — Brave browser
 - `font-jetbrains-mono` — JetBrains Mono
 
-Xlibre is expected from an **external** repo, not necessarily built here.
+External (not built in this monorepo):
+
+- **GraeWolf void-repo** — `brave-origin`, `obsidian`, `melia` via `atelier-void-repo`
+- **Xlibre** — via `atelier-xlibre-repo`

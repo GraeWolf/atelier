@@ -13,6 +13,7 @@ Verified against the host’s official Void `x86_64` repository (2026-08-02). Na
 | **personal** | Built by Atelier into the personal XBPS repo (`packages/`, `repo/`) |
 | **external** | Third-party XBPS repository (not Atelier-built); wired at ISO/install time |
 | **gap** | Required by PLAN but not yet packaged anywhere we control |
+| **graewolf** | [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) signed GitHub release repo (`atelier-void-repo`) |
 
 ## Display server
 
@@ -67,7 +68,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 
 | PLAN | XBPS name | Source | Notes |
 |------|-----------|--------|-------|
-| brave-origin | *(none)* | **gap → personal** | No Brave package in official Void. Ship as personal package (e.g. `brave-origin` or `brave-bin`) in a later step. Not a hard depend of `atelier-desktop` yet. |
+| brave-origin | `brave-origin` | **graewolf** | From [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo). Live/installed systems enable the repo via `atelier-void-repo`. Install: `xbps-install -S brave-origin`. Not a hard depend of `atelier-desktop` (large binary). |
 | nemo | `nemo` | void | File manager; may pull GTK stack |
 | neovim | `neovim` | void | |
 | thunderbird | `thunderbird` | void | |
@@ -98,15 +99,27 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | `atelier-installer` | Whole-disk graphical installer (`atelier-install`) | **personal** |
 | `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |
 | `atelier-xlibre-repo` | Xlibre external repo key + xbps.d | **personal** |
+| `atelier-void-repo` | GraeWolf void-repo public key + xbps.d | **personal** |
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
 ## Explicit gaps (track until closed)
 
-1. **brave-origin** — personal package required  
+1. ~~**brave-origin**~~ — available from GraeWolf void-repo (`atelier-void-repo`); optional install  
 2. **JetBrains Mono** — personal font package required  
 3. **Xlibre** — external repo integration required  
 4. ~~Installer~~ — addressed by `atelier-installer` (yad/zenity/dialog)  
+
+### GraeWolf personal Void repository
+
+| Item | Value |
+|------|--------|
+| Templates | https://github.com/GraeWolf/void-repo |
+| Binary URL | `https://github.com/GraeWolf/void-repo/releases/download/x86_64/` |
+| Packages (examples) | `brave-origin`, `obsidian`, `melia` |
+| Atelier glue | package `atelier-void-repo` (xbps.d + public key) |
+| Live ISO | conf + key in `iso/include-src/`; mklive `-r` includes the URL |
+| Setup helper | `atelier-setup-void-repo` |
 
 ## Audio stack (PipeWire)
 

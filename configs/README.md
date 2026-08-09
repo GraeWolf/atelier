@@ -28,6 +28,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `colors/tokyo-night.conf` | *(reference only)* | Palette notes |
 | `nvidia/` | `atelier-nvidia` package | Proprietary NVIDIA modprobe/X11 glue |
 | `xlibre/` | `atelier-xlibre-repo` package | External repo conf + public key |
+| `void-repo/` | `atelier-void-repo` package | GraeWolf personal Void repo conf + public key |
 | `wallpapers/` | `/usr/share/atelier/wallpapers/` | Desktop backgrounds (default: nord.png) |
 
 ## Theming

@@ -642,6 +642,13 @@ install_packages() {
 		printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
 	fi
 
+	# GraeWolf personal packages (brave-origin, …) — live medium + package ship conf+key
+	if [ -f /etc/xbps.d/20-repository-graewolf.conf ]; then
+		cp -a /etc/xbps.d/20-repository-graewolf.conf \
+			"$TARGETDIR/etc/xbps.d/20-repository-graewolf.conf"
+		REPO_ARGS+=(--repository="https://github.com/GraeWolf/void-repo/releases/download/x86_64")
+	fi
+
 	local pkgs=(base-system linux sudo dbus elogind NetworkManager polkit)
 	if [ "${INSTALL_BOOTLOADER:-1}" -eq 1 ]; then
 		if is_efi; then pkgs+=(grub-x86_64-efi grub efibootmgr dosfstools)

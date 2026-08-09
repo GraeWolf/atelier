@@ -72,7 +72,8 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 | Autologin | `live.autologin` on cmdline; default live user (`anon`, password `voidlinux` unless changed by mklive) |
 | Desktop | `startx` → bspwm (Tokyo Night configs from skel) |
 | Installer | **`atelier-install`** (package `atelier-installer`); optional `void-installer` text fallback |
-| Personal repo | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
+| Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
+| GraeWolf void-repo | `/etc/xbps.d/20-repository-graewolf.conf` + public key (brave-origin, etc.) |
 
 If X does not start automatically, log in on tty1 and run `startx`.
 

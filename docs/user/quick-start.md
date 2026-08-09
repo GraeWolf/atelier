@@ -55,6 +55,16 @@ Details: [nvidia.md](nvidia.md).
 
 Configs live under `~/.config/`. Prefer small edits; see [customization.md](customization.md).
 
+## Browser (Brave Origin)
+
+Atelier enables the **GraeWolf personal Void repo** for packages like `brave-origin`:
+
+```bash
+sudo xbps-install -S brave-origin
+```
+
+If the repo is missing: `sudo atelier-setup-void-repo` then retry.
+
 ## Updates (XBPS)
 
 ```bash

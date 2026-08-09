@@ -95,10 +95,17 @@ check_host_tools() {
 check_packages_resolvable() {
 	# Best-effort: ensure atelier packages exist in local repo
 	atelier_info "Checking personal packages in repo/out"
-	for p in atelier-base atelier-config atelier-desktop; do
+	for p in atelier-base atelier-config atelier-desktop atelier-void-repo; do
 		xbps-query --repository="$ROOT/repo/out" -R "$p" >/dev/null 2>&1 || \
 			atelier_die "cannot query $p from repo/out — run ./scripts/build-repo.sh"
 	done
+	# Best-effort: GraeWolf remote repo reachable (key/conf live on medium either way)
+	if xbps-query --repository="https://github.com/GraeWolf/void-repo/releases/download/x86_64" \
+		-R brave-origin >/dev/null 2>&1; then
+		atelier_info "GraeWolf void-repo OK (brave-origin visible)"
+	else
+		atelier_info "WARN: cannot query brave-origin from GraeWolf void-repo (network?)"
+	fi
 }
 
 run_mklive() {
@@ -116,10 +123,13 @@ run_mklive() {
 
 	# shellcheck disable=SC2086
 	cd "$MKLIVE_DIR"
+	# Official Void + local Atelier packages + GraeWolf personal void-repo
+	# (brave-origin, obsidian, …) so mklive can resolve those names if listed.
 	./mklive.sh \
 		-a "$ARCH" \
 		-r "https://repo-default.voidlinux.org/current" \
 		-r "$_repo_out" \
+		-r "https://github.com/GraeWolf/void-repo/releases/download/x86_64" \
 		-c "$CACHE_DIR" \
 		-p "$_pkgs" \
 		-I "$_include" \

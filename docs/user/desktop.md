@@ -107,7 +107,7 @@ Log: `/tmp/atelier-picom.log` if picom fails to start.
 | btop / fastfetch | System monitor / info |
 | eza, bat, tldr, yt-dlp, gcc | CLI tools |
 
-Browser: **brave-origin** is planned as a personal package; until then the Super+b binding falls back.
+Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S brave-origin`). Super+b falls back until it is installed.
 
 ## Sound
 

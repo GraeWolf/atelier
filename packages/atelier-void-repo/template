@@ -1,0 +1,27 @@
+# Template file for 'atelier-void-repo'
+# Enables GraeWolf personal Void packages (brave-origin, etc.) via GitHub releases.
+# Public key + xbps.d only — does not vendor the .xbps binaries.
+pkgname=atelier-void-repo
+version=0.1.0
+revision=1
+create_wrksrc=yes
+short_desc="Atelier config for GraeWolf personal Void XBPS repository"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/GraeWolf/void-repo"
+
+depends="xbps>=0"
+
+do_install() {
+	vinstall "${FILESDIR}/etc/xbps.d/20-repository-graewolf.conf" 644 etc/xbps.d
+	vinstall "${FILESDIR}/var/db/xbps/keys/94:85:7f:4b:ca:9e:0a:8c:e9:e5:42:dc:07:40:57:74.plist" 644 \
+		var/db/xbps/keys
+	# Also under /usr/share for setup script re-install
+	vinstall "${FILESDIR}/etc/xbps.d/20-repository-graewolf.conf" 644 \
+		usr/share/atelier/void-repo
+	vinstall "${FILESDIR}/var/db/xbps/keys/94:85:7f:4b:ca:9e:0a:8c:e9:e5:42:dc:07:40:57:74.plist" 644 \
+		usr/share/atelier/void-repo/keys
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-void-repo" 755 usr/bin
+	vinstall "${FILESDIR}/usr/share/doc/atelier/void-repo-README.txt" 644 \
+		usr/share/doc/atelier
+}

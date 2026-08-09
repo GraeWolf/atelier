@@ -1,0 +1,38 @@
+#!/bin/sh
+# Enable GraeWolf personal Void repository (brave-origin, obsidian, …).
+# Safe to re-run. Requires root for /etc/xbps.d and key install.
+set -eu
+
+CONF_SRC="/usr/share/atelier/void-repo/20-repository-graewolf.conf"
+CONF_DST="/etc/xbps.d/20-repository-graewolf.conf"
+KEY_NAME="94:85:7f:4b:ca:9e:0a:8c:e9:e5:42:dc:07:40:57:74.plist"
+KEY_SRC="/usr/share/atelier/void-repo/keys/${KEY_NAME}"
+KEY_DST="/var/db/xbps/keys/${KEY_NAME}"
+
+if [ "$(id -u)" -ne 0 ]; then
+	printf 'atelier-setup-void-repo: run as root (e.g. sudo %s)\n' "$0" >&2
+	exit 1
+fi
+
+mkdir -p /etc/xbps.d /var/db/xbps/keys
+
+if [ -f "$CONF_SRC" ]; then
+	install -m 644 "$CONF_SRC" "$CONF_DST"
+elif [ -f "$CONF_DST" ]; then
+	:
+else
+	printf 'repository=https://github.com/GraeWolf/void-repo/releases/download/x86_64/\n' \
+		>"$CONF_DST"
+	chmod 644 "$CONF_DST"
+fi
+
+if [ -f "$KEY_SRC" ]; then
+	install -m 644 "$KEY_SRC" "$KEY_DST"
+elif [ ! -f "$KEY_DST" ]; then
+	printf 'atelier-setup-void-repo: WARN: public key not found; first xbps-install -S may prompt\n' >&2
+fi
+
+printf 'Enabled GraeWolf void-repo:\n  %s\n' "$CONF_DST"
+printf 'Sync:  xbps-install -S\n'
+printf 'Try:   xbps-install -S brave-origin\n'
+printf 'Docs:  /usr/share/doc/atelier/void-repo-README.txt\n'

@@ -2,7 +2,7 @@
 # Metapackage: PLAN desktop stack + applications (Void-available).
 # Does not yet depend on: brave-origin, font-jetbrains-mono, xlibre.
 pkgname=atelier-desktop
-version=0.1.2
+version=0.1.3
 revision=1
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
@@ -16,6 +16,7 @@ homepage="https://github.com/kmccuddy/atelier"
 depends="
  atelier-base>=0
  atelier-config>=0
+ atelier-void-repo>=0
  bspwm>=0
  sxhkd>=0
  picom>=0

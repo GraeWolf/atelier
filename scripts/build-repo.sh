@@ -40,7 +40,7 @@ command -v xbps-create >/dev/null 2>&1 || atelier_die "xbps-create not found (in
 command -v xbps-rindex >/dev/null 2>&1 || atelier_die "xbps-rindex not found (install xbps)"
 
 # Package build order
-PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer atelier-nvidia atelier-xlibre-repo"
+PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer atelier-nvidia atelier-xlibre-repo atelier-void-repo"
 
 if [ "$DO_SYNC" -eq 1 ]; then
 	atelier_info "Syncing configs → atelier-config FILESDIR"
@@ -51,6 +51,8 @@ if [ "$DO_SYNC" -eq 1 ]; then
 	"$ROOT/scripts/sync-atelier-nvidia-files.sh"
 	atelier_info "Syncing Xlibre repo configs"
 	"$ROOT/scripts/sync-atelier-xlibre-files.sh"
+	atelier_info "Syncing GraeWolf void-repo configs"
+	"$ROOT/scripts/sync-atelier-void-repo-files.sh"
 fi
 
 if [ -d "$STAGE_ROOT" ]; then
