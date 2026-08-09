@@ -43,6 +43,8 @@ Modifier key: **Super** (Windows / Command key).
 
 On a **single** monitor, desktops **1–9** all live on that screen.
 
+Bindings use desktop **names** (`bspc desktop -f 7`), not `^7` (which means “7th desktop in global order” and mis-fires when monitors are ordered secondary-first).
+
 ### Session
 
 | Keys | Action |

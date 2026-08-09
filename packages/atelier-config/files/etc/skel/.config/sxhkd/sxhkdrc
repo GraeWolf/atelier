@@ -51,11 +51,13 @@ super + t
 	bspc node -t tiled
 
 # --- Desktops (primary 1-6, secondary 7-9 on dual-head) ----------------------
+# Use desktop NAMES (1-9), not ^N. ^N means "Nth desktop in global order"
+# and breaks when the secondary monitor is ordered first (Super+1 → desk 7).
 super + {1-9}
-	bspc desktop -f '^{1-9}'
+	bspc desktop -f {1-9}
 
 super + shift + {1-9}
-	bspc node -d '^{1-9}' --follow
+	bspc node -d {1-9} --follow
 
 # --- Rotate / balance --------------------------------------------------------
 super + r
