@@ -16,7 +16,8 @@
   Super+Shift+w        Kill window
   Super+h / j / l      Focus left / down / right
   Super+arrows         Focus (all directions; Up = north)
-  Super+Shift+h/j/k/l  Swap with neighbor
+  Super+Shift+h/j/k    Swap left / down / up
+  Super+Shift+arrows   Swap (all directions)
   Super+Alt+h/j/k/l    Resize
   Super+f              Fullscreen
   Super+t              Tiled
@@ -32,13 +33,14 @@
   Super+Shift+1 … 9    Send window to desktop (follow)
 
  ── Session / system ──────────────────────────────────────────────────────
-  Super+Shift+l        Lock screen
+  Super+Shift+l        Lock screen (atelier-lock / xsecurelock)
   Super+Shift+q        Quit bspwm
   Super+Escape         Reload sxhkd
   Super+Shift+r        Restart bspwm (reload session configs)
   Super+Shift+m        Multi-monitor layout wizard
   Super+Shift+v        Volume mixer (pavucontrol)
   Media volume keys    Raise / lower / mute
+  Idle ~5 min          Auto-lock; ~2 min later while locked → suspend
 
  ── Notes ─────────────────────────────────────────────────────────────────
   Full map:  ~/.config/sxhkd/sxhkdrc

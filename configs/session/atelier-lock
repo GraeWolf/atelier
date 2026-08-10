@@ -1,0 +1,73 @@
+#!/bin/sh
+# Atelier — lock the screen with xsecurelock (Super+Shift+l, idle, sleep).
+#
+# - Loads XSECURELOCK_* from ~/.config/xsecurelock/env.sh
+# - Prefer xss-lock path via "xset s activate" when xss-lock is already running
+# - When run as the xss-lock locker (direct exec), runs xsecurelock and may
+#   schedule suspend after ATELIER_LOCK_SUSPEND_SEC (default 120) while locked
+#
+# Env:
+#   ATELIER_LOCK_SUSPEND_SEC  seconds after lock before suspend (0 = never)
+#   ATELIER_SKIP_LOCK_SUSPEND=1  same as 0
+set -eu
+
+# Load Atelier xsecurelock theme / prompts
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/xsecurelock/env.sh" ]; then
+	# shellcheck source=/dev/null
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/xsecurelock/env.sh"
+elif [ -f "$HOME/.config/xsecurelock/env.sh" ]; then
+	# shellcheck source=/dev/null
+	. "$HOME/.config/xsecurelock/env.sh"
+fi
+
+# Already locked
+if pgrep -u "$(id -u)" -x xsecurelock >/dev/null 2>&1; then
+	exit 0
+fi
+
+# If xss-lock is managing the locker, ask it to lock (correct sleep-lock FD path).
+# Detect "we are the locker" via XSS_SLEEP_LOCK_FD or parent/argv.
+if [ -z "${XSS_SLEEP_LOCK_FD:-}" ] \
+	&& [ "${1:-}" != "--as-locker" ] \
+	&& pgrep -u "$(id -u)" -x xss-lock >/dev/null 2>&1; then
+	# Force screensaver → xss-lock starts us again as locker
+	if command -v xset >/dev/null 2>&1; then
+		xset s activate
+		exit 0
+	fi
+	if command -v loginctl >/dev/null 2>&1; then
+		loginctl lock-session 2>/dev/null && exit 0
+	fi
+fi
+
+if ! command -v xsecurelock >/dev/null 2>&1; then
+	printf 'atelier-lock: xsecurelock not found\n' >&2
+	exit 1
+fi
+
+# Suspend shortly after lock while still locked (manual lock or idle lock).
+_suspend_sec=${ATELIER_LOCK_SUSPEND_SEC:-120}
+if [ -n "${ATELIER_SKIP_LOCK_SUSPEND:-}" ]; then
+	_suspend_sec=0
+fi
+
+_waiter=""
+if [ "$_suspend_sec" -gt 0 ] 2>/dev/null; then
+	(
+		sleep "$_suspend_sec"
+		# Only suspend if still locked by us
+		if pgrep -u "$(id -u)" -x xsecurelock >/dev/null 2>&1; then
+			if command -v loginctl >/dev/null 2>&1; then
+				loginctl suspend 2>/dev/null || true
+			elif command -v zzz >/dev/null 2>&1; then
+				zzz 2>/dev/null || true
+			fi
+		fi
+	) &
+	_waiter=$!
+	# shellcheck disable=SC2064
+	trap ' [ -n "$_waiter" ] && kill "$_waiter" 2>/dev/null || true ' EXIT INT TERM HUP
+fi
+
+# Run locker in foreground (xss-lock waits for this)
+exec xsecurelock

@@ -34,8 +34,9 @@ palette = 15=#c0caf5
 
 # Slight transparency; picom opacity-rule also softens the window.
 # Keep high enough for readable text; browsers stay fully opaque in picom.
-background-opacity = 0.92
+background-opacity = 0.75
 minimum-contrast = 1.1
+window-decoration = none
 
 window-padding-x = 8
 window-padding-y = 8

@@ -28,7 +28,11 @@ super + {Left,Down,Up,Right}
 	bspc node -f {west,south,north,east}
 
 # --- Swap --------------------------------------------------------------------
-super + shift + {h,j,k,l}
+# Note: Super+Shift+l is reserved for lock (atelier-lock) — use arrows for east.
+super + shift + {h,j,k}
+	bspc node -s {west,south,north}
+
+super + shift + {Left,Down,Up,Right}
 	bspc node -s {west,south,north,east}
 
 # --- Resize (expand/contract) ------------------------------------------------
@@ -74,8 +78,9 @@ super + shift + r
 	bspc wm -r
 
 # --- Lock / quit session -----------------------------------------------------
+# Use atelier-lock (sources XSECURELOCK_* env; talks to xss-lock when running)
 super + shift + l
-	xsecurelock
+	sh -c 'command -v atelier-lock >/dev/null 2>&1 && exec atelier-lock; exec "$HOME/bin/atelier-lock"'
 
 super + shift + q
 	bspc quit

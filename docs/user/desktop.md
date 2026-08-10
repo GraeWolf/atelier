@@ -26,7 +26,8 @@ Modifier key: **Super** (Windows / Command key).
 | Super+h/j/l | Focus left/down/right |
 | Super+arrows | Focus (all directions; Up = north) |
 | Super+k | Keybind cheat sheet (floating; toggle) |
-| Super+Shift+h/j/k/l | Swap with neighbor |
+| Super+Shift+h/j/k | Swap left / down / up |
+| Super+Shift+arrows | Swap (all directions; Right = east) |
 | Super+Alt+h/j/k/l | Resize |
 | Super+f | Fullscreen |
 | Super+t | Tiled |
@@ -50,7 +51,7 @@ Bindings use desktop **names** (`bspc desktop -f 7`), not `^7` (which means “7
 
 | Keys | Action |
 |------|--------|
-| Super+Shift+l | Lock (xsecurelock) |
+| Super+Shift+l | Lock screen (`atelier-lock` / xsecurelock) |
 | Super+Shift+q | Quit bspwm (end session) |
 | Super+Shift+m | Multi-monitor layout wizard |
 | Super+Shift+v | Volume mixer (pavucontrol) |
@@ -109,6 +110,28 @@ Log: `/tmp/atelier-picom.log` if picom fails to start.
 | eza, bat, tldr, yt-dlp, gcc | CLI tools |
 
 Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S brave-origin`). Super+b falls back until it is installed.
+
+## Screen lock
+
+| Item | Default |
+|------|---------|
+| Manual lock | **Super+Shift+l** → `atelier-lock` |
+| Idle lock | After **5 minutes** idle (`xset s`; via xss-lock) |
+| Suspend | **2 minutes after lock** while still locked (`loginctl suspend`) |
+| Password feedback | Jumping **cursor** (not hex digits) |
+| Picom flash on unlock | Disabled (`XSECURELOCK_COMPOSITE_OBSCURER=0`) |
+
+Env (in `~/.config/xsecurelock/env.sh` and/or session):
+
+```bash
+export ATELIER_LOCK_IDLE_SEC=300      # seconds idle before lock
+export ATELIER_LOCK_CYCLE_SEC=30      # dimmer phase before lock
+export ATELIER_LOCK_SUSPEND_SEC=120   # seconds after lock before suspend (0=off)
+# export ATELIER_SKIP_LOCK_SUSPEND=1
+# export ATELIER_SKIP_IDLE_LOCK=1
+```
+
+Password prompt styles (`XSECURELOCK_PASSWORD_PROMPT`): `cursor` (default here), `asterisks`, `hidden`, … — not `time_hex`.
 
 ## Sound
 

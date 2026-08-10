@@ -55,10 +55,25 @@ if [ -z "${LIBGL_ALWAYS_SOFTWARE:-}" ] && [ -z "${ATELIER_FORCE_HW_GL:-}" ]; the
 fi
 unset _virt
 
-# xsecurelock environment
+# xsecurelock environment (also re-sourced by atelier-lock)
 if [ -f "$HOME/.config/xsecurelock/env.sh" ]; then
 	# shellcheck source=/dev/null
 	. "$HOME/.config/xsecurelock/env.sh"
+fi
+
+# Idle timeouts (MIT-SCREEN-SAVER → xss-lock → atelier-lock)
+#   timeout  = seconds idle before lock (default 300 = 5 min)
+#   cycle    = seconds for dimmer notifier before lock (default 30)
+# Override: ATELIER_LOCK_IDLE_SEC / ATELIER_LOCK_CYCLE_SEC
+# Suspend while locked: ATELIER_LOCK_SUSPEND_SEC (default 120; set 0 to disable)
+if command -v xset >/dev/null 2>&1 && [ -z "${ATELIER_SKIP_IDLE_LOCK:-}" ]; then
+	_idle=${ATELIER_LOCK_IDLE_SEC:-300}
+	_cycle=${ATELIER_LOCK_CYCLE_SEC:-30}
+	xset s "$_idle" "$_cycle"
+	xset s blank
+	# Prefer xss-lock idle path over DPMS races; leave DPMS off by default
+	xset -dpms 2>/dev/null || true
+	unset _idle _cycle
 fi
 
 # dbus session (runit / elogind systems usually already have this)

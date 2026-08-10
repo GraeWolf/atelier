@@ -58,6 +58,7 @@ mkdir -p "$dst/usr/bin" "$dst/usr/share/doc/atelier" \
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/usr/bin/atelier-rofi"
 install -m 755 "$src/session/atelier-monitors"   "$dst/usr/bin/atelier-monitors"
 install -m 755 "$src/session/atelier-keybinds"   "$dst/usr/bin/atelier-keybinds"
+install -m 755 "$src/session/atelier-lock"       "$dst/usr/bin/atelier-lock"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/etc/skel/.config/atelier/keybinds.txt"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
