@@ -67,7 +67,7 @@ fi
 install_void_deps() {
 	log "Installing Void build dependencies (needs sudo)"
 	# core build + curl (optional model fetch helpers)
-	_pkgs="cmake git gcc gcc-c++ make pkg-config ninja libcurl-devel openssl-devel"
+	_pkgs="cmake git gcc make pkg-config ninja libcurl-devel openssl-devel"
 	# shellcheck disable=SC2086
 	if command -v sudo >/dev/null 2>&1; then
 		sudo xbps-install -Sy $_pkgs || die "xbps-install failed"
