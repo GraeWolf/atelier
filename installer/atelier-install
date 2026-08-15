@@ -685,7 +685,7 @@ install_packages() {
 	printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
 	REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
 
-	# GraeWolf personal packages (brave-origin, ...) — live medium + package ship conf+key
+	# GraeWolf personal packages (brave-origin, ...) - live medium + package ship conf+key
 	if [ -f /etc/xbps.d/20-repository-graewolf.conf ]; then
 		cp -a /etc/xbps.d/20-repository-graewolf.conf \
 			"$TARGETDIR/etc/xbps.d/20-repository-graewolf.conf"
