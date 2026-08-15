@@ -8,11 +8,14 @@ readonly COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
 readonly STORAGE_DIR="${HOME}/.local/share/atelier/windows"
 readonly SHARED_DIR="${HOME}/Atelier/Windows"
 readonly CONTAINER_NAME="atelier-windows"
-readonly IMAGE_NAME="dockurr/windows"
+readonly DEFAULT_IMAGE="dockurr/windows"
 readonly WEB_URL="http://127.0.0.1:8006"
 readonly RDP_HINT="127.0.0.1:3389"
 readonly DOCKER_ROOT_MIN_GB=20
 readonly TITLE="Atelier Windows VM"
+
+# Mutable: floating tag by default; override via install --image or ATELIER_WINDOWS_IMAGE
+WINDOWS_IMAGE="${ATELIER_WINDOWS_IMAGE:-$DEFAULT_IMAGE}"
 
 last_error_path() {
 	local d
@@ -271,7 +274,7 @@ write_compose() {
 			'# See: https://github.com/dockur/windows' \
 			'services:' \
 			'  windows:' \
-			"    image: ${IMAGE_NAME}" \
+			"    image: ${WINDOWS_IMAGE}" \
 			"    container_name: ${CONTAINER_NAME}" \
 			'    environment:' \
 			'      VERSION: "11"' \
@@ -308,14 +311,27 @@ show_usage() {
 Usage: atelier-windows-vm <command> [options]
 
 Commands:
-  install              Interactive dialog wizard + first start
-  remove               Stop VM; delete compose + disk (keeps ~/Atelier/Windows)
+  install [options]    Setup + first start (dialog wizard by default)
+  remove [--yes]       Stop VM; delete compose + disk (keeps ~/Atelier/Windows)
   launch [--keep-alive|-k]
                        Start VM if needed and connect with FreeRDP
                        (default: stop VM when RDP closes; -k keeps it running)
   stop                 Stop the Windows VM container
   status               Show configuration / container status
   help                 Show this help
+
+install options (non-interactive / v1.1):
+  --yes, -y            Accept defaults/security; no dialog (scripted install)
+  --force              Overwrite existing compose without prompt
+  --ram SIZE           e.g. 4G or 4 (default 4G)
+  --cpus N             CPU cores (default 2)
+  --disk SIZE          e.g. 64G or 64 (default 64G)
+  --user NAME          Windows username (default docker)
+  --password PASS      Windows password (default admin)
+                       Prefer: ATELIER_WINDOWS_PASSWORD env (avoids shell history)
+  --image REF          Docker image (default dockurr/windows)
+                       Pin: dockurr/windows@sha256:<digest>
+                       Or set ATELIER_WINDOWS_IMAGE
 
 Paths:
   compose   ~/.config/atelier/windows/docker-compose.yml
@@ -327,6 +343,52 @@ Setup once:
   sudo atelier-setup-docker
   # re-login, then: atelier-windows-vm install
 EOF
+}
+
+# Normalize "4" / "4g" / "4G" -> "4G"; print disk number separately via parameter
+normalize_size_g() {
+	local s=$1
+	s=${s//[[:space:]]/}
+	if [[ $s =~ ^[0-9]+$ ]]; then
+		printf '%sG\n' "$s"
+	elif [[ $s =~ ^[0-9]+[Gg]$ ]]; then
+		printf '%sG\n' "${s%[Gg]}"
+	else
+		die "invalid size '$1' (use e.g. 4G or 64)"
+	fi
+}
+
+size_g_number() {
+	local s
+	s=$(normalize_size_g "$1")
+	printf '%s\n' "${s%G}"
+}
+
+install_start_vm() {
+	local ram=$1 cores=$2 disk=$3 user=$4 pass=$5
+	local disk_num
+
+	disk_num=$(size_g_number "$disk")
+	check_disk_for_install "$disk_num"
+
+	log "writing compose to $COMPOSE_FILE (image: $WINDOWS_IMAGE)"
+	write_compose "$ram" "$cores" "$disk" "$user" "$pass"
+	pass=""
+
+	log "starting Windows VM (may download image + Windows ISO)..."
+	if ! compose up -d; then
+		die "failed to start Windows VM (docker compose up). Check: docker logs $CONTAINER_NAME"
+	fi
+
+	log "Windows VM is starting."
+	log "Monitor install progress: $WEB_URL"
+	if have xdg-open; then
+		xdg-open "$WEB_URL" >/dev/null 2>&1 || true
+	fi
+	log "When install finishes, use: atelier-windows-vm launch"
+	log "Or open Rofi and choose Windows."
+	log "To stop: atelier-windows-vm stop"
+	log "To change resources/image: edit $COMPOSE_FILE then restart"
 }
 
 cmd_status() {
@@ -386,8 +448,21 @@ cmd_stop() {
 }
 
 cmd_remove() {
-	require_dialog
-	if ! dlg_yesno "Remove Windows VM configuration and virtual disk?
+	local yes=false
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--yes | -y) yes=true; shift ;;
+		-h | --help)
+			show_usage
+			return 0
+			;;
+		*) die "unknown remove option: $1 (try --yes)" ;;
+		esac
+	done
+
+	if [[ $yes != true ]]; then
+		require_dialog
+		if ! dlg_yesno "Remove Windows VM configuration and virtual disk?
 
 This deletes:
   - $COMPOSE_DIR
@@ -397,8 +472,9 @@ Keeps shared files:
   - $SHARED_DIR
 
 Continue?" 14 64 no; then
-		log "removal cancelled"
-		exit 0
+			log "removal cancelled"
+			exit 0
+		fi
 	fi
 
 	if [[ -f $COMPOSE_FILE ]] && have docker && docker info >/dev/null 2>&1; then
@@ -406,9 +482,15 @@ Continue?" 14 64 no; then
 		compose down 2>/dev/null || true
 	fi
 
+	# Best-effort remove of configured image (tag or digest from compose)
 	if have docker && docker info >/dev/null 2>&1; then
-		log "removing image $IMAGE_NAME (best-effort)..."
-		docker rmi "$IMAGE_NAME" 2>/dev/null || log "image already removed or not present"
+		local img=""
+		if [[ -f $COMPOSE_FILE ]]; then
+			img=$(awk -F': ' '/^[[:space:]]*image:/{gsub(/["'\'' ]/, "", $2); print $2; exit}' "$COMPOSE_FILE" 2>/dev/null || true)
+		fi
+		[[ -n $img ]] || img=$DEFAULT_IMAGE
+		log "removing image $img (best-effort)..."
+		docker rmi "$img" 2>/dev/null || log "image already removed or not present"
 	fi
 
 	if [[ -d $COMPOSE_DIR ]]; then
@@ -428,34 +510,77 @@ Continue?" 14 64 no; then
 
 cmd_install() {
 	local total_ram total_cores storage_free docker_root docker_free
-	local ram cores disk disk_num user pass pass_display
+	local ram cores disk user pass pass_display
 	local ram_args=() disk_args=() opt sel default_disk
 	local max_disk
+	local noninteractive=false force=false
+	local cli_ram="" cli_cores="" cli_disk="" cli_user="" cli_pass="" cli_image=""
 
-	check_arch
-	require_dialog
-	check_kvm
-	check_docker
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--yes | -y) noninteractive=true; shift ;;
+		--force) force=true; shift ;;
+		--ram)
+			[[ $# -ge 2 ]] || die "--ram needs a value"
+			cli_ram=$2
+			shift 2
+			;;
+		--cpus | --cpu | --cores)
+			[[ $# -ge 2 ]] || die "--cpus needs a value"
+			cli_cores=$2
+			shift 2
+			;;
+		--disk)
+			[[ $# -ge 2 ]] || die "--disk needs a value"
+			cli_disk=$2
+			shift 2
+			;;
+		--user | --username)
+			[[ $# -ge 2 ]] || die "--user needs a value"
+			cli_user=$2
+			shift 2
+			;;
+		--password)
+			[[ $# -ge 2 ]] || die "--password needs a value"
+			cli_pass=$2
+			shift 2
+			;;
+		--image)
+			[[ $# -ge 2 ]] || die "--image needs a value"
+			cli_image=$2
+			shift 2
+			;;
+		-h | --help)
+			show_usage
+			return 0
+			;;
+		*)
+			die "unknown install option: $1 (see: atelier-windows-vm help)"
+			;;
+		esac
+	done
 
-	if [[ -f $COMPOSE_FILE ]]; then
-		if ! dlg_yesno "A Windows VM is already configured:
-
-$COMPOSE_FILE
-
-Overwrite and reconfigure?
-(Existing VM disk under storage may still be reused by dockur.)" 14 64 no; then
-			log "install cancelled (existing compose kept)"
-			exit 0
-		fi
+	# Password from env preferred for scripts (not logged)
+	if [[ -z $cli_pass && -n ${ATELIER_WINDOWS_PASSWORD:-} ]]; then
+		cli_pass=$ATELIER_WINDOWS_PASSWORD
+	fi
+	if [[ -n $cli_image ]]; then
+		WINDOWS_IMAGE=$cli_image
+	elif [[ -n ${ATELIER_WINDOWS_IMAGE:-} ]]; then
+		WINDOWS_IMAGE=$ATELIER_WINDOWS_IMAGE
 	fi
 
-	dlg_msgbox "Security note
+	# Any resource flag implies non-interactive when --yes is set;
+	# also allow full flags without --yes only if --yes present for safety
+	if [[ $noninteractive == true ]]; then
+		:
+	elif [[ -n $cli_ram || -n $cli_cores || -n $cli_disk || -n $cli_user || -n $cli_pass || -n $cli_image ]]; then
+		die "resource flags require --yes for non-interactive install (or use dialog wizard with no flags)"
+	fi
 
-• Membership in the docker group is roughly equivalent to root on this machine.
-• Only ~/Atelier/Windows is shared with Windows (two-way, untrusted).
-• Compose credentials are stored in a mode-0600 file under ~/.config/atelier/windows/.
-
-Continue only if you accept this trust model." 16 64
+	check_arch
+	check_kvm
+	check_docker
 
 	total_ram=$(total_ram_gb)
 	total_cores=$(nproc_cores)
@@ -466,12 +591,77 @@ Continue only if you accept this trust model." 16 64
 	[[ -n $storage_free && $storage_free =~ ^[0-9]+$ ]] || storage_free=0
 	[[ -n $docker_free && $docker_free =~ ^[0-9]+$ ]] || docker_free=0
 
+	if [[ -f $COMPOSE_FILE ]]; then
+		if [[ $force == true || $noninteractive == true ]]; then
+			if [[ $force != true && $noninteractive == true ]]; then
+				die "compose already exists: $COMPOSE_FILE (pass --force to overwrite)"
+			fi
+			log "overwriting existing compose (--force)"
+		else
+			require_dialog
+			if ! dlg_yesno "A Windows VM is already configured:
+
+$COMPOSE_FILE
+
+Overwrite and reconfigure?
+(Existing VM disk under storage may still be reused by dockur.)" 14 64 no; then
+				log "install cancelled (existing compose kept)"
+				exit 0
+			fi
+		fi
+	fi
+
+	# ---------- non-interactive path ----------
+	if [[ $noninteractive == true ]]; then
+		ram=$(normalize_size_g "${cli_ram:-4G}")
+		disk=$(normalize_size_g "${cli_disk:-64G}")
+		cores=${cli_cores:-2}
+		cores=${cores//[[:space:]]/}
+		user=${cli_user:-docker}
+		user=$(printf '%s' "$user" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		[[ -n $user ]] || user=docker
+		pass=${cli_pass:-admin}
+
+		if [[ ! $cores =~ ^[0-9]+$ ]] || (( cores < 1 )) || (( cores > total_cores )); then
+			die "invalid --cpus '$cores' (1..$total_cores)"
+		fi
+		valid_username "$user" || die "invalid --user '$user'"
+		valid_password "$pass" || die "invalid --password (charset rules; see docs)"
+
+		local ram_num disk_num
+		ram_num=$(size_g_number "$ram")
+		disk_num=$(size_g_number "$disk")
+		if (( ram_num > total_ram )); then
+			die "--ram ${ram} exceeds host RAM ${total_ram}G"
+		fi
+		if (( docker_free < DOCKER_ROOT_MIN_GB )); then
+			die "insufficient free space on Docker root ($docker_root): ${docker_free}G available, need ${DOCKER_ROOT_MIN_GB}G"
+		fi
+
+		log "non-interactive install: RAM=$ram CPU=$cores DISK=$disk USER=$user IMAGE=$WINDOWS_IMAGE"
+		log "security: docker group ≈ root; only ~/Atelier/Windows is shared"
+		install_start_vm "$ram" "$cores" "$disk" "$user" "$pass"
+		return 0
+	fi
+
+	# ---------- interactive dialog path ----------
+	require_dialog
+
+	dlg_msgbox "Security note
+
+• Membership in the docker group is roughly equivalent to root on this machine.
+• Only ~/Atelier/Windows is shared with Windows (two-way, untrusted).
+• Compose credentials are stored in a mode-0600 file under ~/.config/atelier/windows/.
+
+Continue only if you accept this trust model." 16 64
+
 	dlg_msgbox "System resources
 
 Total RAM:     ${total_ram}G
 CPU cores:     ${total_cores}
 Storage free:  ${storage_free}G  ($STORAGE_DIR FS)
 Docker free:   ${docker_free}G  ($docker_root)
+Image:         $WINDOWS_IMAGE
 
 First install needs about ${DOCKER_ROOT_MIN_GB}G free on Docker root
 plus (disk size + 10G) on the storage filesystem." 16 64
@@ -483,7 +673,6 @@ plus (disk size + 10G) on the storage filesystem." 16 64
   required:    ${DOCKER_ROOT_MIN_GB}G"
 	fi
 
-	# RAM menu
 	for opt in 2 4 8 16 32 64; do
 		if (( opt <= total_ram )); then
 			ram_args+=("${opt}G" "${opt} GiB RAM for Windows")
@@ -496,7 +685,6 @@ plus (disk size + 10G) on the storage filesystem." 16 64
 		|| die "install cancelled"
 	ram=$sel
 
-	# CPU
 	cores=$(dlg_input "CPU cores (1-${total_cores})" "2") || die "install cancelled"
 	cores=${cores//[[:space:]]/}
 	if [[ ! $cores =~ ^[0-9]+$ ]] || (( cores < 1 )) || (( cores > total_cores )); then
@@ -507,7 +695,6 @@ plus (disk size + 10G) on the storage filesystem." 16 64
 		fi
 	fi
 
-	# Disk menu
 	max_disk=$((storage_free - 10))
 	if (( max_disk < 32 )); then
 		die "insufficient free space on storage filesystem.
@@ -539,14 +726,9 @@ plus (disk size + 10G) on the storage filesystem." 16 64
 		disk=$(cat "$tmp")
 		rm -f "$tmp"
 	}
-	disk_num=${disk%G}
 
-	check_disk_for_install "$disk_num"
-
-	# Username
 	while true; do
 		user=$(dlg_input "Windows username (empty = docker)" "docker") || die "install cancelled"
-		# trim whitespace
 		user=$(printf '%s' "$user" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 		[[ -n $user ]] || user=docker
 		if valid_username "$user"; then
@@ -558,7 +740,6 @@ Allowed: A-Z a-z 0-9 . _ - (1-32 chars).
 No quotes, spaces, or backslashes." 12 56
 	done
 
-	# Password
 	pass_display="(default)"
 	while true; do
 		pass=$(dlg_password "Windows password (empty = admin)") || die "install cancelled"
@@ -584,6 +765,7 @@ CPU:       $cores cores
 Disk:      $disk
 Username:  $user
 Password:  $pass_display
+Image:     $WINDOWS_IMAGE
 
 docker group ≈ root. Only ~/Atelier/Windows is shared.
 
@@ -592,25 +774,7 @@ Proceed?" 16 60; then
 		exit 0
 	fi
 
-	log "writing compose to $COMPOSE_FILE"
-	write_compose "$ram" "$cores" "$disk" "$user" "$pass"
-	# Clear pass from shell as best-effort (compose already on disk mode 0600)
-	pass=""
-
-	log "starting Windows VM (may download dockurr/windows + Windows ISO)..."
-	if ! compose up -d; then
-		die "failed to start Windows VM (docker compose up). Check: docker logs $CONTAINER_NAME"
-	fi
-
-	log "Windows VM is starting."
-	log "Monitor install progress: $WEB_URL"
-	if have xdg-open; then
-		xdg-open "$WEB_URL" >/dev/null 2>&1 || true
-	fi
-	log "When install finishes, use: atelier-windows-vm launch"
-	log "Or open Rofi and choose Windows."
-	log "To stop: atelier-windows-vm stop"
-	log "To change resources: edit $COMPOSE_FILE then restart"
+	install_start_vm "$ram" "$cores" "$disk" "$user" "$pass"
 }
 
 # --- launch helpers -----------------------------------------------------------
@@ -835,9 +999,16 @@ cmd_launch() {
 
 # --- main ---------------------------------------------------------------------
 main() {
-	case "${1:-}" in
-	install) cmd_install ;;
-	remove) cmd_remove ;;
+	local cmd=${1:-}
+	case "$cmd" in
+	install)
+		shift || true
+		cmd_install "$@"
+		;;
+	remove)
+		shift || true
+		cmd_remove "$@"
+		;;
 	launch | start)
 		shift || true
 		cmd_launch "$@"
@@ -846,7 +1017,7 @@ main() {
 	status) cmd_status ;;
 	help | --help | -h | "") show_usage ;;
 	*)
-		log "unknown command: $1" >&2
+		log "unknown command: $cmd" >&2
 		show_usage >&2
 		exit 1
 		;;

@@ -4,6 +4,10 @@
 # See: https://github.com/dockur/windows
 #
 # Hand-edits of USERNAME/PASSWORD must keep double-quoted forms for the launcher.
+#
+# Optional image pin (supply-chain):
+#   image: dockurr/windows@sha256:YOUR_DIGEST_HERE
+# Or install with: atelier-windows-vm install --yes --image 'dockurr/windows@sha256:...'
 services:
   windows:
     image: dockurr/windows

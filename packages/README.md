@@ -36,7 +36,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |
 | `atelier-void-repo` | files | GraeWolf personal Void repo (public key + xbps.d) |
-| `atelier-windows-vm` | files | Optional Windows VM (Docker + FreeRDP); **not** a dep of `atelier-desktop` |
+| `atelier-windows-vm` | files | Optional Windows VM (Docker + FreeRDP, v0.2.0); **not** a dep of `atelier-desktop` |
 
 ## Config packaging workflow
 

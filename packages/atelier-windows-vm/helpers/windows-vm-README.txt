@@ -1,60 +1,48 @@
 Atelier — optional Windows VM
 =============================
 
-Package: atelier-windows-vm
-Status: install / launch / status / stop / remove implemented
+Package: atelier-windows-vm 0.2.0
 
-Purpose
--------
-Opt-in Windows 11 guest for Office-class apps via Docker (dockur/windows) + FreeRDP.
-Not part of atelier-desktop. Not on the live ISO package lists.
+Opt-in Windows 11 via Docker (dockur/windows) + FreeRDP.
+Not part of atelier-desktop. Not on live ISO lists.
 
 Setup (once)
 ------------
   sudo xbps-install -Sy atelier-windows-vm
   sudo atelier-setup-docker
-  # log out and back in (docker group)
+  # re-login
 
-  docker info
-  docker compose version
+  docker info && docker compose version
+
+Install
+-------
+  atelier-windows-vm install              # dialog wizard
+  atelier-windows-vm install --yes \      # non-interactive
+    --ram 4G --cpus 2 --disk 64G --force
+
+  # password via env (preferred for scripts):
+  ATELIER_WINDOWS_PASSWORD=... atelier-windows-vm install --yes --force
+
+  # pin image digest (optional):
+  --image dockurr/windows@sha256:...
+  # or ATELIER_WINDOWS_IMAGE=...
 
 Use
 ---
-  atelier-windows-vm install     # dialog wizard; watch http://127.0.0.1:8006
-  atelier-windows-vm launch      # FreeRDP; stops VM when RDP closes
-  atelier-windows-vm launch -k   # keep VM running after RDP
-  atelier-windows-vm status
-  atelier-windows-vm stop
-  atelier-windows-vm remove      # keeps ~/Atelier/Windows
+  http://127.0.0.1:8006     # install progress
+  atelier-windows-vm launch
+  atelier-windows-vm launch -k
+  atelier-windows-vm status|stop
+  atelier-windows-vm remove [--yes]
 
 Paths
 -----
-  compose   ~/.config/atelier/windows/docker-compose.yml  (mode 0600)
-  storage   ~/.local/share/atelier/windows
-  shared    ~/Atelier/Windows
-  last-error  $XDG_RUNTIME_DIR/atelier-windows-vm-last-error.txt
-              (or under /tmp if runtime dir is missing)
-
-Desktop
--------
-  Rofi/drun entry: "Windows" -> atelier-windows-vm launch
-  Errors use notify-send + last-error file (Terminal=false).
-
-FreeRDP
--------
-  Client: xfreerdp3 (package freerdp)
-  Password via /from-stdin (not on argv) when supported
-  Auto-stop on RDP exit unless --keep-alive
+  ~/.config/atelier/windows/docker-compose.yml   (0600)
+  ~/.local/share/atelier/windows
+  ~/Atelier/Windows
+  last-error: $XDG_RUNTIME_DIR/atelier-windows-vm-last-error.txt
 
 Security
 --------
-  docker group ≈ root. Only ~/Atelier/Windows is shared (two-way).
-  Compose holds credentials (mode 0600).
-
-Policy
-------
-  Host: Void XBPS. Guest image: dockurr/windows (registry). Needs /dev/kvm.
-
-Build notes
------------
-  docs/build/windows-vm.md in the Atelier source tree.
+  docker group ≈ root. Only ~/Atelier/Windows shared (two-way).
+  Full guide: docs/user/windows-vm.md (source tree) or project website docs.

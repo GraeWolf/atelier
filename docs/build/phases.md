@@ -75,6 +75,7 @@ Remaining gaps (JetBrains font package, encryption, extra hardware polish) are d
 | Live ISO | **Not** on `iso/package-lists/*` |
 | Host packages | Void XBPS: `docker`, `docker-compose`, `freerdp`, `dialog`, … |
 | Runtime image | Third-party Docker image `dockurr/windows` pulled only when the user runs install |
-| Docs | [windows-vm.md](windows-vm.md) (build policy); user guide lands with implementation |
+| Docs | [windows-vm.md](windows-vm.md) (build); [../user/windows-vm.md](../user/windows-vm.md) (user) |
+| Status | Implemented (`atelier-windows-vm` 0.2.0); bare-metal support gate in build docs |
 
 This is deliberate optional glue for Office-class apps—not Phase 1 MVP scope.
