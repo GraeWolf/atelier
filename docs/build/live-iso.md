@@ -144,5 +144,5 @@ See [nvidia.md](nvidia.md).
 
 ## Out of scope (later)
 
-- Public hosting of the personal repo
 - Further hardware beyond primary NVIDIA desktop
+- Full-disk encryption

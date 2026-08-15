@@ -103,23 +103,29 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
-## Explicit gaps (track until closed)
+## Closed / resolved
 
-1. ~~**brave-origin**~~ — available from GraeWolf void-repo (`atelier-void-repo`); optional install  
-2. **JetBrains Mono** — personal font package required  
-3. **Xlibre** — external repo integration required  
-4. ~~Installer~~ — addressed by `atelier-installer` (yad/zenity/dialog)  
+1. ~~**brave-origin**~~ — [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo); live/ISO via `atelier-void-repo`  
+2. ~~**Public package hosting**~~ — same repo (GitHub Releases `x86_64`)  
+3. ~~**Installer**~~ — `atelier-installer` wizard  
+4. ~~**Xlibre wiring**~~ — `atelier-xlibre-repo` + setup helper (package still external)  
 
-### GraeWolf personal Void repository
+## Explicit gaps (still open)
+
+1. **JetBrains Mono** — personal font package if PLAN fonts are required as-named (UI currently uses Fira Code)  
+2. Full-disk encryption — deferred past MVP  
+
+### GraeWolf personal Void repository (public)
 
 | Item | Value |
 |------|--------|
-| Templates | https://github.com/GraeWolf/void-repo |
+| Templates / source | https://github.com/GraeWolf/void-repo |
 | Binary URL | `https://github.com/GraeWolf/void-repo/releases/download/x86_64/` |
 | Packages (examples) | `brave-origin`, `obsidian`, `melia` |
 | Atelier glue | package `atelier-void-repo` (xbps.d + public key) |
 | Live ISO | conf + key in `iso/include-src/`; mklive `-r` includes the URL |
 | Setup helper | `atelier-setup-void-repo` |
+| Status | **In use** — public hosting and brave-origin resolved |
 
 ## Audio stack (PipeWire)
 

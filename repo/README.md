@@ -27,10 +27,9 @@ repo/
 ## Phase 1 approach
 
 - Build packages from `../packages/` into `out/`
-- Layout is ready for later public hosting (publish `out/`)
-- Public hosting is **not** required for MVP
 - Packages are **unsigned** by default (local/dev)
-
+- **Public** packages (e.g. `brave-origin`) live in [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo), not necessarily in this `out/` tree
+- Optional later: also publish this `out/` tree for remote Atelier metapackage updates
 ## Enabling the repo
 
 See examples in `conf/`:

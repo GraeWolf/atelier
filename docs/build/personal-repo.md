@@ -91,19 +91,29 @@ sudo xbps-install -y atelier-desktop
 - To sign later: `xbps-rindex --sign` / `--sign-pkg` with a key kept outside the repo
 - Document the public key for users when public hosting goes live
 
-## Future public hosting
+## Public packages (GraeWolf void-repo)
 
-1. `./scripts/build-repo.sh`
-2. Upload `repo/out/*` to static hosting (`https://example.com/atelier/current/`)
-3. Ship `10-repository-atelier-public.conf` (or installer snippet) with that URL
-4. Optionally sign repodata and packages
+Separate from this monorepo’s `repo/out/`:
 
-## Packages produced
+| Item | Value |
+|------|--------|
+| Source | https://github.com/GraeWolf/void-repo |
+| Binaries | `https://github.com/GraeWolf/void-repo/releases/download/x86_64/` |
+| Atelier enablement | package `atelier-void-repo` |
+| Example packages | `brave-origin`, and other GraeWolf builds |
+
+Atelier **metapackages/configs** stay local/on-ISO for now. **Extra PLAN packages** (browser, etc.) come from the public void-repo.
+
+Optional later: also publish `repo/out` (atelier-*) to a static URL; examples remain in `repo/conf/*-public.conf.example`.
+
+## Packages produced (this monorepo)
 
 | Package | Type |
 |---------|------|
 | `atelier-base` | metapackage |
-| `atelier-config` | config files (`/etc/skel`, xsessions, bashrc.d) |
-| `atelier-desktop` | metapackage (stack + apps + config) |
+| `atelier-config` | config files (`/etc/skel`, xsessions, bashrc.d, wallpapers, …) |
+| `atelier-desktop` | metapackage (stack + apps + config + void-repo glue) |
+| `atelier-installer` | graphical installer |
+| `atelier-nvidia` / `atelier-xlibre-repo` / `atelier-void-repo` | hardware / external repos |
 
 See [package-sources.md](package-sources.md) for depends and gaps.

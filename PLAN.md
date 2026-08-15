@@ -144,4 +144,6 @@ Architecture decisions for Phase 1: docs/build/architecture.md
 End-to-end build guide: docs/build/end-to-end.md
 User documentation: docs/user/
 
-Later phases: Extra hardware support, encryption, further polish, public repo hosting, remaining package gaps (e.g. brave-origin, JetBrains Mono), etc.
+Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-repo) provides packages such as brave-origin; enabled via atelier-void-repo on live and installed systems.
+
+Later phases: Extra hardware support, encryption, further polish, remaining package gaps (e.g. JetBrains Mono), etc.

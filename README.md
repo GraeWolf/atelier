@@ -28,7 +28,10 @@ Milestone status: [docs/build/phases.md](docs/build/phases.md)
 End-to-end build: [docs/build/end-to-end.md](docs/build/end-to-end.md)  
 User quick start: [docs/user/quick-start.md](docs/user/quick-start.md)
 
-Known gaps (e.g. Brave personal package, JetBrains Mono package, public repo hosting) are listed in the build docs — not forgotten, just not blocking Phase 1 packaging/docs.
+**Public package repo:** [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) (e.g. `brave-origin`) is enabled on live/installed systems via `atelier-void-repo`.  
+**Local Atelier packages** still build into `repo/out/` and ship on the ISO at `/usr/share/atelier/repo`.
+
+Remaining gaps (e.g. JetBrains Mono package, encryption) are listed in [docs/build/package-sources.md](docs/build/package-sources.md).
 
 ## Quick links
 

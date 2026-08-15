@@ -108,13 +108,20 @@ Multi-machine: Git is the source of truth; re-read `PLAN.md` / `docs/build/phase
 - Architecture: [architecture.md](architecture.md)
 - Installer internals: [installer.md](installer.md)
 
-## Known Phase 1 gaps (honest)
+## Package repositories (two layers)
+
+| Layer | Role |
+|-------|------|
+| **Local Atelier** (`repo/out` → ISO `/usr/share/atelier/repo`) | Metapackages and configs built in this monorepo |
+| **GraeWolf void-repo** ([github.com/GraeWolf/void-repo](https://github.com/GraeWolf/void-repo)) | Public signed packages (e.g. `brave-origin`); enabled via `atelier-void-repo` |
+
+## Known remaining gaps
 
 | Gap | Status |
 |-----|--------|
-| brave-origin browser package | Not in Void; personal package still TBD |
-| JetBrains Mono font package | Referenced in configs; personal package TBD |
-| Public hosting of personal repo | Layout/docs only; local `repo/out` for MVP |
+| ~~brave-origin~~ | Available from GraeWolf void-repo (`sudo xbps-install -S brave-origin`) |
+| ~~Public package hosting~~ | GraeWolf/void-repo (binaries on GitHub Releases tag `x86_64`) |
+| JetBrains Mono font package | Referenced in PLAN; not yet packaged (UI uses Fira Code today) |
 | Full-disk encryption | Deferred past MVP |
 | Hardware CI | Manual test on desktop machine |
 

@@ -33,12 +33,15 @@ Desktop and theming configuration is shipped as **XBPS packages** built from sou
 
 Prefer packages over rootfs overlays so the installed system can be updated the same way as the live image.
 
-## Personal repository
+## Package repositories
 
-- **Phase 1:** Local / build-time XBPS repository under `repo/out/`
-- Built with `scripts/build-repo.sh` (`xbps-create` + `xbps-rindex`; unsigned by default)
-- Layout and docs support later public hosting (static host, rsync, etc.) without restructuring
-- See `docs/build/personal-repo.md`
+- **Local Atelier repo:** build-time under `repo/out/`, embedded on the ISO at `/usr/share/atelier/repo`
+  - Built with `scripts/build-repo.sh` (`xbps-create` + `xbps-rindex`; unsigned by default)
+  - See `docs/build/personal-repo.md`
+- **Public GraeWolf void-repo:** [github.com/GraeWolf/void-repo](https://github.com/GraeWolf/void-repo)
+  - Signed binaries: `https://github.com/GraeWolf/void-repo/releases/download/x86_64/`
+  - Enabled on live/installed systems via package `atelier-void-repo` (xbps.d + public key)
+  - Provides PLAN packages not in official Void (e.g. `brave-origin`)
 - **Never commit private signing keys or secrets** (see `AGENTS.md`)
 
 ## Source of truth

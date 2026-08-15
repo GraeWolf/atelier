@@ -27,8 +27,7 @@ Declarative package lists from `PLAN.md`; `atelier-base` / `atelier-desktop`; so
 Tokyo Night bspwm stack configs shipped as `atelier-config`.
 
 ### Step 3 — Local personal XBPS repository
-`scripts/build-repo.sh` → `repo/out/`; publish-ready layout.
-
+`scripts/build-repo.sh` → `repo/out/`. Public extras (brave-origin, etc.) via GraeWolf/void-repo + `atelier-void-repo`.
 ### Step 4 — First bootable live ISO
 void-mklive wrappers; personal repo embedded; themed live desktop path.
 
@@ -53,7 +52,9 @@ User guides + end-to-end build docs; README status updated.
 | Consistent Tokyo Night theming | configs across stack |
 | Basic user + detailed build docs | `docs/user/`, `docs/build/` |
 
-Remaining gaps (browser package, JetBrains font package, public repo hosting, encryption) are documented in [end-to-end.md](end-to-end.md) and [package-sources.md](package-sources.md).
+**Resolved:** public package hosting and brave-origin via [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) (`atelier-void-repo` on live/ISO).
+
+Remaining gaps (JetBrains font package, encryption, extra hardware polish) are documented in [end-to-end.md](end-to-end.md) and [package-sources.md](package-sources.md).
 
 ## Out of scope for Phase 1
 

@@ -3,7 +3,9 @@
 # Prefer installing via metapackage `atelier-desktop` once the personal
 # repo is built (Step 3). This file is the flat equivalent for mklive -p.
 #
-# Gaps (not listed here until packaged): brave-origin, JetBrains Mono, Xlibre
+# brave-origin: GraeWolf void-repo (atelier-void-repo); install with xbps-install -S brave-origin
+# JetBrains Mono: still optional/gap; UI uses Fira Code
+# Xlibre: external via atelier-xlibre-repo
 # See docs/build/package-sources.md
 
 # --- From base list (also install base.txt or atelier-base) ---
