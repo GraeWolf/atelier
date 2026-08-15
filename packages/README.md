@@ -53,11 +53,13 @@ Flat lists for ISO tooling: [iso/package-lists/](../iso/package-lists/).
 - Do not add packages beyond `PLAN.md` unless required technical glue (document why)
 - Never put secrets or private keys in this tree
 
-## Planned personal packages (gaps)
+## External repositories (not built in this monorepo)
 
-- `font-jetbrains-mono` — JetBrains Mono
+| Source | Role |
+|--------|------|
+| [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) | Public signed packages (`brave-origin`, …); enabled by `atelier-void-repo` (**resolved**) |
+| Xlibre (xlibre-void) | Display server; enabled by `atelier-xlibre-repo` |
 
-External (not built in this monorepo):
+## Still open (optional)
 
-- **GraeWolf void-repo** — `brave-origin`, `obsidian`, `melia` via `atelier-void-repo`
-- **Xlibre** — via `atelier-xlibre-repo`
+- `font-jetbrains-mono` — PLAN font name; UI currently uses Fira Code
