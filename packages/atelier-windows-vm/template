@@ -6,7 +6,7 @@
 # Files come from packages/atelier-windows-vm/files/ via stage_from_files.
 # The do_install block below documents intended payload layout only.
 pkgname=atelier-windows-vm
-version=0.1.1
+version=0.1.2
 revision=1
 create_wrksrc=yes
 short_desc="Atelier optional Windows VM (Docker + FreeRDP)"

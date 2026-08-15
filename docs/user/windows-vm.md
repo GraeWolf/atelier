@@ -14,10 +14,22 @@ docker info
 docker compose version   # or: docker-compose version
 ```
 
-## Guest install / launch (not finished yet)
+## Install the guest
+
+Requires an interactive terminal (dialog wizard), KVM, and working Docker:
 
 ```bash
 atelier-windows-vm install
+# open http://127.0.0.1:8006 for install progress
+atelier-windows-vm status
+atelier-windows-vm stop
+```
+
+`remove` deletes compose + VM disk but **keeps** `~/Atelier/Windows`.
+
+## Launch via FreeRDP (not finished yet)
+
+```bash
 atelier-windows-vm launch
 ```
 

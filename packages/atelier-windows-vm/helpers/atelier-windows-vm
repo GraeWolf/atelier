@@ -1,20 +1,38 @@
 #!/usr/bin/env bash
-# Atelier Windows VM lifecycle CLI (stub — full install/launch in later PRs).
+# Atelier Windows VM lifecycle CLI
 # Usage: atelier-windows-vm <install|remove|launch|stop|status|help>
+# install/status/stop/remove: PR4. launch: PR5.
 set -euo pipefail
 
-readonly COMPOSE_FILE="${HOME}/.config/atelier/windows/docker-compose.yml"
+readonly COMPOSE_DIR="${HOME}/.config/atelier/windows"
+readonly COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
 readonly STORAGE_DIR="${HOME}/.local/share/atelier/windows"
 readonly SHARED_DIR="${HOME}/Atelier/Windows"
 readonly CONTAINER_NAME="atelier-windows"
-readonly LAST_ERROR="${XDG_RUNTIME_DIR:-/tmp}/atelier-windows-vm-last-error.txt"
+readonly IMAGE_NAME="dockurr/windows"
+readonly WEB_URL="http://127.0.0.1:8006"
+readonly RDP_HINT="127.0.0.1:3389"
+readonly DOCKER_ROOT_MIN_GB=20
+readonly TITLE="Atelier Windows VM"
+
+last_error_path() {
+	local d
+	if [[ -n ${XDG_RUNTIME_DIR:-} && -d ${XDG_RUNTIME_DIR} && -w ${XDG_RUNTIME_DIR} ]]; then
+		d=$XDG_RUNTIME_DIR
+	else
+		d=${TMPDIR:-/tmp}
+	fi
+	printf '%s\n' "$d/atelier-windows-vm-last-error.txt"
+}
 
 log() { printf 'atelier-windows-vm: %s\n' "$*"; }
 
 write_error_file() {
-	# Best-effort last-error path for rofi/non-TTY callers
+	local f
+	f=$(last_error_path)
 	umask 077
-	printf '%s\n' "$*" >"$LAST_ERROR" 2>/dev/null || true
+	# Redirect failure must not abort under set -e
+	{ printf '%s\n' "$*" >"$f"; } 2>/dev/null || true
 }
 
 die() {
@@ -26,19 +44,275 @@ die() {
 	exit 1
 }
 
-not_implemented() {
-	die "'$1' is not implemented yet (package skeleton). See: /usr/share/doc/atelier/windows-vm-README.txt"
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# --- compose CLI --------------------------------------------------------------
+compose() {
+	[[ -f $COMPOSE_FILE ]] || die "compose not found: $COMPOSE_FILE (run: atelier-windows-vm install)"
+	if docker compose version >/dev/null 2>&1; then
+		docker compose -f "$COMPOSE_FILE" "$@"
+	elif have docker-compose; then
+		docker-compose -f "$COMPOSE_FILE" "$@"
+	else
+		die "neither 'docker compose' nor docker-compose found"
+	fi
 }
 
+# --- temp hygiene for secrets -------------------------------------------------
+secure_tmpdir() {
+	local d
+	if [[ -n ${XDG_RUNTIME_DIR:-} && -d $XDG_RUNTIME_DIR && -w $XDG_RUNTIME_DIR ]]; then
+		d=$XDG_RUNTIME_DIR
+	else
+		d=${TMPDIR:-/tmp}
+	fi
+	printf '%s\n' "$d"
+}
+
+mktemp_secret() {
+	local old um
+	old=$(umask)
+	umask 077
+	mktemp "$(secure_tmpdir)/atelier-winvm.XXXXXX"
+	umask "$old"
+}
+
+# --- disk / system helpers ----------------------------------------------------
+free_gb_on_path() {
+	# GiB free on the filesystem that contains $1 (path may not exist yet)
+	local path=$1 parent
+	parent=$path
+	while [[ ! -e $parent && $parent != / && $parent != . ]]; do
+		parent=$(dirname "$parent")
+	done
+	[[ -e $parent ]] || parent=/
+	df -BG --output=avail "$parent" 2>/dev/null | awk 'NR==2 {gsub(/G/,""); print int($1)}' \
+		|| df -B1G "$parent" 2>/dev/null | awk 'NR==2 {print int($4)}'
+}
+
+docker_root_dir() {
+	local root
+	if have docker && docker info >/dev/null 2>&1; then
+		root=$(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir:/ {print $2; exit}')
+		if [[ -n ${root// /} ]]; then
+			printf '%s\n' "$root"
+			return 0
+		fi
+	fi
+	printf '%s\n' "/var/lib/docker"
+}
+
+total_ram_gb() {
+	awk '/MemTotal:/ {printf "%d", $2/1024/1024; exit}' /proc/meminfo
+}
+
+nproc_cores() {
+	nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1
+}
+
+# --- validation ---------------------------------------------------------------
+valid_username() {
+	[[ $1 =~ ^[A-Za-z0-9._-]{1,32}$ ]]
+}
+
+valid_password() {
+	# Letters, digits, !@#$%^&*_+.=-  (no quotes, backslash, space, or controls)
+	local re='^[A-Za-z0-9!@#$%^&*_+.=-]{1,128}$'
+	[[ $1 =~ $re ]]
+}
+
+# --- dialog helpers -----------------------------------------------------------
+require_dialog() {
+	have dialog || die "dialog is required for the install wizard (xbps-install dialog)"
+	# dialog needs a TTY for interactive use
+	if [[ ! -t 0 && ! -t 1 ]]; then
+		die "install wizard needs an interactive terminal (run from a TTY, not rofi)"
+	fi
+}
+
+dlg_msgbox() {
+	local msg=$1 h=${2:-12} w=${3:-64}
+	dialog --title "$TITLE" --msgbox "$msg" "$h" "$w"
+}
+
+dlg_yesno() {
+	# default no when third arg is "no"
+	local msg=$1 h=${2:-12} w=${3:-64} def=${4:-yes}
+	if [[ $def == no ]]; then
+		dialog --title "$TITLE" --defaultno --yesno "$msg" "$h" "$w"
+	else
+		dialog --title "$TITLE" --yesno "$msg" "$h" "$w"
+	fi
+}
+
+dlg_menu() {
+	# args: text height width menuheight tag1 item1 tag2 item2 ...
+	# prints selected tag to stdout
+	local text=$1 h=$2 w=$3 mh=$4
+	shift 4
+	local tmp rc
+	tmp=$(mktemp_secret)
+	set +e
+	dialog --title "$TITLE" --menu "$text" "$h" "$w" "$mh" "$@" 2>"$tmp"
+	rc=$?
+	set -e
+	if [[ $rc -ne 0 ]]; then
+		rm -f "$tmp"
+		return 1
+	fi
+	cat "$tmp"
+	rm -f "$tmp"
+	return 0
+}
+
+dlg_input() {
+	local label=$1 default=$2
+	local tmp rc
+	tmp=$(mktemp_secret)
+	set +e
+	dialog --title "$TITLE" --inputbox "$label" 10 50 "$default" 2>"$tmp"
+	rc=$?
+	set -e
+	if [[ $rc -ne 0 ]]; then
+		rm -f "$tmp"
+		return 1
+	fi
+	cat "$tmp"
+	rm -f "$tmp"
+	return 0
+}
+
+dlg_password() {
+	local label=$1
+	local tmp rc
+	tmp=$(mktemp_secret)
+	set +e
+	dialog --title "$TITLE" --insecure --passwordbox "$label" 10 50 2>"$tmp"
+	rc=$?
+	set -e
+	if [[ $rc -ne 0 ]]; then
+		rm -f "$tmp"
+		return 1
+	fi
+	cat "$tmp"
+	rm -f "$tmp"
+	return 0
+}
+
+# --- prerequisites ------------------------------------------------------------
+check_arch() {
+	[[ $(uname -m) == x86_64 ]] || die "Windows VM is supported on x86_64 only (got: $(uname -m))"
+}
+
+check_kvm() {
+	if [[ ! -e /dev/kvm ]]; then
+		die "KVM not available (/dev/kvm missing).
+On bare metal: enable VT-x/AMD-V in firmware; modprobe kvm-intel or kvm-amd.
+On WSL2: nested virtualization may be unavailable — test on real hardware."
+	fi
+	if [[ ! -r /dev/kvm ]]; then
+		die "/dev/kvm exists but is not readable. Run: sudo atelier-setup-docker  then re-login (kvm group)."
+	fi
+}
+
+check_docker() {
+	have docker || die "docker not found. Install atelier-windows-vm deps and run: sudo atelier-setup-docker"
+	if ! docker info >/dev/null 2>&1; then
+		die "docker daemon not reachable. Run: sudo atelier-setup-docker  then re-login (docker group)."
+	fi
+}
+
+check_disk_for_install() {
+	local disk_gb=$1
+	local need_storage=$((disk_gb + 10))
+	local storage_free docker_root docker_free
+
+	mkdir -p "$(dirname "$STORAGE_DIR")" 2>/dev/null || true
+	storage_free=$(free_gb_on_path "$STORAGE_DIR")
+	docker_root=$(docker_root_dir)
+	docker_free=$(free_gb_on_path "$docker_root")
+
+	[[ -n $storage_free && $storage_free =~ ^[0-9]+$ ]] || storage_free=0
+	[[ -n $docker_free && $docker_free =~ ^[0-9]+$ ]] || docker_free=0
+
+	if (( storage_free < need_storage )); then
+		die "insufficient free space on storage filesystem.
+  path:     $STORAGE_DIR
+  available: ${storage_free}G
+  required:  ${need_storage}G (${disk_gb}G disk + 10G headroom)"
+	fi
+	if (( docker_free < DOCKER_ROOT_MIN_GB )); then
+		die "insufficient free space on Docker root filesystem.
+  Docker Root: $docker_root
+  available:   ${docker_free}G
+  required:    ${DOCKER_ROOT_MIN_GB}G (image + ISO class overhead for first install)"
+	fi
+}
+
+# --- write compose ------------------------------------------------------------
+write_compose() {
+	local ram=$1 cores=$2 disk=$3 user=$4 pass=$5
+	local tz home_abs
+
+	tz=$(tr -d '[:space:]' </etc/timezone 2>/dev/null || true)
+	[[ -n $tz ]] || tz=${TZ:-UTC}
+	[[ -n $tz ]] || tz=UTC
+
+	home_abs=$HOME
+	mkdir -p "$COMPOSE_DIR"
+	chmod 700 "$COMPOSE_DIR"
+	mkdir -p "$STORAGE_DIR" "$SHARED_DIR"
+
+	# printf (not unquoted heredoc) so passwords with $ / ` cannot expand
+	umask 077
+	{
+		printf '%s\n' \
+			'# Generated by atelier-windows-vm install — contains credentials; mode 0600' \
+			'# Hand-edits: keep USERNAME/PASSWORD double-quoted for the launcher parser.' \
+			'# See: https://github.com/dockur/windows' \
+			'services:' \
+			'  windows:' \
+			"    image: ${IMAGE_NAME}" \
+			"    container_name: ${CONTAINER_NAME}" \
+			'    environment:' \
+			'      VERSION: "11"' \
+			"      RAM_SIZE: \"${ram}\"" \
+			"      CPU_CORES: \"${cores}\"" \
+			"      DISK_SIZE: \"${disk}\""
+		printf '      USERNAME: "%s"\n' "$user"
+		printf '      PASSWORD: "%s"\n' "$pass"
+		printf '%s\n' \
+			"      TZ: \"${tz}\"" \
+			'      ARGUMENTS: "-rtc base=localtime,clock=host,driftfix=slew"' \
+			'    devices:' \
+			'      - /dev/kvm' \
+			'      - /dev/net/tun' \
+			'    cap_add:' \
+			'      - NET_ADMIN' \
+			'    ports:' \
+			'      - 127.0.0.1:8006:8006' \
+			'      - 127.0.0.1:3389:3389/tcp' \
+			'      - 127.0.0.1:3389:3389/udp' \
+			'    volumes:' \
+			"      - ${home_abs}/.local/share/atelier/windows:/storage" \
+			"      - ${home_abs}/Atelier/Windows:/shared" \
+			'    restart: unless-stopped' \
+			'    stop_grace_period: 2m'
+	} >"$COMPOSE_FILE"
+	chmod 600 "$COMPOSE_FILE"
+	umask 022
+}
+
+# --- commands -----------------------------------------------------------------
 show_usage() {
 	cat <<'EOF'
 Usage: atelier-windows-vm <command> [options]
 
-Commands (full behaviour lands in later PRs):
-  install              Interactive setup + first start of Windows VM
-  remove               Remove compose + VM disk (keeps ~/Atelier/Windows)
+Commands:
+  install              Interactive dialog wizard + first start
+  remove               Stop VM; delete compose + disk (keeps ~/Atelier/Windows)
   launch [--keep-alive|-k]
-                       Start VM if needed and connect with FreeRDP
+                       Start VM and connect with FreeRDP (not fully implemented yet)
   stop                 Stop the Windows VM container
   status               Show configuration / container status
   help                 Show this help
@@ -48,47 +322,308 @@ Paths:
   storage   ~/.local/share/atelier/windows
   shared    ~/Atelier/Windows
 
-Setup once (when implemented):
+Setup once:
   sudo atelier-setup-docker
+  # re-login, then: atelier-windows-vm install
 EOF
 }
 
 cmd_status() {
-	log "package skeleton — lifecycle not fully implemented"
+	local st cstatus docker_root
+
 	if [[ -f $COMPOSE_FILE ]]; then
-		log "compose: present ($COMPOSE_FILE)"
+		printf 'configured: yes\n'
+		printf 'compose:    %s\n' "$COMPOSE_FILE"
+		# shellcheck disable=SC2012
+		st=$(ls -l "$COMPOSE_FILE" 2>/dev/null | awk '{print $1}')
+		printf 'mode:       %s\n' "${st:--}"
 	else
-		log "compose: not configured (run install when available)"
+		printf 'configured: no\n'
+		printf 'hint:       run: atelier-windows-vm install\n'
+		return 1
 	fi
+
+	printf 'storage:    %s\n' "$STORAGE_DIR"
 	if [[ -d $STORAGE_DIR ]]; then
-		log "storage: $STORAGE_DIR"
+		printf 'storage_ok: yes\n'
 	else
-		log "storage: not created"
+		printf 'storage_ok: no\n'
 	fi
+	printf 'shared:     %s\n' "$SHARED_DIR"
 	if [[ -d $SHARED_DIR ]]; then
-		log "shared:  $SHARED_DIR"
+		printf 'shared_ok:  yes\n'
 	else
-		log "shared:  not created"
+		printf 'shared_ok:  no\n'
 	fi
-	if command -v docker >/dev/null 2>&1; then
-		if docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null; then
-			:
+
+	if have docker && docker info >/dev/null 2>&1; then
+		cstatus=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || true)
+		if [[ -n $cstatus ]]; then
+			printf 'container:  %s (%s)\n' "$CONTAINER_NAME" "$cstatus"
 		else
-			log "container: $CONTAINER_NAME not found"
+			printf 'container:  %s (not found)\n' "$CONTAINER_NAME"
 		fi
+		docker_root=$(docker_root_dir)
+		printf 'docker_root: %s\n' "$docker_root"
 	else
-		log "docker: not installed or not on PATH"
+		printf 'container:  unknown (docker not reachable)\n'
 	fi
-	log "docs: /usr/share/doc/atelier/windows-vm-README.txt"
-	log "build policy: docs/build/windows-vm.md (source tree)"
+
+	printf 'web:        %s\n' "$WEB_URL"
+	printf 'rdp:        %s\n' "$RDP_HINT"
+	printf 'launch:     atelier-windows-vm launch\n'
+	printf 'stop:       atelier-windows-vm stop\n'
+	return 0
 }
 
+cmd_stop() {
+	[[ -f $COMPOSE_FILE ]] || die "Windows VM not configured (no compose file)."
+	check_docker
+	log "stopping Windows VM..."
+	compose down
+	log "Windows VM stopped."
+}
+
+cmd_remove() {
+	require_dialog
+	if ! dlg_yesno "Remove Windows VM configuration and virtual disk?
+
+This deletes:
+  - $COMPOSE_DIR
+  - $STORAGE_DIR
+
+Keeps shared files:
+  - $SHARED_DIR
+
+Continue?" 14 64 no; then
+		log "removal cancelled"
+		exit 0
+	fi
+
+	if [[ -f $COMPOSE_FILE ]] && have docker && docker info >/dev/null 2>&1; then
+		log "stopping container..."
+		compose down 2>/dev/null || true
+	fi
+
+	if have docker && docker info >/dev/null 2>&1; then
+		log "removing image $IMAGE_NAME (best-effort)..."
+		docker rmi "$IMAGE_NAME" 2>/dev/null || log "image already removed or not present"
+	fi
+
+	if [[ -d $COMPOSE_DIR ]]; then
+		rm -rf "$COMPOSE_DIR"
+		log "removed $COMPOSE_DIR"
+	fi
+	if [[ -d $STORAGE_DIR ]]; then
+		rm -rf "$STORAGE_DIR"
+		log "removed $STORAGE_DIR"
+	fi
+
+	log "shared folder kept: $SHARED_DIR"
+	log "delete shared files manually if desired: rm -rf \"$SHARED_DIR\""
+	log "package remains installed (xbps-remove atelier-windows-vm to uninstall)"
+	log "Windows VM removal completed."
+}
+
+cmd_install() {
+	local total_ram total_cores storage_free docker_root docker_free
+	local ram cores disk disk_num user pass pass_display
+	local ram_args=() disk_args=() opt sel default_disk
+	local max_disk
+
+	check_arch
+	require_dialog
+	check_kvm
+	check_docker
+
+	if [[ -f $COMPOSE_FILE ]]; then
+		if ! dlg_yesno "A Windows VM is already configured:
+
+$COMPOSE_FILE
+
+Overwrite and reconfigure?
+(Existing VM disk under storage may still be reused by dockur.)" 14 64 no; then
+			log "install cancelled (existing compose kept)"
+			exit 0
+		fi
+	fi
+
+	dlg_msgbox "Security note
+
+• Membership in the docker group is roughly equivalent to root on this machine.
+• Only ~/Atelier/Windows is shared with Windows (two-way, untrusted).
+• Compose credentials are stored in a mode-0600 file under ~/.config/atelier/windows/.
+
+Continue only if you accept this trust model." 16 64
+
+	total_ram=$(total_ram_gb)
+	total_cores=$(nproc_cores)
+	mkdir -p "$(dirname "$STORAGE_DIR")" 2>/dev/null || true
+	storage_free=$(free_gb_on_path "$STORAGE_DIR")
+	docker_root=$(docker_root_dir)
+	docker_free=$(free_gb_on_path "$docker_root")
+	[[ -n $storage_free && $storage_free =~ ^[0-9]+$ ]] || storage_free=0
+	[[ -n $docker_free && $docker_free =~ ^[0-9]+$ ]] || docker_free=0
+
+	dlg_msgbox "System resources
+
+Total RAM:     ${total_ram}G
+CPU cores:     ${total_cores}
+Storage free:  ${storage_free}G  ($STORAGE_DIR FS)
+Docker free:   ${docker_free}G  ($docker_root)
+
+First install needs about ${DOCKER_ROOT_MIN_GB}G free on Docker root
+plus (disk size + 10G) on the storage filesystem." 16 64
+
+	if (( docker_free < DOCKER_ROOT_MIN_GB )); then
+		die "insufficient free space on Docker root filesystem.
+  Docker Root: $docker_root
+  available:   ${docker_free}G
+  required:    ${DOCKER_ROOT_MIN_GB}G"
+	fi
+
+	# RAM menu
+	for opt in 2 4 8 16 32 64; do
+		if (( opt <= total_ram )); then
+			ram_args+=("${opt}G" "${opt} GiB RAM for Windows")
+		fi
+	done
+	if ((${#ram_args[@]} == 0)); then
+		die "not enough RAM detected (${total_ram}G) for a Windows VM (need at least 2G free host capacity)"
+	fi
+	sel=$(dlg_menu "How much RAM for the Windows VM?" 15 60 8 "${ram_args[@]}") \
+		|| die "install cancelled"
+	ram=$sel
+
+	# CPU
+	cores=$(dlg_input "CPU cores (1-${total_cores})" "2") || die "install cancelled"
+	cores=${cores//[[:space:]]/}
+	if [[ ! $cores =~ ^[0-9]+$ ]] || (( cores < 1 )) || (( cores > total_cores )); then
+		log "invalid cores; using 2"
+		cores=2
+		if (( cores > total_cores )); then
+			cores=$total_cores
+		fi
+	fi
+
+	# Disk menu
+	max_disk=$((storage_free - 10))
+	if (( max_disk < 32 )); then
+		die "insufficient free space on storage filesystem.
+  path:      $STORAGE_DIR
+  available: ${storage_free}G
+  required:  at least 42G (32G disk + 10G headroom)"
+	fi
+	for opt in 32 64 128 256 512; do
+		if (( opt <= max_disk )); then
+			disk_args+=("${opt}G" "${opt} GiB virtual disk")
+		fi
+	done
+	default_disk=64G
+	if ! printf '%s\n' "${disk_args[@]}" | grep -qx '64G'; then
+		default_disk=32G
+	fi
+	{
+		tmp=$(mktemp_secret)
+		set +e
+		dialog --title "$TITLE" --default-item "$default_disk" \
+			--menu "Disk size for Windows VM (64G+ recommended)" 16 60 8 \
+			"${disk_args[@]}" 2>"$tmp"
+		rc=$?
+		set -e
+		if [[ $rc -ne 0 ]]; then
+			rm -f "$tmp"
+			die "install cancelled"
+		fi
+		disk=$(cat "$tmp")
+		rm -f "$tmp"
+	}
+	disk_num=${disk%G}
+
+	check_disk_for_install "$disk_num"
+
+	# Username
+	while true; do
+		user=$(dlg_input "Windows username (empty = docker)" "docker") || die "install cancelled"
+		# trim whitespace
+		user=$(printf '%s' "$user" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		[[ -n $user ]] || user=docker
+		if valid_username "$user"; then
+			break
+		fi
+		dlg_msgbox "Invalid username.
+
+Allowed: A-Z a-z 0-9 . _ - (1-32 chars).
+No quotes, spaces, or backslashes." 12 56
+	done
+
+	# Password
+	pass_display="(default)"
+	while true; do
+		pass=$(dlg_password "Windows password (empty = admin)") || die "install cancelled"
+		if [[ -z $pass ]]; then
+			pass=admin
+			pass_display="(default)"
+			break
+		fi
+		if valid_password "$pass"; then
+			pass_display="(user-defined)"
+			break
+		fi
+		dlg_msgbox "Invalid password.
+
+Allowed: letters, digits, and !@#\$%^&*_+.=-
+Length 1-128. No quotes, backslashes, or control characters." 12 56
+	done
+
+	if ! dlg_yesno "Windows VM configuration
+
+RAM:       $ram
+CPU:       $cores cores
+Disk:      $disk
+Username:  $user
+Password:  $pass_display
+
+docker group ≈ root. Only ~/Atelier/Windows is shared.
+
+Proceed?" 16 60; then
+		log "install cancelled by user"
+		exit 0
+	fi
+
+	log "writing compose to $COMPOSE_FILE"
+	write_compose "$ram" "$cores" "$disk" "$user" "$pass"
+	# Clear pass from shell as best-effort (compose already on disk mode 0600)
+	pass=""
+
+	log "starting Windows VM (may download dockurr/windows + Windows ISO)..."
+	if ! compose up -d; then
+		die "failed to start Windows VM (docker compose up). Check: docker logs $CONTAINER_NAME"
+	fi
+
+	log "Windows VM is starting."
+	log "Monitor install progress: $WEB_URL"
+	if have xdg-open; then
+		xdg-open "$WEB_URL" >/dev/null 2>&1 || true
+	fi
+	log "When install finishes, use: atelier-windows-vm launch"
+	log "Or open Rofi and choose Windows."
+	log "To stop: atelier-windows-vm stop"
+	log "To change resources: edit $COMPOSE_FILE then restart"
+}
+
+cmd_launch() {
+	die "'launch' is not implemented yet (PR 5). For now: status/stop/install/remove work.
+Web UI during install: $WEB_URL"
+}
+
+# --- main ---------------------------------------------------------------------
 main() {
 	case "${1:-}" in
-	install) not_implemented install ;;
-	remove) not_implemented remove ;;
-	launch | start) not_implemented launch ;;
-	stop | down) not_implemented stop ;;
+	install) cmd_install ;;
+	remove) cmd_remove ;;
+	launch | start) shift || true; cmd_launch "$@" ;;
+	stop | down) cmd_stop ;;
 	status) cmd_status ;;
 	help | --help | -h | "") show_usage ;;
 	*)

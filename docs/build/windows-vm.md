@@ -1,6 +1,6 @@
 # Windows VM (post-MVP optional) — build & policy
 
-Status: **setup-docker implemented**; install/launch lifecycle CLI still incomplete.  
+Status: **setup-docker + install/status/stop/remove implemented**; FreeRDP `launch` still incomplete.  
 Policy locked for Atelier; full implementation follows incremental PRs.
 
 ## Purpose
@@ -43,10 +43,13 @@ Prior art: Omarchy’s `omarchy-windows-vm` wrapping [dockur/windows](https://gi
 
 ```bash
 sudo xbps-install -Sy atelier-windows-vm   # from personal repo
-sudo atelier-setup-docker                  # runit + docker/kvm groups (implemented)
+sudo atelier-setup-docker                  # runit + docker/kvm groups
 # re-login
-atelier-windows-vm install                 # dialog wizard; web UI :8006 (stub)
-atelier-windows-vm launch                  # FreeRDP to localhost:3389 (stub)
+atelier-windows-vm install                 # dialog wizard; compose + compose up; web UI :8006
+atelier-windows-vm status
+atelier-windows-vm stop
+atelier-windows-vm remove                  # keeps ~/Atelier/Windows
+atelier-windows-vm launch                  # FreeRDP (pending PR 5)
 ```
 
 ### `atelier-setup-docker` (locked algorithm)
