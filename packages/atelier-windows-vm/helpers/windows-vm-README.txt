@@ -1,22 +1,31 @@
-Atelier — optional Windows VM (skeleton)
-========================================
+Atelier — optional Windows VM
+=============================
 
 Package: atelier-windows-vm
-Status: skeleton only — install/launch/setup-docker not fully implemented yet
+Status: setup-docker implemented; install/launch lifecycle still incomplete
 
 Purpose
 -------
 Opt-in Windows 11 guest for Office-class apps via Docker (dockur/windows) + FreeRDP.
 Not part of atelier-desktop. Not on the live ISO package lists.
 
-Planned commands
-----------------
-  sudo atelier-setup-docker     # once: Docker service + docker/kvm groups
-  atelier-windows-vm install    # dialog wizard; pull image; start guest
-  atelier-windows-vm launch     # FreeRDP to 127.0.0.1:3389
+Setup (once)
+------------
+  sudo xbps-install -Sy atelier-windows-vm   # from personal repo when available
+  sudo atelier-setup-docker                  # Docker service + docker/kvm groups
+  # log out and back in (or: newgrp docker)
+
+  docker info
+  docker compose version   # or: docker-compose version
+
+Commands
+--------
+  atelier-windows-vm install    # dialog wizard (not fully implemented yet)
+  atelier-windows-vm launch     # FreeRDP (not fully implemented yet)
   atelier-windows-vm stop
   atelier-windows-vm status
   atelier-windows-vm remove
+  atelier-windows-vm help
 
 Paths
 -----
@@ -33,6 +42,8 @@ Policy
 Host packages: Void XBPS (docker, freerdp, dialog, libnotify, …).
 Runtime image: dockurr/windows (Docker registry; not an XBPS package).
 Requires KVM (/dev/kvm). Prefer bare metal for real use.
+
+Docker group is roughly root-equivalent on the host — intentional for this path.
 
 Build notes
 -----------

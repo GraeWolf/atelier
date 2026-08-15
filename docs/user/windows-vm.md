@@ -1,15 +1,22 @@
 # Windows VM (optional)
 
-Status: **optional package under development**. Full install/launch UX is not finished yet.
+Status: **Docker setup is available**; install/launch of the Windows guest is still unfinished.
 
-When complete, Atelier will offer an opt-in Windows 11 guest for Office-class apps via Docker + FreeRDP. It is **not** part of the default desktop (`atelier-desktop`).
+Atelier offers an opt-in Windows 11 guest for Office-class apps via Docker + FreeRDP. It is **not** part of the default desktop (`atelier-desktop`).
 
-## Planned flow
+## Setup (available now)
 
 ```bash
 sudo xbps-install -Sy atelier-windows-vm
 sudo atelier-setup-docker
 # log out and back in (docker group)
+docker info
+docker compose version   # or: docker-compose version
+```
+
+## Guest install / launch (not finished yet)
+
+```bash
 atelier-windows-vm install
 atelier-windows-vm launch
 ```

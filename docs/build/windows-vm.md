@@ -1,6 +1,6 @@
 # Windows VM (post-MVP optional) — build & policy
 
-Status: **package skeleton in progress** (lifecycle CLI not fully implemented yet).  
+Status: **setup-docker implemented**; install/launch lifecycle CLI still incomplete.  
 Policy locked for Atelier; full implementation follows incremental PRs.
 
 ## Purpose
@@ -39,15 +39,28 @@ Prior art: Omarchy’s `omarchy-windows-vm` wrapping [dockur/windows](https://gi
 3. `build-repo.sh` stages via `stage_from_files` for `atelier-windows-vm`
 4. `xbps-create` → `repo/out/`
 
-## Intended user flow (when fully implemented)
+## User flow
 
 ```bash
 sudo xbps-install -Sy atelier-windows-vm   # from personal repo
-sudo atelier-setup-docker                  # runit + docker/kvm groups
+sudo atelier-setup-docker                  # runit + docker/kvm groups (implemented)
 # re-login
-atelier-windows-vm install                 # dialog wizard; web UI :8006
-atelier-windows-vm launch                  # FreeRDP to localhost:3389
+atelier-windows-vm install                 # dialog wizard; web UI :8006 (stub)
+atelier-windows-vm launch                  # FreeRDP to localhost:3389 (stub)
 ```
+
+### `atelier-setup-docker` (locked algorithm)
+
+Idempotent root helper (`#!/bin/sh`):
+
+1. Resolve target user: `$1` or `$SUDO_USER`
+2. `xbps-install -Sy docker docker-cli docker-compose`
+3. Ensure groups `docker` and `kvm`; `usermod -aG docker,kvm <user>`
+4. `ln -sf /etc/sv/docker /var/service/docker` (required)
+5. Wait for `docker info`; if it fails, enable `/etc/sv/containerd` if present and `sv restart docker`
+6. Print re-login reminder and verification commands
+
+Messaging: **Docker enablement required by Windows VM** (not a general Docker product installer).
 
 ## Paths (Atelier)
 

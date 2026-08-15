@@ -1,21 +1,150 @@
 #!/bin/sh
-# Docker enablement required by Atelier Windows VM (stub — full enablement in PR 3).
+# Docker enablement required by Atelier Windows VM.
+# General Docker use is a side effect, not a separate product goal.
 # Usage: sudo atelier-setup-docker [username]
 set -eu
 
 log() { printf 'atelier-setup-docker: %s\n' "$*"; }
 die() { printf 'atelier-setup-docker: error: %s\n' "$*" >&2; exit 1; }
 
-if [ "$(id -u)" -ne 0 ]; then
-	die "run as root (sudo atelier-setup-docker)"
+[ "$(id -u)" -eq 0 ] || die "run as root (sudo atelier-setup-docker)"
+
+if [ "$(uname -m)" != "x86_64" ]; then
+	die "Windows VM host stack is documented for x86_64 only"
 fi
 
-log "stub: full Docker/runit setup is not implemented yet"
-log "planned steps:"
-log "  - install docker docker-cli docker-compose (if missing)"
-log "  - enable /etc/sv/docker under /var/service"
-log "  - probe/enable containerd if docker info fails"
-log "  - add user to docker and kvm groups"
-log "  - re-login required for group membership"
+# Resolve target user: explicit arg, else sudo invoker, else fail
+TARGET_USER=""
+if [ "${1:-}" != "" ]; then
+	TARGET_USER=$1
+elif [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+	TARGET_USER=$SUDO_USER
+else
+	die "could not determine target user; usage: sudo atelier-setup-docker <username>"
+fi
+
+# Validate user exists and is not a system-only edge case we care about
+if ! getent passwd "$TARGET_USER" >/dev/null 2>&1; then
+	die "user not found: $TARGET_USER"
+fi
+TARGET_UID=$(getent passwd "$TARGET_USER" | cut -d: -f3)
+if [ -z "$TARGET_UID" ] || [ "$TARGET_UID" -lt 1000 ]; then
+	# Allow UID < 1000 only if explicit first arg (admin override); still warn
+	if [ "${1:-}" = "" ]; then
+		die "refusing to configure system user '$TARGET_USER' (UID $TARGET_UID); pass username explicitly to override"
+	fi
+	log "warning: configuring low-UID user $TARGET_USER (UID $TARGET_UID)"
+fi
+
+log "Docker enablement required by Windows VM"
+log "target user: $TARGET_USER"
+
+if ! command -v xbps-install >/dev/null 2>&1; then
+	die "xbps-install not found (this helper is for Void Linux)"
+fi
+
+log "installing docker docker-cli docker-compose (idempotent)"
+xbps-install -Sy docker docker-cli docker-compose
+
+# Groups: docker (docker.sock) and kvm (/dev/kvm)
+if ! getent group docker >/dev/null 2>&1; then
+	log "creating group docker"
+	groupadd docker 2>/dev/null || die "failed to create group docker"
+fi
+if ! getent group kvm >/dev/null 2>&1; then
+	log "warning: group kvm missing; KVM access may fail until installed"
+else
+	:
+fi
+
+# Build group list that exists
+_groups="docker"
+if getent group kvm >/dev/null 2>&1; then
+	_groups="docker,kvm"
+fi
+log "adding $TARGET_USER to groups: $_groups"
+usermod -aG "$_groups" "$TARGET_USER"
+
+enable_sv() {
+	_svc=$1
+	if [ ! -d "/etc/sv/$_svc" ]; then
+		return 1
+	fi
+	if [ ! -e "/var/service/$_svc" ] && [ ! -L "/var/service/$_svc" ]; then
+		log "enabling runit service: $_svc"
+		ln -sf "/etc/sv/$_svc" "/var/service/$_svc"
+	else
+		log "runit service already linked: $_svc"
+	fi
+	return 0
+}
+
+if [ ! -d /etc/sv/docker ]; then
+	die "missing /etc/sv/docker after package install; reinstall docker/moby"
+fi
+
+enable_sv docker || die "failed to enable docker service"
+
+# Wait for dockerd to become usable
+_i=0
+_docker_ok=0
+while [ "$_i" -lt 30 ]; do
+	if docker info >/dev/null 2>&1; then
+		_docker_ok=1
+		break
+	fi
+	_i=$((_i + 1))
+	sleep 1
+done
+
+if [ "$_docker_ok" -eq 0 ]; then
+	log "docker info failed after wait; trying containerd enable + docker restart"
+	if [ -d /etc/sv/containerd ]; then
+		enable_sv containerd || log "warning: could not enable containerd"
+		# Give containerd a moment, then restart docker
+		sleep 2
+		if command -v sv >/dev/null 2>&1; then
+			sv restart docker 2>/dev/null || true
+		fi
+		_i=0
+		while [ "$_i" -lt 30 ]; do
+			if docker info >/dev/null 2>&1; then
+				_docker_ok=1
+				break
+			fi
+			_i=$((_i + 1))
+			sleep 1
+		done
+	else
+		log "warning: /etc/sv/containerd not present"
+	fi
+fi
+
+if [ "$_docker_ok" -eq 0 ]; then
+	die "docker daemon not ready (docker info failed). Check: sv status docker; dmesg | tail"
+fi
+
+if command -v sv >/dev/null 2>&1; then
+	log "docker service status:"
+	sv status docker 2>/dev/null || true
+	if [ -e /var/service/containerd ] || [ -L /var/service/containerd ]; then
+		sv status containerd 2>/dev/null || true
+	fi
+fi
+
+# Compose CLI (plugin or standalone)
+if docker compose version >/dev/null 2>&1; then
+	log "compose: docker compose (plugin) OK"
+elif command -v docker-compose >/dev/null 2>&1; then
+	log "compose: docker-compose (standalone) OK"
+else
+	log "warning: neither 'docker compose' nor docker-compose responded"
+fi
+
+log "done"
+log "re-login (or: newgrp docker) so group membership applies for $TARGET_USER"
+log "then as $TARGET_USER verify:"
+log "  docker info"
+log "  docker compose version   # or: docker-compose version"
+log "next: atelier-windows-vm install   # when install wizard is implemented"
 log "docs: /usr/share/doc/atelier/windows-vm-README.txt"
-die "not implemented yet"
