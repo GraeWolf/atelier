@@ -1,6 +1,6 @@
 # Windows VM (optional)
 
-Status: **Docker setup is available**; install/launch of the Windows guest is still unfinished.
+Status: **optional package available** (install + FreeRDP launch). Requires KVM and Docker.
 
 Atelier offers an opt-in Windows 11 guest for Office-class apps via Docker + FreeRDP. It is **not** part of the default desktop (`atelier-desktop`).
 
@@ -27,10 +27,22 @@ atelier-windows-vm stop
 
 `remove` deletes compose + VM disk but **keeps** `~/Atelier/Windows`.
 
-## Launch via FreeRDP (not finished yet)
+## Launch via FreeRDP
 
 ```bash
-atelier-windows-vm launch
+atelier-windows-vm launch      # full-screen RDP; stops VM when you close the session
+atelier-windows-vm launch -k   # keep the VM running after RDP closes
+```
+
+Or open **Windows** from Rofi (`Super+d`).
+
+First boot can take a long time while Windows installs; use `http://127.0.0.1:8006` and re-run `launch` after it finishes.
+
+If Rofi seems to do nothing, check:
+
+```bash
+cat "${XDG_RUNTIME_DIR:-/tmp}/atelier-windows-vm-last-error.txt"
+atelier-windows-vm launch   # from a terminal for full messages
 ```
 
 ## Limits (by design)

@@ -1,7 +1,7 @@
 # Windows VM (post-MVP optional) — build & policy
 
-Status: **setup-docker + install/status/stop/remove implemented**; FreeRDP `launch` still incomplete.  
-Policy locked for Atelier; full implementation follows incremental PRs.
+Status: **setup-docker + install/launch/status/stop/remove implemented** (v0.1.3).  
+Optional polish (non-interactive flags, image digest pin) is PR 7 / v1.1.
 
 ## Purpose
 
@@ -46,11 +46,22 @@ sudo xbps-install -Sy atelier-windows-vm   # from personal repo
 sudo atelier-setup-docker                  # runit + docker/kvm groups
 # re-login
 atelier-windows-vm install                 # dialog wizard; compose + compose up; web UI :8006
+atelier-windows-vm launch                  # FreeRDP; auto-stop VM on RDP close
+atelier-windows-vm launch --keep-alive     # leave VM running after RDP
 atelier-windows-vm status
 atelier-windows-vm stop
 atelier-windows-vm remove                  # keeps ~/Atelier/Windows
-atelier-windows-vm launch                  # FreeRDP (pending PR 5)
 ```
+
+### `launch` behaviour (locked)
+
+1. Require compose, KVM, docker, `xfreerdp3`
+2. `compose up -d` if container not running
+3. Wait up to 120s for docker log line `windows started successfully` (timeout: print `:8006`, leave container up, no FreeRDP)
+4. Connect with FreeRDP; password via `/from-stdin` (not `/p:` on argv when supported)
+5. Soft HiDPI scale from `xrdb` / `xdpyinfo` when available
+6. After FreeRDP returns: always `compose down` unless `--keep-alive` (even if FreeRDP exit ≠ 0)
+7. Exit 0 after a session was started
 
 ### `atelier-setup-docker` (locked algorithm)
 

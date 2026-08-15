@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Atelier Windows VM lifecycle CLI
 # Usage: atelier-windows-vm <install|remove|launch|stop|status|help>
-# install/status/stop/remove: PR4. launch: PR5.
 set -euo pipefail
 
 readonly COMPOSE_DIR="${HOME}/.config/atelier/windows"
@@ -312,7 +311,8 @@ Commands:
   install              Interactive dialog wizard + first start
   remove               Stop VM; delete compose + disk (keeps ~/Atelier/Windows)
   launch [--keep-alive|-k]
-                       Start VM and connect with FreeRDP (not fully implemented yet)
+                       Start VM if needed and connect with FreeRDP
+                       (default: stop VM when RDP closes; -k keeps it running)
   stop                 Stop the Windows VM container
   status               Show configuration / container status
   help                 Show this help
@@ -321,6 +321,7 @@ Paths:
   compose   ~/.config/atelier/windows/docker-compose.yml
   storage   ~/.local/share/atelier/windows
   shared    ~/Atelier/Windows
+  last-error  runtime dir or /tmp: atelier-windows-vm-last-error.txt
 
 Setup once:
   sudo atelier-setup-docker
@@ -612,9 +613,224 @@ Proceed?" 16 60; then
 	log "To change resources: edit $COMPOSE_FILE then restart"
 }
 
+# --- launch helpers -----------------------------------------------------------
+freerdp_bin() {
+	if have xfreerdp3; then
+		printf '%s\n' xfreerdp3
+	elif have xfreerdp; then
+		printf '%s\n' xfreerdp
+	else
+		die "FreeRDP client not found (need xfreerdp3 from package freerdp)"
+	fi
+}
+
+# Prefer /from-stdin so password is not on argv; fall back to /p: only if unsupported.
+freerdp_supports_from_stdin() {
+	local bin=$1
+	# FreeRDP 3 documents /from-stdin; probe help text when possible
+	if "$bin" /help 2>&1 | grep -qi 'from-stdin'; then
+		return 0
+	fi
+	# freerdp 3.x typically supports it even if help grep fails
+	case $bin in
+	xfreerdp3) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+read_compose_credentials() {
+	# Parse double-quoted USERNAME / PASSWORD lines written by install
+	local line u p
+	u=""
+	p=""
+	while IFS= read -r line || [[ -n $line ]]; do
+		if [[ $line =~ USERNAME:[[:space:]]*\"([^\"]*)\" ]]; then
+			u=${BASH_REMATCH[1]}
+		elif [[ $line =~ PASSWORD:[[:space:]]*\"([^\"]*)\" ]]; then
+			p=${BASH_REMATCH[1]}
+		fi
+	done <"$COMPOSE_FILE"
+	[[ -n $u ]] || u=docker
+	[[ -n $p ]] || p=admin
+	WIN_USER=$u
+	WIN_PASS=$p
+}
+
+rdp_scale_flag() {
+	# Soft HiDPI scale; empty string means default 100%
+	local dpi percent
+	RDP_SCALE=""
+	if have xrdb; then
+		dpi=$(xrdb -query 2>/dev/null | awk '/Xft\.dpi:/ {print int($2); exit}')
+		if [[ -n ${dpi:-} && $dpi -gt 0 ]]; then
+			percent=$((dpi * 100 / 96))
+			if (( percent >= 170 )); then
+				RDP_SCALE="/scale:180"
+			elif (( percent >= 130 )); then
+				RDP_SCALE="/scale:140"
+			fi
+			return 0
+		fi
+	fi
+	if have xdpyinfo; then
+		dpi=$(xdpyinfo 2>/dev/null | awk -F'[ x]+' '/resolution:/ {print int($2); exit}')
+		if [[ -n ${dpi:-} && $dpi -gt 0 ]]; then
+			percent=$((dpi * 100 / 96))
+			if (( percent >= 170 )); then
+				RDP_SCALE="/scale:180"
+			elif (( percent >= 130 )); then
+				RDP_SCALE="/scale:140"
+			fi
+		fi
+	fi
+}
+
+container_running() {
+	local st
+	st=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || true)
+	[[ $st == running ]]
+}
+
+wait_windows_ready() {
+	# Poll docker logs for dockur success line; timeout leaves container up for web UI
+	local wait_count=0
+	log "waiting for Windows VM to become ready (up to 120s)..."
+	until docker logs "$CONTAINER_NAME" 2>&1 | grep -qi 'windows started successfully'; do
+		sleep 2
+		wait_count=$((wait_count + 1))
+		if (( wait_count > 60 )); then
+			die "timeout: Windows VM not ready within 2 minutes.
+
+Monitor first-time install progress: $WEB_URL
+Check logs: docker logs $CONTAINER_NAME
+Leave the container running; re-run launch after Windows finishes installing."
+		fi
+	done
+	log "Windows VM reported ready"
+}
+
 cmd_launch() {
-	die "'launch' is not implemented yet (PR 5). For now: status/stop/install/remove work.
-Web UI during install: $WEB_URL"
+	local KEEP_ALIVE=false
+	local WIN_USER WIN_PASS RDP_SCALE rdp_bin rdp_rc use_stdin
+	local -a rdp_args
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--keep-alive | -k) KEEP_ALIVE=true; shift ;;
+		-h | --help)
+			show_usage
+			return 0
+			;;
+		*)
+			die "unknown launch option: $1 (try --keep-alive)"
+			;;
+		esac
+	done
+
+	[[ -f $COMPOSE_FILE ]] || die "Windows VM not configured. Run: atelier-windows-vm install
+(Compose missing: $COMPOSE_FILE)"
+
+	check_arch
+	check_kvm
+	check_docker
+	rdp_bin=$(freerdp_bin)
+
+	read_compose_credentials
+	# Never log WIN_PASS
+
+	if ! container_running; then
+		log "starting Windows VM..."
+		if have notify-send; then
+			notify-send "Windows VM" "Starting Windows VM (15-30s)..." -t 15000 2>/dev/null || true
+		fi
+		if ! compose up -d; then
+			die "failed to start Windows VM. Try: atelier-windows-vm status; docker logs $CONTAINER_NAME"
+		fi
+	else
+		log "Windows VM container already running"
+	fi
+
+	wait_windows_ready
+
+	rdp_scale_flag
+	use_stdin=0
+	if freerdp_supports_from_stdin "$rdp_bin"; then
+		use_stdin=1
+	else
+		log "warning: FreeRDP may not support /from-stdin; using /p: (password visible in process list)"
+	fi
+
+	rdp_args=(
+		/u:"$WIN_USER"
+		/v:127.0.0.1:3389
+		-grab-keyboard
+		/sound
+		/microphone
+		/clipboard
+		/cert:ignore
+		/title:"Windows VM - Atelier"
+		/dynamic-resolution
+		/gfx:AVC444
+		/floatbar:sticky:off,default:visible,show:fullscreen
+	)
+	if [[ -n ${RDP_SCALE:-} ]]; then
+		rdp_args+=("$RDP_SCALE")
+	fi
+
+	if [[ $KEEP_ALIVE == true ]]; then
+		log "connecting via RDP (VM will keep running after RDP closes)"
+	else
+		log "connecting via RDP (VM will stop when RDP closes; use --keep-alive to leave running)"
+	fi
+
+	local t0 t1 elapsed
+	t0=$(date +%s)
+
+	# Isolate FreeRDP exit from set -e / pipefail so auto-stop always runs
+	set +e
+	if [[ $use_stdin -eq 1 ]]; then
+		printf '%s\n' "$WIN_PASS" | "$rdp_bin" "${rdp_args[@]}" /from-stdin
+		rdp_rc=$?
+	else
+		"$rdp_bin" "${rdp_args[@]}" /p:"$WIN_PASS"
+		rdp_rc=$?
+	fi
+	t1=$(date +%s)
+	elapsed=$((t1 - t0))
+
+	# Gfx escape hatch: only if FreeRDP failed within a few seconds (not a normal long session disconnect)
+	if (( rdp_rc != 0 && elapsed < 8 )); then
+		local -a rdp_args_nografx=()
+		local a
+		for a in "${rdp_args[@]}"; do
+			[[ $a == /gfx:AVC444 ]] && continue
+			rdp_args_nografx+=("$a")
+		done
+		log "retrying FreeRDP without /gfx:AVC444 (quick failure, exit $rdp_rc, ${elapsed}s)"
+		if [[ $use_stdin -eq 1 ]]; then
+			printf '%s\n' "$WIN_PASS" | "$rdp_bin" "${rdp_args_nografx[@]}" /from-stdin
+			rdp_rc=$?
+		else
+			"$rdp_bin" "${rdp_args_nografx[@]}" /p:"$WIN_PASS"
+			rdp_rc=$?
+		fi
+	fi
+	set -e
+
+	# Drop password from shell environment ASAP
+	WIN_PASS=""
+
+	log "RDP session ended (exit ${rdp_rc:-?})"
+
+	if [[ $KEEP_ALIVE != true ]]; then
+		log "stopping Windows VM (default; use --keep-alive to leave running)"
+		compose down || log "warning: compose down failed"
+	else
+		log "Windows VM still running (keep-alive). Stop with: atelier-windows-vm stop"
+	fi
+
+	# Exit 0 after a session was started (FreeRDP often non-zero on normal disconnect)
+	exit 0
 }
 
 # --- main ---------------------------------------------------------------------
@@ -622,7 +838,10 @@ main() {
 	case "${1:-}" in
 	install) cmd_install ;;
 	remove) cmd_remove ;;
-	launch | start) shift || true; cmd_launch "$@" ;;
+	launch | start)
+		shift || true
+		cmd_launch "$@"
+		;;
 	stop | down) cmd_stop ;;
 	status) cmd_status ;;
 	help | --help | -h | "") show_usage ;;

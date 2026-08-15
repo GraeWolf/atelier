@@ -2,7 +2,7 @@ Atelier — optional Windows VM
 =============================
 
 Package: atelier-windows-vm
-Status: install / status / stop / remove implemented; launch (FreeRDP) still pending
+Status: install / launch / status / stop / remove implemented
 
 Purpose
 -------
@@ -18,32 +18,37 @@ Setup (once)
   docker info
   docker compose version
 
-Install guest
--------------
-  atelier-windows-vm install
-  # follow dialog wizard; watch progress at http://127.0.0.1:8006
-
+Use
+---
+  atelier-windows-vm install     # dialog wizard; watch http://127.0.0.1:8006
+  atelier-windows-vm launch      # FreeRDP; stops VM when RDP closes
+  atelier-windows-vm launch -k   # keep VM running after RDP
   atelier-windows-vm status
   atelier-windows-vm stop
-  atelier-windows-vm remove   # keeps ~/Atelier/Windows
-
-  atelier-windows-vm launch   # FreeRDP — not fully implemented yet
+  atelier-windows-vm remove      # keeps ~/Atelier/Windows
 
 Paths
 -----
   compose   ~/.config/atelier/windows/docker-compose.yml  (mode 0600)
   storage   ~/.local/share/atelier/windows
   shared    ~/Atelier/Windows
+  last-error  $XDG_RUNTIME_DIR/atelier-windows-vm-last-error.txt
+              (or under /tmp if runtime dir is missing)
 
-Username / password (wizard)
-----------------------------
-  Username: A-Z a-z 0-9 . _ - (default: docker)
-  Password: letters, digits, !@#$%^&*_+.=- (default: admin)
-  Empty fields use defaults. Exotic passwords: set inside Windows, edit compose carefully.
+Desktop
+-------
+  Rofi/drun entry: "Windows" -> atelier-windows-vm launch
+  Errors use notify-send + last-error file (Terminal=false).
+
+FreeRDP
+-------
+  Client: xfreerdp3 (package freerdp)
+  Password via /from-stdin (not on argv) when supported
+  Auto-stop on RDP exit unless --keep-alive
 
 Security
 --------
-  docker group ≈ root. Only ~/Atelier/Windows is shared (two-way, untrusted).
+  docker group ≈ root. Only ~/Atelier/Windows is shared (two-way).
   Compose holds credentials (mode 0600).
 
 Policy
