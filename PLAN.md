@@ -147,3 +147,9 @@ User documentation: docs/user/
 Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-repo) provides packages such as brave-origin; enabled via atelier-void-repo on live and installed systems.
 
 Later phases: Extra hardware support, encryption, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
+
+Post-MVP optional (not part of Phase 1 desktop meta):
+- Windows VM via package `atelier-windows-vm` (Docker + dockur/windows + FreeRDP).
+  Opt-in only; not a dependency of `atelier-desktop`; not on live ISO package lists.
+  Host packages come from official Void XBPS; at install time Docker may pull the third-party
+  image `dockurr/windows` (documented pure-XBPS exception). See docs/build/windows-vm.md.

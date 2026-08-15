@@ -14,9 +14,13 @@ packages/
 │   └── files/          # from configs/ via sync script
 ├── atelier-desktop/
 │   └── template
-└── atelier-installer/
+├── atelier-installer/
+│   ├── template
+│   └── files/          # from installer/ via sync script
+└── atelier-windows-vm/
     ├── template
-    └── files/          # from installer/ via sync script
+    ├── helpers/        # CLI + setup stubs (canonical)
+    └── files/          # from helpers/ via sync script
 ```
 
 Build with `./scripts/build-repo.sh` (Step 3 tooling).
@@ -32,13 +36,16 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |
 | `atelier-void-repo` | files | GraeWolf personal Void repo (public key + xbps.d) |
+| `atelier-windows-vm` | files | Optional Windows VM (Docker + FreeRDP); **not** a dep of `atelier-desktop` |
 
 ## Config packaging workflow
 
-1. Edit canonical files under `configs/` or `installer/`
-2. Run `scripts/sync-atelier-config-files.sh` / `scripts/sync-atelier-installer-files.sh`
+1. Edit canonical files under `configs/`, `installer/`, or package `helpers/`
+2. Run the matching `scripts/sync-atelier-*-files.sh`
 3. Commit sources and generated `packages/*/files/`
 4. `./scripts/build-repo.sh`
+
+`atelier-windows-vm` is post-MVP optional glue (PLAN note). Do not add it to `atelier-desktop` depends or live ISO lists.
 
 ## Source of truth for names and gaps
 

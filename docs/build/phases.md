@@ -63,3 +63,18 @@ Remaining gaps (JetBrains font package, encryption, extra hardware polish) are d
 - Calamares  
 - Public repo hosting (layout and docs only)  
 - Additional window managers or desktop environments  
+- Windows VM / Docker guest stack (post-MVP optional; see below)
+
+## Post-MVP optional: Windows VM
+
+| Item | Policy |
+|------|--------|
+| Package | `atelier-windows-vm` (personal repo) |
+| Role | Opt-in Windows 11 guest via Docker + dockur/windows + FreeRDP |
+| Desktop meta | **Not** a dependency of `atelier-desktop` |
+| Live ISO | **Not** on `iso/package-lists/*` |
+| Host packages | Void XBPS: `docker`, `docker-compose`, `freerdp`, `dialog`, … |
+| Runtime image | Third-party Docker image `dockurr/windows` pulled only when the user runs install |
+| Docs | [windows-vm.md](windows-vm.md) (build policy); user guide lands with implementation |
+
+This is deliberate optional glue for Office-class apps—not Phase 1 MVP scope.

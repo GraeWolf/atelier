@@ -108,8 +108,21 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |
 | `atelier-xlibre-repo` | Xlibre external repo key + xbps.d | **personal** |
 | `atelier-void-repo` | GraeWolf void-repo public key + xbps.d | **personal** |
+| `atelier-windows-vm` | Optional Windows VM (Docker + FreeRDP + dockur image) | **personal** (post-MVP; opt-in) |
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
+
+### Optional Windows VM (`atelier-windows-vm`)
+
+| Role | XBPS / image | Source | Notes |
+|------|--------------|--------|-------|
+| Atelier package | `atelier-windows-vm` | **personal** | CLI, setup helper, desktop entry; not on ISO lists |
+| Docker engine | `docker`, `docker-cli`, `docker-compose` | void | Host stack via depends |
+| FreeRDP | `freerdp` (`xfreerdp3`) | void | Session client |
+| TUI / notify | `dialog`, `libnotify` | void | Wizard + rofi error UX |
+| Guest image | `dockurr/windows` | Docker registry | Pulled at user install time; not XBPS |
+
+See [windows-vm.md](windows-vm.md).
 
 ## Closed / resolved
 

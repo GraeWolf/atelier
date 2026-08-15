@@ -1,0 +1,21 @@
+#!/bin/sh
+# Docker enablement required by Atelier Windows VM (stub — full enablement in PR 3).
+# Usage: sudo atelier-setup-docker [username]
+set -eu
+
+log() { printf 'atelier-setup-docker: %s\n' "$*"; }
+die() { printf 'atelier-setup-docker: error: %s\n' "$*" >&2; exit 1; }
+
+if [ "$(id -u)" -ne 0 ]; then
+	die "run as root (sudo atelier-setup-docker)"
+fi
+
+log "stub: full Docker/runit setup is not implemented yet"
+log "planned steps:"
+log "  - install docker docker-cli docker-compose (if missing)"
+log "  - enable /etc/sv/docker under /var/service"
+log "  - probe/enable containerd if docker info fails"
+log "  - add user to docker and kvm groups"
+log "  - re-login required for group membership"
+log "docs: /usr/share/doc/atelier/windows-vm-README.txt"
+die "not implemented yet"

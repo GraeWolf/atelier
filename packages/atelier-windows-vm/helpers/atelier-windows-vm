@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Atelier Windows VM lifecycle CLI (stub — full install/launch in later PRs).
+# Usage: atelier-windows-vm <install|remove|launch|stop|status|help>
+set -euo pipefail
+
+readonly COMPOSE_FILE="${HOME}/.config/atelier/windows/docker-compose.yml"
+readonly STORAGE_DIR="${HOME}/.local/share/atelier/windows"
+readonly SHARED_DIR="${HOME}/Atelier/Windows"
+readonly CONTAINER_NAME="atelier-windows"
+readonly LAST_ERROR="${XDG_RUNTIME_DIR:-/tmp}/atelier-windows-vm-last-error.txt"
+
+log() { printf 'atelier-windows-vm: %s\n' "$*"; }
+
+write_error_file() {
+	# Best-effort last-error path for rofi/non-TTY callers
+	umask 077
+	printf '%s\n' "$*" >"$LAST_ERROR" 2>/dev/null || true
+}
+
+die() {
+	log "error: $*"
+	write_error_file "$*"
+	if command -v notify-send >/dev/null 2>&1; then
+		notify-send -u critical "Windows VM" "$*" 2>/dev/null || true
+	fi
+	exit 1
+}
+
+not_implemented() {
+	die "'$1' is not implemented yet (package skeleton). See: /usr/share/doc/atelier/windows-vm-README.txt"
+}
+
+show_usage() {
+	cat <<'EOF'
+Usage: atelier-windows-vm <command> [options]
+
+Commands (full behaviour lands in later PRs):
+  install              Interactive setup + first start of Windows VM
+  remove               Remove compose + VM disk (keeps ~/Atelier/Windows)
+  launch [--keep-alive|-k]
+                       Start VM if needed and connect with FreeRDP
+  stop                 Stop the Windows VM container
+  status               Show configuration / container status
+  help                 Show this help
+
+Paths:
+  compose   ~/.config/atelier/windows/docker-compose.yml
+  storage   ~/.local/share/atelier/windows
+  shared    ~/Atelier/Windows
+
+Setup once (when implemented):
+  sudo atelier-setup-docker
+EOF
+}
+
+cmd_status() {
+	log "package skeleton — lifecycle not fully implemented"
+	if [[ -f $COMPOSE_FILE ]]; then
+		log "compose: present ($COMPOSE_FILE)"
+	else
+		log "compose: not configured (run install when available)"
+	fi
+	if [[ -d $STORAGE_DIR ]]; then
+		log "storage: $STORAGE_DIR"
+	else
+		log "storage: not created"
+	fi
+	if [[ -d $SHARED_DIR ]]; then
+		log "shared:  $SHARED_DIR"
+	else
+		log "shared:  not created"
+	fi
+	if command -v docker >/dev/null 2>&1; then
+		if docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null; then
+			:
+		else
+			log "container: $CONTAINER_NAME not found"
+		fi
+	else
+		log "docker: not installed or not on PATH"
+	fi
+	log "docs: /usr/share/doc/atelier/windows-vm-README.txt"
+	log "build policy: docs/build/windows-vm.md (source tree)"
+}
+
+main() {
+	case "${1:-}" in
+	install) not_implemented install ;;
+	remove) not_implemented remove ;;
+	launch | start) not_implemented launch ;;
+	stop | down) not_implemented stop ;;
+	status) cmd_status ;;
+	help | --help | -h | "") show_usage ;;
+	*)
+		log "unknown command: $1" >&2
+		show_usage >&2
+		exit 1
+		;;
+	esac
+}
+
+main "$@"

@@ -8,6 +8,7 @@ Project automation scripts (build personal repo, sync configs, verification).
 | `sync-atelier-installer-files.sh` | Copy `installer/` → `packages/atelier-installer/files/` |
 | `sync-atelier-nvidia-files.sh` | Copy NVIDIA configs → `packages/atelier-nvidia/files/` |
 | `sync-atelier-xlibre-files.sh` | Copy Xlibre repo files → `packages/atelier-xlibre-repo/files/` |
+| `sync-atelier-windows-vm-files.sh` | Copy Windows VM helpers → `packages/atelier-windows-vm/files/` |
 | `build-repo.sh` | Build Atelier packages into `repo/out/` and index |
 | `verify-repo.sh` | Query local repo; install base+config into a rootdir |
 | `prepare-iso-include.sh` | Build `iso/include/` from include-src + repo/out |

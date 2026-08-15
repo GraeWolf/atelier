@@ -1,0 +1,43 @@
+# Template file for 'atelier-windows-vm'
+# Opt-in Windows 11 VM via Docker (dockur/windows) + FreeRDP.
+# NOT a dependency of atelier-desktop. Not on live ISO package lists.
+#
+# NOTE: In this monorepo, build-repo.sh does NOT run do_install.
+# Files come from packages/atelier-windows-vm/files/ via stage_from_files.
+# The do_install block below documents intended payload layout only.
+pkgname=atelier-windows-vm
+version=0.1.0
+revision=1
+create_wrksrc=yes
+short_desc="Atelier optional Windows VM (Docker + FreeRDP)"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/kmccuddy/atelier"
+
+# Host stack from official Void. Docker image dockurr/windows is pulled at runtime.
+# freerdp provides xfreerdp3 (freerdp3 is transitional dummy on Void).
+# dialog: install wizard TUI (consistent with atelier-install).
+# xdg-utils: optional browser open for install progress (best-effort).
+# libnotify: notify-send for non-TTY / rofi error UX.
+# docker meta pulls docker-cli + moby (+ containerd via moby).
+depends="
+ docker>=0
+ docker-cli>=0
+ docker-compose>=0
+ freerdp>=0
+ dialog>=0
+ xdg-utils>=0
+ libnotify>=0
+"
+
+# DOCUMENTATION ONLY — not executed by scripts/build-repo.sh
+do_install() {
+	vinstall "${FILESDIR}/usr/bin/atelier-windows-vm" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-docker" 755 usr/bin
+	vinstall "${FILESDIR}/usr/share/applications/atelier-windows.desktop" 644 \
+		usr/share/applications
+	vinstall "${FILESDIR}/usr/share/atelier/windows/docker-compose.yml.example" 644 \
+		usr/share/atelier/windows
+	vinstall "${FILESDIR}/usr/share/doc/atelier/windows-vm-README.txt" 644 \
+		usr/share/doc/atelier
+}

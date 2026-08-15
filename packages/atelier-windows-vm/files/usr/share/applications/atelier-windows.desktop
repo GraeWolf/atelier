@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Windows
+GenericName=Windows VM
+Comment=Start Windows VM (Docker) and connect with FreeRDP
+Exec=atelier-windows-vm launch
+Icon=applications-system
+Terminal=false
+Categories=System;Emulator;
+Keywords=windows;vm;rdp;atelier;
+StartupNotify=false

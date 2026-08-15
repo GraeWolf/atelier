@@ -1,0 +1,34 @@
+# Example compose for Atelier Windows VM (no secrets).
+# Generated user compose (mode 0600) lives at:
+#   ~/.config/atelier/windows/docker-compose.yml
+# See: https://github.com/dockur/windows
+#
+# Hand-edits of USERNAME/PASSWORD must keep double-quoted forms for the launcher.
+services:
+  windows:
+    image: dockurr/windows
+    container_name: atelier-windows
+    environment:
+      VERSION: "11"
+      RAM_SIZE: "4G"
+      CPU_CORES: "2"
+      DISK_SIZE: "64G"
+      USERNAME: "docker"
+      PASSWORD: "CHANGE_ME"
+      TZ: "UTC"
+      ARGUMENTS: "-rtc base=localtime,clock=host,driftfix=slew"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 127.0.0.1:8006:8006
+      - 127.0.0.1:3389:3389/tcp
+      - 127.0.0.1:3389:3389/udp
+    volumes:
+      # Replace with absolute paths for your user:
+      - ${HOME}/.local/share/atelier/windows:/storage
+      - ${HOME}/Atelier/Windows:/shared
+    restart: unless-stopped
+    stop_grace_period: 2m

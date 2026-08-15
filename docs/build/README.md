@@ -19,6 +19,7 @@ Learning how the distro is assembled is a core project goal.
 | [live-iso.md](live-iso.md) | void-mklive wrappers and live image notes |
 | [installer.md](installer.md) | Graphical installer package notes |
 | [nvidia.md](nvidia.md) | Proprietary NVIDIA + Xlibre |
+| [windows-vm.md](windows-vm.md) | Optional Windows VM (Docker + FreeRDP; post-MVP) |
 
 ## Config packaging cheatsheet
 
@@ -28,6 +29,7 @@ Learning how the distro is assembled is a core project goal.
 ./scripts/sync-atelier-installer-files.sh   # installer/
 ./scripts/sync-atelier-nvidia-files.sh
 ./scripts/sync-atelier-xlibre-files.sh
+./scripts/sync-atelier-windows-vm-files.sh  # optional Windows VM package
 ./scripts/build-repo.sh
 ```
 
