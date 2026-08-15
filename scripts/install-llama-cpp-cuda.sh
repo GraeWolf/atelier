@@ -3,31 +3,27 @@
 #
 # What it does:
 #   1. Checks nvidia-smi / driver
-#   2. Installs Void build deps (cmake, gcc, git, …) via xbps
+#   2. Installs Void build deps (cmake, gcc, ninja, …) via xbps
 #   3. Installs NVIDIA CUDA Toolkit (runfile) if nvcc is missing
-#   4. Clones/updates llama.cpp and builds with GGML_CUDA=ON
-#   5. Installs binaries to PREFIX (default: ~/.local)
-#   6. Writes a tiny env helper and runs a GPU smoke test
+#   4. Patches CUDA/glibc cospi noexcept clash when needed (glibc 2.41+)
+#   5. Clones/updates llama.cpp and builds with GGML_CUDA=ON
+#   6. Installs binaries to PREFIX (default: ~/.local)
 #
 # Usage:
 #   ./scripts/install-llama-cpp-cuda.sh
-#   PREFIX=$HOME/.local CUDA_VERSION=12.8.1 ./scripts/install-llama-cpp-cuda.sh
-#   ./scripts/install-llama-cpp-cuda.sh --skip-cuda-install   # if nvcc already OK
-#   ./scripts/install-llama-cpp-cuda.sh --rebuild             # force clean rebuild
+#   ./scripts/install-llama-cpp-cuda.sh --skip-cuda-install --rebuild
+#   CUDA_VERSION=13.0.0 ./scripts/install-llama-cpp-cuda.sh
 #
 # Notes:
-#   - Official Void repos do not ship the full CUDA toolkit; this uses NVIDIA's
-#     Linux runfile (toolkit only — your existing proprietary driver stays).
-#   - Needs network, several GB free disk, and sudo for packages / toolkit.
-#   - RTX 40-series (e.g. 4060 Ti) = CUDA arch 89; we use "native" when possible.
+#   - Void does not ship the full CUDA toolkit; uses NVIDIA runfile (toolkit only).
+#   - glibc 2.41 + CUDA 12.8 hits cospi/sinpi noexcept errors — we patch headers
+#     or prefer CUDA 13.0 when installing fresh.
 set -eu
 
-# --- defaults ----------------------------------------------------------------
 PREFIX="${PREFIX:-$HOME/.local}"
 SRC_DIR="${SRC_DIR:-$HOME/src/llama.cpp}"
-# CUDA toolkit version to fetch if nvcc is missing (must be ≤ driver-supported)
-# Driver 595 reports max CUDA 13.2; 12.8 is widely tested with llama.cpp.
-CUDA_VERSION="${CUDA_VERSION:-12.8.1}"
+# Prefer 13.0 with driver 595 (reports CUDA 13.2). Override with CUDA_VERSION=…
+CUDA_VERSION="${CUDA_VERSION:-13.0.0}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 REPO_URL="${REPO_URL:-https://github.com/ggml-org/llama.cpp.git}"
@@ -39,7 +35,7 @@ for arg in "$@"; do
 	--skip-cuda-install) SKIP_CUDA_INSTALL=1 ;;
 	--rebuild) REBUILD=1 ;;
 	-h | --help)
-		sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
 		exit 0
 		;;
 	*)
@@ -52,41 +48,59 @@ done
 log() { printf '==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
+have_pkg() { xbps-query -p pkgver "$1" >/dev/null 2>&1; }
 
-# --- 0. GPU / OS checks ------------------------------------------------------
-log "Checking NVIDIA GPU"
-need_cmd nvidia-smi
-nvidia-smi -L || die "nvidia-smi failed — install/load proprietary NVIDIA driver first"
-nvidia-smi | head -n 15 || true
-
-if [ ! -f /etc/os-release ] || ! grep -qi void /etc/os-release 2>/dev/null; then
-	log "WARN: this script targets Void Linux (xbps); continuing anyway"
-fi
-
-# --- 1. Void build packages --------------------------------------------------
-install_void_deps() {
-	log "Installing Void build dependencies (needs sudo)"
-	# core build + curl (optional model fetch helpers)
-	_pkgs="cmake git gcc make pkg-config ninja libcurl-devel openssl-devel"
-	# shellcheck disable=SC2086
-	if command -v sudo >/dev/null 2>&1; then
-		sudo xbps-install -Sy $_pkgs || die "xbps-install failed"
+run_root() {
+	if [ "$(id -u)" -eq 0 ]; then
+		"$@"
+	elif command -v sudo >/dev/null 2>&1; then
+		sudo "$@"
 	else
-		xbps-install -Sy $_pkgs || die "xbps-install failed (need root)"
+		die "need root for: $*"
 	fi
 }
 
-need_cmd git
-if ! command -v cmake >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1; then
-	install_void_deps
-else
-	log "cmake/g++ present — ensuring full dep set"
-	install_void_deps
+# --- 0. GPU ------------------------------------------------------------------
+log "Checking NVIDIA GPU"
+need_cmd nvidia-smi
+nvidia-smi -L || die "nvidia-smi failed — install proprietary NVIDIA driver first"
+nvidia-smi | head -n 12 || true
+
+if [ ! -f /etc/os-release ] || ! grep -qi void /etc/os-release 2>/dev/null; then
+	log "WARN: script is tuned for Void Linux (xbps)"
 fi
+
+# --- 1. Void packages (only missing) -----------------------------------------
+install_void_deps() {
+	log "Ensuring Void build dependencies"
+	_want="cmake git gcc make pkg-config ninja libcurl-devel openssl-devel libgomp-devel"
+	_need=""
+	for p in $_want; do
+		# gcc package provides g++; libgomp-devel for OpenMP
+		if ! have_pkg "$p"; then
+			_need="$_need $p"
+		fi
+	done
+	# gcc-c++ may be separate on some systems; on Void, gcc usually pulls it
+	if ! command -v g++ >/dev/null 2>&1; then
+		_need="$_need gcc"
+	fi
+	if [ -z "$_need" ]; then
+		log "All listed packages already installed"
+		return 0
+	fi
+	log "Installing:$_need"
+	# shellcheck disable=SC2086
+	run_root xbps-install -Sy $_need || die "xbps-install failed"
+}
+
+install_void_deps
+need_cmd git
 need_cmd cmake
 need_cmd g++
+need_cmd ninja
 
-# --- 2. CUDA toolkit ---------------------------------------------------------
+# --- 2. CUDA -----------------------------------------------------------------
 find_nvcc() {
 	if command -v nvcc >/dev/null 2>&1; then
 		command -v nvcc
@@ -95,14 +109,11 @@ find_nvcc() {
 	for d in \
 		"$CUDA_HOME/bin/nvcc" \
 		/usr/local/cuda/bin/nvcc \
-		/usr/local/cuda-12.8/bin/nvcc \
-		/usr/local/cuda-12.6/bin/nvcc \
-		/usr/local/cuda-13.0/bin/nvcc
+		/usr/local/cuda-13.0/bin/nvcc \
+		/usr/local/cuda-12.9/bin/nvcc \
+		/usr/local/cuda-12.8/bin/nvcc
 	do
-		if [ -x "$d" ]; then
-			printf '%s\n' "$d"
-			return 0
-		fi
+		[ -x "$d" ] && { printf '%s\n' "$d"; return 0; }
 	done
 	return 1
 }
@@ -113,71 +124,107 @@ setup_cuda_env() {
 	_root=$(CDPATH= cd -- "$_bindir/.." && pwd)
 	export CUDA_HOME="$_root"
 	export PATH="$_bindir:${PATH}"
-	# common lib path
 	if [ -d "$_root/lib64" ]; then
 		export LD_LIBRARY_PATH="$_root/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+	elif [ -d "$_root/targets/x86_64-linux/lib" ]; then
+		export LD_LIBRARY_PATH="$_root/targets/x86_64-linux/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 	fi
 	log "Using CUDA_HOME=$CUDA_HOME"
 	nvcc --version | head -n 5 || true
 }
 
-install_cuda_toolkit() {
-	log "CUDA toolkit (nvcc) not found — installing NVIDIA toolkit $CUDA_VERSION (runfile)"
-	log "This downloads a large installer (~3GB+). Driver is NOT replaced (--toolkit only)."
+# glibc 2.41+ declares cospi/sinpi with noexcept; CUDA ≤12.8 host headers do not.
+# That breaks nvcc host preprocessor. Patch CUDA headers to add noexcept.
+fix_cuda_glibc_cospi() {
+	_hdr=""
+	for h in \
+		"$CUDA_HOME/targets/x86_64-linux/include/crt/math_functions.h" \
+		"$CUDA_HOME/include/crt/math_functions.h" \
+		/usr/local/cuda/targets/x86_64-linux/include/crt/math_functions.h
+	do
+		if [ -f "$h" ]; then
+			_hdr=$h
+			break
+		fi
+	done
+	[ -n "$_hdr" ] || {
+		log "WARN: math_functions.h not found — skip glibc patch"
+		return 0
+	}
 
-	_tmpdir="${TMPDIR:-/tmp}/atelier-cuda-install"
-	mkdir -p "$_tmpdir"
-	_runfile="cuda_${CUDA_VERSION}_linux.run"
-	# NVIDIA layout: https://developer.download.nvidia.com/compute/cuda/12.8.1/local_installers/...
-	# Some versions use a build suffix; try common patterns.
-	_base="https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/local_installers"
-	_url="${CUDA_INSTALLER_URL:-}"
-
-	if [ -z "$_url" ]; then
-		# Probe a few known filename patterns (NVIDIA renames with driver build id)
-		log "Resolving CUDA runfile URL for $CUDA_VERSION …"
-		# Use the network installer meta page is hard; prefer pinned URLs users can override.
-		# 12.8.1 known local installer name (may 404 if NVIDIA renames — set CUDA_INSTALLER_URL).
-		# Prefer known-good filenames (NVIDIA embeds a driver build id in the name)
-		for cand in \
-			"${_base}/cuda_${CUDA_VERSION}_570.124.06_linux.run" \
-			"${_base}/cuda_${CUDA_VERSION}_570.86.15_linux.run" \
-			"${_base}/cuda_${CUDA_VERSION}_570.86.10_linux.run" \
-			"${_base}/cuda_${CUDA_VERSION}_560.35.05_linux.run" \
-			"${_base}/cuda_${CUDA_VERSION}_linux.run"
-		do
-			# Follow redirects; NVIDIA often 302 → CDN
-			_code=$(curl -fsIL -o /dev/null -w '%{http_code}' "$cand" 2>/dev/null || echo 000)
-			if [ "$_code" = "200" ]; then
-				_url=$cand
-				break
-			fi
-		done
+	# Already patched?
+	if grep -q 'sinpi(double x) noexcept' "$_hdr" 2>/dev/null; then
+		log "CUDA glibc cospi patch already applied"
+		return 0
 	fi
 
+	# Only needed when glibc exposes cospi with noexcept (2.41+)
+	if ! grep -q 'cospi' /usr/include/bits/mathcalls.h 2>/dev/null; then
+		log "glibc has no cospi in mathcalls.h — skip patch"
+		return 0
+	fi
+
+	log "Patching CUDA headers for glibc cospi/sinpi noexcept clash"
+	log "  file: $_hdr"
+	_bak="${_hdr}.bak-atelier-glibc"
+	if [ ! -f "$_bak" ]; then
+		run_root cp -a "$_hdr" "$_bak"
+	fi
+
+	# Patch device-builtin declarations (CUDA 12.8 layout; spaces vary)
+	run_root sed -E -i \
+		-e 's/\b(sinpi|sinpif|cospi|cospif)\((float|double) x\);/\1(\2 x) noexcept;/g' \
+		"$_hdr"
+
+	if grep -Eq 'sinpi\(double x\) noexcept' "$_hdr"; then
+		log "Patch applied OK"
+	else
+		log "WARN: patch may not have matched — install CUDA 13.0+ or patch manually:"
+		log "  sudo sed -E -i.bak 's/\\b(sinpi|sinpif|cospi|cospif)\\((float|double) x\\);/\\1(\\2 x) noexcept;/g' $_hdr"
+	fi
+}
+
+probe_cuda_url() {
+	_ver=$1
+	_base="https://developer.download.nvidia.com/compute/cuda/${_ver}/local_installers"
+	# Known good build ids (order matters)
+	for build in \
+		580.65.06 \
+		575.57.08 \
+		570.124.06 \
+		570.133.20 \
+		570.148.08 \
+		570.86.15 \
+		570.86.10 \
+		560.35.05
+	do
+		_cand="${_base}/cuda_${_ver}_${build}_linux.run"
+		_code=$(curl -fsIL -o /dev/null -w '%{http_code}' "$_cand" 2>/dev/null || echo 000)
+		if [ "$_code" = "200" ]; then
+			printf '%s\n' "$_cand"
+			return 0
+		fi
+	done
+	_cand="${_base}/cuda_${_ver}_linux.run"
+	_code=$(curl -fsIL -o /dev/null -w '%{http_code}' "$_cand" 2>/dev/null || echo 000)
+	if [ "$_code" = "200" ]; then
+		printf '%s\n' "$_cand"
+		return 0
+	fi
+	return 1
+}
+
+install_cuda_toolkit() {
+	log "Installing NVIDIA CUDA toolkit $CUDA_VERSION (runfile, toolkit only)"
+	_tmpdir="${TMPDIR:-/tmp}/atelier-cuda-install"
+	mkdir -p "$_tmpdir"
+	_url="${CUDA_INSTALLER_URL:-}"
 	if [ -z "$_url" ]; then
-		cat >&2 <<EOF
-error: could not auto-resolve CUDA $CUDA_VERSION runfile URL.
-
-Install the CUDA toolkit manually (toolkit only, do not overwrite the driver), then re-run:
-
-  # Example — get the runfile from:
-  #   https://developer.nvidia.com/cuda-downloads
-  #   Linux → x86_64 → runfile (local)
-  sudo sh cuda_*_linux.run --silent --toolkit --no-opengl-libs --override
-
-  export CUDA_HOME=/usr/local/cuda
-  export PATH=\$CUDA_HOME/bin:\$PATH
-
-Or re-run this script with an explicit URL:
-
-  CUDA_INSTALLER_URL='https://developer.download.nvidia.com/compute/cuda/.../cuda_....run' \\
-    $0 --skip-cuda-install   # after manual install
-  # or without --skip if nvcc is still missing and URL is set:
-  CUDA_INSTALLER_URL='...' $0
-
-EOF
-		die "CUDA toolkit missing"
+		log "Resolving runfile URL for $CUDA_VERSION …"
+		_url=$(probe_cuda_url "$CUDA_VERSION") || true
+	fi
+	if [ -z "$_url" ]; then
+		die "could not resolve CUDA $CUDA_VERSION runfile (set CUDA_INSTALLER_URL=…)"
 	fi
 
 	_dest="$_tmpdir/$(basename "$_url")"
@@ -185,40 +232,22 @@ EOF
 		log "Downloading $_url"
 		curl -fL --progress-bar -o "$_dest" "$_url" || die "download failed"
 	else
-		log "Reusing cached installer $_dest"
+		log "Reusing $_dest"
 	fi
 	chmod +x "$_dest"
 
-	log "Installing toolkit to /usr/local/cuda (sudo; silent)"
-	# --toolkit: toolkit only; --no-opengl-libs: don't touch GL; skip driver
-	if command -v sudo >/dev/null 2>&1; then
-		sudo sh "$_dest" --silent --toolkit --no-opengl-libs --override \
-			|| die "CUDA runfile failed"
-	else
-		sh "$_dest" --silent --toolkit --no-opengl-libs --override \
-			|| die "CUDA runfile failed"
-	fi
+	log "Running installer (sudo; silent; does not replace GPU driver)"
+	run_root sh "$_dest" --silent --toolkit --no-opengl-libs --override \
+		|| die "CUDA runfile failed"
 
-	# Symlink convenience
-	if [ -d /usr/local/cuda ] && [ ! -e "$CUDA_HOME" ]; then
-		CUDA_HOME=/usr/local/cuda
-	fi
-	# NVIDIA often installs to /usr/local/cuda-X.Y
-	if [ ! -x "${CUDA_HOME}/bin/nvcc" ]; then
+	if [ ! -x /usr/local/cuda/bin/nvcc ]; then
 		_latest=$(ls -d /usr/local/cuda-* 2>/dev/null | sort -V | tail -n1 || true)
 		if [ -n "$_latest" ] && [ -x "$_latest/bin/nvcc" ]; then
-			CUDA_HOME=$_latest
-			if [ ! -e /usr/local/cuda ]; then
-				log "Linking /usr/local/cuda → $CUDA_HOME"
-				if command -v sudo >/dev/null 2>&1; then
-					sudo ln -sfn "$CUDA_HOME" /usr/local/cuda
-				else
-					ln -sfn "$CUDA_HOME" /usr/local/cuda
-				fi
-				CUDA_HOME=/usr/local/cuda
-			fi
+			log "Linking /usr/local/cuda → $_latest"
+			run_root ln -sfn "$_latest" /usr/local/cuda
 		fi
 	fi
+	CUDA_HOME=/usr/local/cuda
 }
 
 if setup_cuda_env; then
@@ -230,101 +259,122 @@ else
 	setup_cuda_env || die "nvcc still missing after toolkit install"
 fi
 
-# --- 3. Clone / update llama.cpp ---------------------------------------------
+# Always try the glibc patch (no-op if already fixed / not needed)
+fix_cuda_glibc_cospi
+
+# Quick host-compile probe
+log "Probing nvcc host compile"
+_probe="${TMPDIR:-/tmp}/atelier-cuda-probe-$$.cu"
+printf 'int main(){return 0;}\n' >"$_probe"
+if ! nvcc -c "$_probe" -o "${_probe}.o" 2>/tmp/atelier-nvcc-probe.log; then
+	log "nvcc probe failed — applying glibc patch again / see /tmp/atelier-nvcc-probe.log"
+	if grep -q 'cospi\|sinpi' /tmp/atelier-nvcc-probe.log 2>/dev/null; then
+		fix_cuda_glibc_cospi
+		nvcc -c "$_probe" -o "${_probe}.o" 2>/tmp/atelier-nvcc-probe.log \
+			|| die "nvcc still broken after patch (try CUDA_VERSION=13.0.0 reinstall)"
+	else
+		die "nvcc probe failed (see /tmp/atelier-nvcc-probe.log)"
+	fi
+fi
+rm -f "$_probe" "${_probe}.o"
+log "nvcc probe OK"
+
+# --- 3. Clone llama.cpp ------------------------------------------------------
 log "Source tree: $SRC_DIR"
 mkdir -p "$(dirname "$SRC_DIR")"
 if [ -d "$SRC_DIR/.git" ]; then
 	log "Updating existing clone"
-	git -C "$SRC_DIR" fetch --depth 1 origin master 2>/dev/null \
-		|| git -C "$SRC_DIR" fetch --depth 1 origin main 2>/dev/null \
+	git -C "$SRC_DIR" pull --ff-only 2>/dev/null \
+		|| git -C "$SRC_DIR" fetch --depth 1 origin master 2>/dev/null \
 		|| true
-	git -C "$SRC_DIR" pull --ff-only 2>/dev/null || true
 else
 	log "Cloning $REPO_URL"
 	git clone --depth 1 "$REPO_URL" "$SRC_DIR"
 fi
 
-# --- 4. Configure & build with CUDA ------------------------------------------
+# --- 4. Build ----------------------------------------------------------------
 cd "$SRC_DIR"
 if [ "$REBUILD" -eq 1 ] && [ -d build ]; then
-	log "Clean rebuild (--rebuild)"
+	log "Removing build/ (--rebuild)"
+	rm -rf build
+fi
+# Stale failed configure leaves a broken cache — always wipe if no successful build
+if [ -d build ] && [ ! -f build/build.ninja ] && [ ! -f build/Makefile ]; then
+	log "Removing incomplete build/"
 	rm -rf build
 fi
 
-log "Configuring CMake (GGML_CUDA=ON)"
-# native arch = detect GPU (4060 Ti → 89). Fallback: common 70;75;80;86;89;90
 _arch="${CMAKE_CUDA_ARCHITECTURES:-native}"
-cmake -S . -B build -G Ninja \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX="$PREFIX" \
-	-DGGML_CUDA=ON \
-	-DGGML_NATIVE=ON \
-	-DLLAMA_CURL=ON \
-	-DCMAKE_CUDA_ARCHITECTURES="$_arch" \
-	-DCMAKE_CUDA_COMPILER="$(command -v nvcc)" \
-	|| {
-		log "native arch failed — retrying common SM list"
-		cmake -S . -B build -G Ninja \
-			-DCMAKE_BUILD_TYPE=Release \
-			-DCMAKE_INSTALL_PREFIX="$PREFIX" \
-			-DGGML_CUDA=ON \
-			-DLLAMA_CURL=ON \
-			-DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
-			-DCMAKE_CUDA_COMPILER="$(command -v nvcc)"
-	}
+log "Configuring CMake (GGML_CUDA=ON, arch=$_arch)"
 
-log "Building (jobs=$JOBS) — first CUDA build can take a while"
-cmake --build build --config Release -j"$JOBS"
+# Note: LLAMA_CURL is deprecated in recent llama.cpp — curl is enabled by default
+# when libcurl is found. Do not pass -DLLAMA_CURL=ON.
+_cmake_cfg() {
+	_a=$1
+	cmake -S . -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX="$PREFIX" \
+		-DGGML_CUDA=ON \
+		-DGGML_NATIVE=ON \
+		-DGGML_CCACHE=OFF \
+		-DCMAKE_CUDA_ARCHITECTURES="$_a" \
+		-DCMAKE_CUDA_COMPILER="$(command -v nvcc)"
+}
+
+if ! _cmake_cfg "$_arch"; then
+	log "Configure failed — clean + retry with explicit SM list (incl. 89 for 40-series)"
+	rm -rf build
+	# Re-apply patch in case configure wiped nothing but we need fresh state
+	fix_cuda_glibc_cospi
+	_cmake_cfg "75;80;86;89;90" || die "cmake configure failed"
+fi
+
+log "Building (jobs=$JOBS) — first CUDA build can take a long time"
+cmake --build build --config Release -j"$JOBS" || die "build failed"
 
 log "Installing to $PREFIX"
 cmake --install build
 
-# Ensure user bin on PATH hint
-mkdir -p "$PREFIX/bin"
-
-# --- 5. Env helper -----------------------------------------------------------
+mkdir -p "$PREFIX/bin" "$PREFIX/share"
 _envfile="$PREFIX/share/atelier-llama-cpp-env.sh"
-mkdir -p "$PREFIX/share"
+# Include PREFIX/lib64 — llama installs many .so next to the install prefix
+# (libllama-cli-impl.so, libggml-cuda.so, …). Without this you get:
+#   error while loading shared libraries: libllama-cli-impl.so: cannot open …
 cat >"$_envfile" <<EOF
-# Generated by install-llama-cpp-cuda.sh — source from ~/.bashrc if you want
+# Generated by install-llama-cpp-cuda.sh — source from ~/.bashrc
 export CUDA_HOME="${CUDA_HOME}"
-export PATH="${CUDA_HOME}/bin:${PREFIX}/bin:\${PATH}"
-if [ -d "${CUDA_HOME}/lib64" ]; then
-  export LD_LIBRARY_PATH="${CUDA_HOME}/lib64\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-fi
+export PATH="\${CUDA_HOME}/bin:${PREFIX}/bin:\${PATH}"
+_libs=""
+for _d in \\
+  "${PREFIX}/lib64" \\
+  "${PREFIX}/lib" \\
+  "\${CUDA_HOME}/lib64" \\
+  "\${CUDA_HOME}/targets/x86_64-linux/lib"
+do
+  if [ -d "\$_d" ]; then
+    case ":\${_libs}:" in
+      *":\${_d}:"*) ;;
+      *) _libs="\${_libs}\${_libs:+:}\${_d}" ;;
+    esac
+  fi
+done
+export LD_LIBRARY_PATH="\${_libs}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+unset _libs _d
 EOF
-log "Wrote env helper: $_envfile"
-log "Add permanently:  echo 'source $_envfile' >> ~/.bashrc"
+log "Env helper: $_envfile  (source from ~/.bashrc if desired)"
 
 # shellcheck source=/dev/null
 . "$_envfile"
 
-# --- 6. Smoke test -----------------------------------------------------------
-log "Smoke test: llama-cli help + CUDA device list"
-if command -v llama-cli >/dev/null 2>&1; then
-	llama-cli --version 2>/dev/null || llama-cli -h 2>&1 | head -n 5 || true
-elif [ -x "$PREFIX/bin/llama-cli" ]; then
-	"$PREFIX/bin/llama-cli" -h 2>&1 | head -n 5 || true
+log "Smoke test"
+if [ -x "$PREFIX/bin/llama-cli" ]; then
+	"$PREFIX/bin/llama-cli" -h 2>&1 | head -n 8 || true
 elif [ -x "$SRC_DIR/build/bin/llama-cli" ]; then
-	"$SRC_DIR/build/bin/llama-cli" -h 2>&1 | head -n 5 || true
-	log "Binaries are also in $SRC_DIR/build/bin"
+	"$SRC_DIR/build/bin/llama-cli" -h 2>&1 | head -n 8 || true
+	log "Also available under $SRC_DIR/build/bin"
 else
-	# older binary name
-	if [ -x "$SRC_DIR/build/bin/main" ]; then
-		log "Found legacy build/bin/main"
-	else
-		log "WARN: could not find llama-cli — check $SRC_DIR/build/bin"
-		ls -la "$SRC_DIR/build/bin" 2>/dev/null | head -n 30 || true
-	fi
-fi
-
-# ggml-cuda presence
-if ls "$SRC_DIR/build/bin"/libggml-cuda* >/dev/null 2>&1 \
-	|| ls "$PREFIX/lib"/libggml-cuda* >/dev/null 2>&1 \
-	|| ls "$PREFIX/lib64"/libggml-cuda* >/dev/null 2>&1; then
-	log "CUDA backend library present"
-else
-	log "WARN: libggml-cuda not found in obvious paths — GPU offload may fail"
+	log "Listing build/bin:"
+	ls -la "$SRC_DIR/build/bin" 2>/dev/null | head -n 40 || true
 fi
 
 cat <<EOF
@@ -332,27 +382,13 @@ cat <<EOF
 ========================================================================
   llama.cpp CUDA build finished
 ========================================================================
+  Source:  $SRC_DIR
+  Prefix:  $PREFIX
+  CUDA:    $CUDA_HOME
 
-  Source:   $SRC_DIR
-  Install:  $PREFIX  (llama-cli, llama-server, … in \$PREFIX/bin)
-  CUDA:     $CUDA_HOME
+  source $_envfile
+  llama-cli -m /path/to/model.gguf -ngl 99 -p "Hello"
 
-  Load env for this shell:
-    source $_envfile
-
-  Run a GGUF model on GPU (offload all layers):
-    llama-cli -m /path/to/model.gguf -ngl 99 -p "Hello"
-
-  HTTP server:
-    llama-server -m /path/to/model.gguf -ngl 99 --host 127.0.0.1 --port 8080
-
-  Models: download any GGUF (e.g. from Hugging Face). Example:
-    mkdir -p ~/models
-    # then place a .gguf file there
-
-  Rebuild later:
-    $0 --rebuild --skip-cuda-install
-
-  Your GPU: use nvidia-smi while a job runs to confirm VRAM usage.
+  Rebuild:  $0 --rebuild --skip-cuda-install
 ========================================================================
 EOF
