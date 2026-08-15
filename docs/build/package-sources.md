@@ -68,7 +68,8 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 
 | PLAN | XBPS name | Source | Notes |
 |------|-----------|--------|-------|
-| brave-origin | `brave-origin` | **graewolf** | From [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo). Live/installed systems enable the repo via `atelier-void-repo`. Install: `xbps-install -S brave-origin`. Not a hard depend of `atelier-desktop` (large binary). |
+| brave-origin | `brave-origin` | **graewolf** | From [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo). Live/installed systems enable the repo via `atelier-void-repo`. Optional install (large). |
+| dropbox | `dropbox` | **void-nonfree** | Required desktop package; needs `void-repo-nonfree`. Hard depend of `atelier-desktop`; always installed by `atelier-install`. |
 | nemo | `nemo` | void | File manager; may pull GTK stack |
 | neovim | `neovim` | void | |
 | thunderbird | `thunderbird` | void | |
@@ -88,6 +89,13 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | FiraCode | `font-firacode` | void | |
 | JetBrains Mono | *(none)* | **gap → personal** | Not in official Void under this name. Add personal `font-jetbrains-mono` (or similar) later. |
 | Nerd Font Symbols | `nerd-fonts-symbols-ttf` | void | Symbols-only; prefer over full `nerd-fonts` for size |
+
+## XDG user directories
+
+| Role | XBPS name | Source | Notes |
+|------|-----------|--------|-------|
+| User dirs tool | `xdg-user-dirs` | void | Required; installer runs `xdg-user-dirs-update` as the new user |
+| GTK integration | `xdg-user-dirs-gtk` | void | Recommended with nemo / GTK apps |
 
 ## Metapackages / config (Atelier personal)
 

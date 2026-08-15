@@ -11,13 +11,17 @@ Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm
    startx
    ```
 
-3. You should see bspwm with polybar (Tokyo Night colors).
+3. You should see bspwm with polybar (Tokyo Night colors) and the nord wallpaper.
 
 ### Live medium
 
-On the live ISO, autologin may start X for you. If not, log in (default live user is often `anon` / `voidlinux` from void-mklive) and run `startx`.
+The live ISO boots to a **TTY** (no automatic desktop).
 
-To install to disk, see [installer.md](installer.md).
+1. Log in as **anon** / **voidlinux**
+2. Install: `sudo atelier-install` (TUI)
+3. Optional desktop on live: `startx`
+
+Details: [installer.md](installer.md).
 
 ## Everyday basics
 

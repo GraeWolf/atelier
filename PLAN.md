@@ -107,7 +107,7 @@ ComponentChoiceNotesBaseVoid LinuxRollingInit systemrunitPackage managerXBPS (pu
 7. Desktop & Default Applications
 Desktop stack: bspwm + picom + polybar + rofi + ghostty + xsecurelock/xss-lock + starship + fastfetch + btop
 Applications:
-brave-origin, nemo, neovim, thunderbird, audacity, xfburn, ristretto, exa, bat, tldr, yt-dlp, gcc
+brave-origin, nemo, neovim, thunderbird, audacity, xfburn, ristretto, exa, bat, tldr, yt-dlp, gcc, dropbox
 
 8. Aesthetics
 

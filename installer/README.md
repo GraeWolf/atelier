@@ -1,6 +1,6 @@
-# Graphical installer
+# Installer
 
-Custom **simple** GUI installer for Atelier (not Calamares).
+Atelier whole-disk installer: **TUI by default** (`dialog`), optional GUI (`--gui`).
 
 ## MVP scope
 
@@ -9,30 +9,30 @@ Custom **simple** GUI installer for Atelier (not Calamares).
 | Whole-disk erase & install | Encryption |
 | EFI (GPT+ESP) and BIOS (GPT+bios_grub) | Custom partition layouts |
 | Hostname, user, root password | Dual-boot / preserve foreign OS |
-| Timezone, locale, keymap (text entry) | RAID/LVM |
-| base-system + atelier-desktop + GRUB | Automatic mirror ranking |
+| Timezone, locale, keymap (pickers) | RAID/LVM |
+| base-system + atelier-desktop + GRUB | Automatic dual-GPU polish |
+| Dropbox (nonfree, required) + xdg-user-dirs | |
 | Personal repo when present on live media | |
-| Optional proprietary NVIDIA (nonfree) | Shipping full nvidia.ko on default live ISO |
-| Optional Xlibre (external repo) | Guaranteed dual-GPU / Optimus polish |
+| Optional proprietary NVIDIA / Xlibre | Shipping full nvidia.ko on default live ISO |
 
 ## Components
 
 | Path | Role |
 |------|------|
-| `atelier-install` | Main installer script (yad → zenity → dialog) |
-| `atelier-install.desktop` | Live desktop launcher entry |
+| `atelier-install` | Main installer (default **dialog** TUI; `--gui` for yad) |
+| `atelier-install.desktop` | Desktop launcher (`--gui`) when a session is running |
 
 Packaged as **`atelier-installer`** in the personal XBPS repo (`packages/atelier-installer/`).
 
 ## Live usage
 
-1. Boot the live ISO (graphical session)
-2. Run **Install Atelier Linux** from the menu, or:
+1. Boot the live ISO to a **TTY**
+2. Log in as **anon** / **voidlinux**
+3. Run:
 
 ```bash
-atelier-install
-# or
-sudo atelier-install
+sudo atelier-install          # TUI (dialog)
+sudo atelier-install --gui    # after startx, optional
 ```
 
 3. Confirm disk wipe, answer prompts, wait for package download/install
@@ -42,7 +42,7 @@ Log: `/tmp/atelier-install.log`
 
 ## Dependencies (runtime)
 
-- `yad` (preferred) or `zenity` or `dialog`
+- `dialog` (default TUI); `yad` / `zenity` optional for `--gui`
 - `parted`, `e2fsprogs`, `dosfstools` (EFI), `util-linux`
 - `xbps`, `grub` / `grub-x86_64-efi`, `sudo`, `polkit` (for pkexec)
 

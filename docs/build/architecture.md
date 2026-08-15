@@ -22,10 +22,11 @@ This document records the technical choices locked for the Phase 1 MVP.
   - Default live image: X.Org + mesa (VM-friendly)
   - NVIDIA/Xlibre: installer options + `atelier-setup-nvidia` / `atelier-setup-xlibre`
   - Docs: `docs/build/live-iso.md`, `docs/build/nvidia.md`
-- **Installer:** Custom simple GUI installer (`atelier-install`, package `atelier-installer`)
-  - Shell + yad (zenity/dialog fallback); whole-disk only; no encryption
+- **Installer:** `atelier-install` (package `atelier-installer`)
+  - **TUI default** (`dialog`); optional `--gui` (yad/zenity)
+  - Whole-disk only; no encryption
+  - Live ISO boots to TTY; run `sudo atelier-install`
   - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`
-  - Live images may still embed `void-installer` as a text fallback
 
 ## Configuration delivery
 

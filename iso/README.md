@@ -31,8 +31,9 @@ Full documentation: [docs/build/live-iso.md](../docs/build/live-iso.md)
 - Prefer **XBPS packages** (`atelier-desktop`) over large rootfs overlays
 - Personal repo is installed into the image at `/usr/share/atelier/repo`
 - First ISO uses **X.Org** for VM testing; **Xlibre** is wired later
-- **atelier-installer** (GUI); optional **void-installer** text fallback
-- Live cmdline includes `live.autologin`; profile.d may `startx` on tty1
+- Live boots to **TTY**; install with `sudo atelier-install` (TUI)
+- Optional live desktop: `startx` (full desktop packages still on the medium)
+- Optional **void-installer** text fallback
 
 ## Safety
 

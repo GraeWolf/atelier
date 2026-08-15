@@ -1,40 +1,53 @@
 # Installing Atelier Linux
 
-## From the live ISO
+## From the live ISO (TTY + TUI)
 
-1. Boot the live medium and start the graphical session (`startx` if needed).
-2. Run **Install Atelier Linux** from the menu, or:
+1. Boot the live medium. You get a **text login** (no automatic desktop).
+2. Log in as **anon** / **voidlinux** (void-mklive defaults).
+3. Start the installer:
 
    ```bash
-   atelier-install
+   sudo atelier-install
    ```
 
-3. Walk the **Back / Next** wizard:
+   This runs a **dialog** TUI wizard (similar spirit to Void’s installer).
 
-   | Step | What you choose |
-   |------|-----------------|
-   | Welcome | Overview |
-   | Disk | Whole disk to erase |
-   | Identity | Hostname, user, passwords |
-   | Locale | Timezone, locale, keymap (lists) |
-   | Graphics | NVIDIA (if GPU present), Xlibre |
-   | Software | Optional package groups |
-   | Mirror | Void package mirror |
-   | Bootloader | Install GRUB (recommended) or skip |
-   | Summary | Review and start install |
+4. Optional GUI installer (if you started a desktop with `startx`):
 
-4. Wait for packages (needs network). Log: `/tmp/atelier-install.log`
-5. Reboot; remove the live medium.
+   ```bash
+   sudo atelier-install --gui
+   ```
 
-Live user (if needed before install): **anon** / **voidlinux**
+5. Walk **Back / Next** through disk, identity, locale, graphics, optional software, mirror, bootloader, and summary.
+6. Wait for packages (needs network). Log: `/tmp/atelier-install.log`
+7. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
-## What the installer does
+Optional on the live medium only:
 
-- Erases the **entire** selected disk (GPT: EFI+root or BIOS grub+root)
-- Installs Void base, kernel, NetworkManager, **atelier-desktop** when the personal repo is on the medium
-- Optional: NVIDIA proprietary, Xlibre, extra CLI/media packages
-- Writes chosen Void mirror into the target system
-- Creates your user (`wheel`/sudo) and root password
+```bash
+startx    # themed bspwm desktop is still on the ISO if you want it
+```
+
+## Wizard steps
+
+| Step | What you choose |
+|------|-----------------|
+| Welcome | Overview |
+| Disk | Whole disk to erase |
+| Identity | Hostname, user, passwords |
+| Locale | Timezone, locale, keymap (lists) |
+| Graphics | NVIDIA (if GPU present), Xlibre |
+| Software | Optional package groups |
+| Mirror | Void package mirror |
+| Bootloader | Install GRUB (recommended) or skip |
+| Summary | Review and start install |
+
+## What gets installed (always)
+
+- Void base, kernel, NetworkManager, **atelier-desktop** (when personal repo is present)
+- **void-repo-nonfree** + **dropbox** (required)
+- **xdg-user-dirs** (+ gtk); installer runs `xdg-user-dirs-update` for your user
+- GraeWolf void-repo config when present on the live medium
 
 ## What it does not do
 
@@ -44,18 +57,11 @@ Live user (if needed before install): **anon** / **voidlinux**
 
 ## Graphics
 
-- **NVIDIA GPU detected:** Yes/No for proprietary drivers
-- **No NVIDIA (typical VM):** drivers skipped; use `sudo atelier-setup-nvidia` on real hardware later
+- **NVIDIA GPU detected:** Yes/No for proprietary drivers  
+- **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia`  
 - **Xlibre:** Yes/No (usually No in VMs)
 
 See [nvidia.md](nvidia.md).
-
-## Optional software groups
-
-- **Extra CLI:** htop, ripgrep, fd, curl, wget (if available in Void)
-- **Media:** mpv, ffmpeg
-
-Desktop stack from PLAN is always installed via `atelier-desktop` when present.
 
 ## Fallback
 

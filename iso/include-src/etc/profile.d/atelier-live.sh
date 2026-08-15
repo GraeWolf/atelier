@@ -1,18 +1,28 @@
-# Atelier live session helpers (live ISO only; installed via mklive -I include).
-# Autostart X on tty1 when live.autologin is on the kernel command line.
+# Atelier live session helpers (live ISO only; mklive -I include).
+# Live boots to a TTY (no auto startx). Install from the shell with a TUI.
 
-atelier_live_should_startx() {
-	[ -z "${DISPLAY:-}" ] || return 1
-	[ "$(tty 2>/dev/null)" = "/dev/tty1" ] || return 1
-	grep -qw 'live.autologin' /proc/cmdline 2>/dev/null || return 1
-	command -v startx >/dev/null 2>&1 || return 1
-	return 0
-}
+# Show once per interactive login on a real tty
+case $- in
+*i*) ;;
+*) return 0 2>/dev/null || exit 0 ;;
+esac
 
-if atelier_live_should_startx; then
-	# Avoid restart loops: only once per login shell
-	if [ -z "${ATELIER_STARTED_X:-}" ]; then
-		export ATELIER_STARTED_X=1
-		exec startx
-	fi
+_tty=$(tty 2>/dev/null || true)
+case "$_tty" in
+/dev/tty* | /dev/console) ;;
+*) unset _tty; return 0 2>/dev/null || true ;;
+esac
+
+if [ -z "${ATELIER_LIVE_HINT_SHOWN:-}" ]; then
+	export ATELIER_LIVE_HINT_SHOWN=1
+	printf '\n'
+	printf '  Atelier Linux (live)\n'
+	printf '  --------------------\n'
+	printf '  Install (TUI):  sudo atelier-install\n'
+	printf '  Install (GUI):  startx, then run atelier-install --gui\n'
+	printf '                  or: sudo atelier-install --gui\n'
+	printf '  Desktop only:   startx\n'
+	printf '  Default login:  anon / voidlinux (void-mklive)\n'
+	printf '\n'
 fi
+unset _tty

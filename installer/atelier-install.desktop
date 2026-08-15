@@ -3,8 +3,8 @@ Type=Application
 Name=Install Atelier Linux
 GenericName=System Installer
 Comment=Install Atelier Linux (whole-disk, simple GUI)
-# Keep locale/display for yad when launched from rofi/menu
-Exec=env LANG=C.UTF-8 LC_ALL=C.UTF-8 atelier-install
+# GUI when launched from a desktop session; TTY live uses: sudo atelier-install
+Exec=env LANG=C.UTF-8 LC_ALL=C.UTF-8 atelier-install --gui
 Icon=system-software-install
 Terminal=false
 Categories=System;Settings;

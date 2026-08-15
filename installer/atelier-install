@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Atelier Linux - graphical installer (wizard, whole-disk MVP)
-# Back/Next steps, ASCII-only UI strings for yad safety.
+# Atelier Linux installer (wizard, whole-disk MVP)
+# Default: TUI (dialog). Optional GUI: atelier-install --gui
+# ASCII-only UI strings for locale safety.
 set -euo pipefail
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -56,11 +57,29 @@ die() { ui_error "$*"; exit 1; }
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# UI mode: tui (dialog, default) | gui (yad/zenity) | auto (legacy: prefer dialog)
+UI_MODE=tui
 UI=none
-if have yad; then UI=yad
-elif have zenity; then UI=zenity
-elif have dialog; then UI=dialog
-fi
+
+select_ui() {
+	case $UI_MODE in
+	gui)
+		if have yad; then UI=yad
+		elif have zenity; then UI=zenity
+		elif have dialog; then UI=dialog
+		else UI=none
+		fi
+		;;
+	tui|*)
+		if have dialog; then UI=dialog
+		elif have yad; then UI=yad
+		elif have zenity; then UI=zenity
+		else UI=none
+		fi
+		;;
+	esac
+	log "UI_MODE=$UI_MODE UI=$UI"
+}
 
 yad_run() { yad --title="$TITLE" --center --on-top "$@"; }
 
@@ -115,7 +134,15 @@ wizard_page() {
 		fi
 		;;
 	dialog)
-		dialog --title "$TITLE" --yes-label Next --no-label Back --yesno "$msg" 16 70 && rc=0 || rc=1
+		# Three-way via menu (more reliable than yesno for Back)
+		dialog --title "$TITLE" --menu "$msg" 18 72 3 \
+			next "Next" back "Back" abort "Abort" 2>/tmp/atelier-wiz.$$ || true
+		case $(cat /tmp/atelier-wiz.$$ 2>/dev/null || true) in
+		next) rc=0 ;;
+		back) rc=1 ;;
+		*) rc=2 ;;
+		esac
+		rm -f /tmp/atelier-wiz.$$
 		;;
 	*)
 		printf '%s\n[Enter]=Next [b]=Back [q]=Abort: ' "$msg" >&2
@@ -153,6 +180,7 @@ ui_password() {
 }
 
 # List pick: returns selected first column. Args after text: pairs id detail
+# Exit status: 0 ok, 1 cancel/back
 ui_list_pick() {
 	local text=$1; shift
 	case $UI in
@@ -168,8 +196,12 @@ ui_list_pick() {
 	dialog)
 		local items=()
 		while [ $# -ge 2 ]; do items+=("$1" "$2"); shift 2; done
-		dialog --title "$TITLE" --menu "$text" 20 70 12 "${items[@]}" 2>/tmp/atelier-pick.$$
-		cat /tmp/atelier-pick.$$; rm -f /tmp/atelier-pick.$$
+		if ! dialog --title "$TITLE" --menu "$text" 20 72 14 "${items[@]}" 2>/tmp/atelier-pick.$$; then
+			rm -f /tmp/atelier-pick.$$
+			return 1
+		fi
+		cat /tmp/atelier-pick.$$
+		rm -f /tmp/atelier-pick.$$
 		;;
 	*) printf '%s\n' "$text" >&2; printf '%s\n' "$@" >&2; read -r a; printf '%s\n' "$a" ;;
 	esac
@@ -180,7 +212,6 @@ ui_checklist() {
 	local text=$1; shift
 	case $UI in
 	yad)
-		# yad checklist: column CHK + TAG + Label; print checked tags
 		local args=() t l s
 		while [ $# -ge 3 ]; do
 			t=$1; l=$2; s=$3; shift 3
@@ -200,8 +231,23 @@ ui_checklist() {
 			--column=Pick --column=Tag --column=Option --print-column=2 --separator='\n' \
 			"${args[@]}" 2>/dev/null | sed '/^$/d'
 		;;
+	dialog)
+		local items=() t l s
+		while [ $# -ge 3 ]; do
+			t=$1; l=$2; s=$3; shift 3
+			items+=("$t" "$l" "$s")
+		done
+		if ! dialog --title "$TITLE" --checklist "$text" 18 72 8 "${items[@]}" 2>/tmp/atelier-chk.$$; then
+			rm -f /tmp/atelier-chk.$$
+			return 1
+		fi
+		# dialog prints quoted tags: "extra_cli" "media"
+		# shellcheck disable=SC2046
+		eval "set -- $(cat /tmp/atelier-chk.$$)"
+		rm -f /tmp/atelier-chk.$$
+		for t in "$@"; do printf '%s\n' "$t"; done
+		;;
 	*)
-		# fallback: all off unless previously set - return empty
 		printf ''
 		;;
 	esac
@@ -633,23 +679,24 @@ install_packages() {
 		log "WARN: personal repo missing at $ATELIER_REPO_LIVE"
 	fi
 
-	# Primary mirror for target system
+	# Primary + nonfree mirrors (Dropbox requires nonfree always)
 	mkdir -p "$TARGETDIR/etc/xbps.d"
 	printf 'repository=%s\n' "$VOID_REPO" >"$TARGETDIR/etc/xbps.d/00-repository-main.conf"
+	printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
+	REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
 
-	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
-		REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
-		printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
-	fi
-
-	# GraeWolf personal packages (brave-origin, …) — live medium + package ship conf+key
+	# GraeWolf personal packages (brave-origin, ...) — live medium + package ship conf+key
 	if [ -f /etc/xbps.d/20-repository-graewolf.conf ]; then
 		cp -a /etc/xbps.d/20-repository-graewolf.conf \
 			"$TARGETDIR/etc/xbps.d/20-repository-graewolf.conf"
 		REPO_ARGS+=(--repository="https://github.com/GraeWolf/void-repo/releases/download/x86_64")
 	fi
 
-	local pkgs=(base-system linux sudo dbus elogind NetworkManager polkit)
+	local pkgs=(
+		base-system linux sudo dbus elogind NetworkManager polkit
+		void-repo-nonfree dropbox
+		xdg-user-dirs xdg-user-dirs-gtk
+	)
 	if [ "${INSTALL_BOOTLOADER:-1}" -eq 1 ]; then
 		if is_efi; then pkgs+=(grub-x86_64-efi grub efibootmgr dosfstools)
 		else pkgs+=(grub); fi
@@ -664,7 +711,7 @@ install_packages() {
 	fi
 
 	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
-		pkgs+=(void-repo-nonfree nvidia)
+		pkgs+=(nvidia)
 		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-nvidia >/dev/null 2>&1; then
 			pkgs+=(atelier-nvidia)
 		fi
@@ -733,6 +780,16 @@ configure_system() {
 		printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
 		chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
 	fi
+
+	# XDG user directories (Desktop, Documents, Downloads, ...) for the new user
+	if chroot "$TARGETDIR" command -v xdg-user-dirs-update >/dev/null 2>&1; then
+		log "running xdg-user-dirs-update for $USERNAME"
+		chroot "$TARGETDIR" su - "$USERNAME" -c 'xdg-user-dirs-update' >>"$LOG" 2>&1 || \
+			log "WARN: xdg-user-dirs-update failed for $USERNAME"
+	else
+		log "WARN: xdg-user-dirs-update not found on target"
+	fi
+
 	enable_sv NetworkManager
 	enable_sv dbus
 	enable_sv elogind
@@ -784,15 +841,51 @@ Log: $LOG"
 	fi
 }
 
+usage() {
+	cat <<EOF
+Atelier installer v${VERSION} (whole-disk)
+
+Usage: atelier-install [options]
+
+  (default)   TUI with dialog (Void-like; works on a live tty)
+  --tui       Force dialog TUI
+  --gui       Force graphical UI (yad/zenity; needs DISPLAY)
+  -h, --help  This help
+
+Live medium: log in as anon / voidlinux, then:
+  sudo atelier-install
+EOF
+}
+
 # --- main wizard loop ---------------------------------------------------------
 main() {
 	: >"$LOG"
-	log "atelier-install $VERSION starting UI=$UI"
+	log "atelier-install $VERSION starting"
+
+	local arg
+	for arg in "$@"; do
+		case $arg in
+		--gui) UI_MODE=gui ;;
+		--tui) UI_MODE=tui ;;
+		-h|--help) usage; exit 0 ;;
+		*) die "Unknown option: $arg (try --help)" ;;
+		esac
+	done
+
+	select_ui
+	log "atelier-install UI_MODE=$UI_MODE UI=$UI"
+
 	ensure_root "$@"
 	have parted || die "parted is required"
 	have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
 	have xbps-install || die "xbps-install is required"
 	have lsblk || die "util-linux (lsblk) is required"
+	if [ "$UI" = "dialog" ]; then
+		have dialog || die "dialog is required for TUI mode"
+	fi
+	if [ "$UI" = "none" ]; then
+		die "No UI backend (install dialog for TUI, or yad for --gui)"
+	fi
 
 	# steps as names; navigate with index
 	local steps=(welcome disk identity locale graphics software mirror bootloader summary)

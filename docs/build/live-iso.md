@@ -7,7 +7,8 @@ How to build the Atelier live ISO (Phase 1 Step 4).
 - Bootable live ISO via **void-mklive**
 - **Personal repository** integrated (build-time install + on-medium repo)
 - Themed **bspwm** desktop from `atelier-desktop` / `atelier-config`
-- Temporary **void-installer** (custom GUI installer is Step 5)
+- Live boots to **TTY**; install with `sudo atelier-install` (dialog TUI)
+
 - **X.Org** for first image / VM testing (**Xlibre** comes with later NVIDIA work)
 
 ## Requirements
@@ -52,16 +53,16 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 
 1. `./scripts/build-repo.sh` — personal packages → `repo/out/`
 2. `./scripts/prepare-iso-include.sh` — builds `iso/include/`:
-   - live xbps.d pointing at `/usr/share/atelier/repo`
+   - live xbps.d pointing at `/usr/share/atelier/repo` + GraeWolf void-repo
    - copy of personal `.xbps` + repodata
-   - live-only `profile.d` helper for autostart X with `live.autologin`
+   - live-only `profile.d` **hint** (TTY install instructions; no auto startx)
 3. Clones **void-mklive** into `iso/void-mklive/` (gitignored) if missing
-4. Embeds **void-installer** from void-mklive’s `installer.sh` into the include tree
+4. Embeds **void-installer** from void-mklive’s `installer.sh` (emergency fallback)
 5. Runs `mklive.sh` with:
-   - official Void repo + `repo/out`
+   - official Void + local Atelier (+ GraeWolf as configured)
    - packages from `iso/package-lists/live.txt` (includes `atelier-desktop`)
    - services: `dbus`, `elogind`, `NetworkManager`
-   - kernel cmdline: `live.autologin`
+   - **no** `live.autologin` (TTY login)
    - bootloader title: **Atelier Linux**
    - postsetup: `iso/scripts/postsetup.sh`
 
@@ -69,13 +70,11 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 
 | Item | Value |
 |------|--------|
-| Autologin | `live.autologin` on cmdline; default live user (`anon`, password `voidlinux` unless changed by mklive) |
-| Desktop | `startx` → bspwm (Tokyo Night configs from skel) |
-| Installer | **`atelier-install`** (package `atelier-installer`); optional `void-installer` text fallback |
+| Login | TTY; live user `anon` / `voidlinux` (void-mklive) |
+| Install | `sudo atelier-install` (dialog TUI); `--gui` optional after `startx` |
+| Desktop (optional) | `startx` → bspwm (packages still on the medium) |
 | Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
 | GraeWolf void-repo | `/etc/xbps.d/20-repository-graewolf.conf` + public key (brave-origin, etc.) |
-
-If X does not start automatically, log in on tty1 and run `startx`.
 
 ## Package lists
 

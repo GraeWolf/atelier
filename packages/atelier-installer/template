@@ -1,7 +1,7 @@
 # Template file for 'atelier-installer'
 # Simple whole-disk graphical installer for Atelier live images.
 pkgname=atelier-installer
-version=0.2.0
+version=0.3.0
 revision=1
 create_wrksrc=yes
 short_desc="Atelier simple graphical installer (whole-disk MVP)"
@@ -10,6 +10,7 @@ license="MIT"
 homepage="https://github.com/kmccuddy/atelier"
 
 depends="
+ dialog>=0
  yad>=0
  parted>=0
  e2fsprogs>=0

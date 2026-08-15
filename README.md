@@ -18,7 +18,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 What that means in-tree:
 
 - Bootable live ISO build path (void-mklive wrappers)
-- Graphical whole-disk installer (`atelier-install`)
+- Whole-disk installer (`atelier-install`: TUI default; live boots to TTY)
 - Personal XBPS repository build and ISO integration
 - Tokyo Night themed bspwm desktop packages
 - Proprietary NVIDIA + optional Xlibre setup path

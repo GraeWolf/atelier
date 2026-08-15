@@ -135,10 +135,11 @@ run_mklive() {
 		-I "$_include" \
 		-S "dbus elogind NetworkManager" \
 		-T "$TITLE" \
-		-C "live.autologin" \
 		-e /bin/bash \
 		-x "$_post" \
 		-o "$OUT_ISO"
+	# Note: no live.autologin — live boots to TTY; run: sudo atelier-install
+	# Optional desktop on live medium: startx (desktop packages still installed).
 }
 
 # --- main ---

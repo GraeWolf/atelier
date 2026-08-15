@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.2.0+** |
+| XBPS package | `atelier-installer` **0.3.0+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -16,7 +16,13 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Wizard (v0.2)
+## Modes (v0.3)
+
+| Command | UI |
+|---------|-----|
+| `atelier-install` | **TUI** (`dialog`) — default, for live tty |
+| `atelier-install --tui` | Force dialog |
+| `atelier-install --gui` | yad/zenity when DISPLAY is set |
 
 Stateful Back/Next flow (whole-disk only):
 
@@ -24,24 +30,27 @@ welcome → disk → identity → locale → graphics → software → mirror �
 
 ### UI rules
 
-- **yad** preferred; zenity/dialog fallbacks
-- **ASCII-only** dialog strings (yad + C locale safety)
-- Explicit **Yes/No** or **Back/Next/Abort** exit codes
-- `ensure_gui_env` + pkexec env preservation (`DISPLAY`, `LANG`, `XDG_RUNTIME_DIR`, …)
+- **Default dialog (TUI)**; optional GUI with `--gui`
+- **ASCII-only** UI strings
+- Explicit **Yes/No** or **Back/Next/Abort**
+- `ensure_gui_env` + pkexec env preservation
 
 ### Options wired into install phase
 
 | Variable | Effect |
 |----------|--------|
-| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos for install + target `/etc/xbps.d` |
-| `INSTALL_NVIDIA` | nonfree + nvidia + atelier-nvidia |
+| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos; **nonfree always** (Dropbox) |
+| `INSTALL_NVIDIA` | nvidia + atelier-nvidia |
 | `INSTALL_XLIBRE` | atelier-xlibre-repo + xlibre |
 | `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
 | `INSTALL_BOOTLOADER` | GRUB install or skip |
+| (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
+
+After `useradd`, runs `su - $USER -c xdg-user-dirs-update`.
 
 ## Runtime dependencies
 
-yad (or zenity/dialog), parted, e2fsprogs, dosfstools, util-linux, xbps, grub*, sudo, polkit
+dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, xbps, grub*, sudo, polkit
 
 ## Testing checklist
 
