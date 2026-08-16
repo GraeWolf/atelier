@@ -12,7 +12,7 @@ create_wrksrc=yes
 short_desc="Atelier optional Windows VM (Docker + FreeRDP)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # Host stack from official Void. Docker image dockurr/windows is pulled at runtime.
 # freerdp provides xfreerdp3 (freerdp3 is transitional dummy on Void).

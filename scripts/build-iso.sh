@@ -92,6 +92,10 @@ check_host_tools() {
 	fi
 }
 
+# Mirror base used for official Void packages (overridable for offline mirrors)
+VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
+VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-${VOID_REPO%/}/nonfree}"
+
 check_packages_resolvable() {
 	# Best-effort: ensure atelier packages exist in local repo
 	atelier_info "Checking personal packages in repo/out"
@@ -99,6 +103,12 @@ check_packages_resolvable() {
 		xbps-query --repository="$ROOT/repo/out" -R "$p" >/dev/null 2>&1 || \
 			atelier_die "cannot query $p from repo/out — run ./scripts/build-repo.sh"
 	done
+	# atelier-desktop requires dropbox from Void nonfree — mklive must see this repo
+	if xbps-query --repository="$VOID_NONFREE_REPO" -R dropbox >/dev/null 2>&1; then
+		atelier_info "Void nonfree OK (dropbox visible at $VOID_NONFREE_REPO)"
+	else
+		atelier_die "cannot query dropbox from nonfree ($VOID_NONFREE_REPO). atelier-desktop depends on it; check network/mirror"
+	fi
 	# Best-effort: GraeWolf remote repo reachable (key/conf live on medium either way)
 	if xbps-query --repository="https://github.com/GraeWolf/void-repo/releases/download/x86_64" \
 		-R brave-origin >/dev/null 2>&1; then
@@ -119,15 +129,17 @@ run_mklive() {
 	atelier_info "Invoking mklive.sh (requires root)"
 	atelier_info "  arch=$ARCH"
 	atelier_info "  packages=$_pkgs"
+	atelier_info "  repos: $VOID_REPO | nonfree | repo/out | graewolf void-repo"
 	atelier_info "  output=$OUT_ISO"
 
 	# shellcheck disable=SC2086
 	cd "$MKLIVE_DIR"
-	# Official Void + local Atelier packages + GraeWolf personal void-repo
-	# (brave-origin, obsidian, …) so mklive can resolve those names if listed.
+	# Official Void (main + nonfree for dropbox) + local Atelier packages +
+	# GraeWolf personal void-repo (brave-origin, …) so mklive can resolve depends.
 	./mklive.sh \
 		-a "$ARCH" \
-		-r "https://repo-default.voidlinux.org/current" \
+		-r "$VOID_REPO" \
+		-r "$VOID_NONFREE_REPO" \
 		-r "$_repo_out" \
 		-r "https://github.com/GraeWolf/void-repo/releases/download/x86_64" \
 		-c "$CACHE_DIR" \
