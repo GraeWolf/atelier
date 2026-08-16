@@ -4,7 +4,7 @@
 # ASCII-only UI strings for locale safety.
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.3.1"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -83,13 +83,32 @@ select_ui() {
 
 yad_run() { yad --title="$TITLE" --center --on-top "$@"; }
 
+# dialog --stdout: result on stdout, UI on stderr (terminal). Avoids broken
+# 2>/tmp capture that leaves raw arrow keys (^[[A/^[[B) on the TTY.
+# Always talk to a real tty when possible.
+dialog_run() {
+	# Ensure a usable TERM for ncurses on live/console
+	if [ -z "${TERM:-}" ] || [ "$TERM" = "dumb" ]; then
+		export TERM=linux
+	fi
+	# Drain pending stdin garbage (arrow keys from a previous failed dialog)
+	while read -r -t 0 _junk 2>/dev/null; do :; done || true
+	# --stdout: selection/text on stdout (capturable). UI uses /dev/tty via ncurses.
+	# Feed keys from the real tty so sudo/pipes do not break arrow navigation.
+	if [ -c /dev/tty ]; then
+		dialog --stdout --backtitle "$TITLE" "$@" </dev/tty
+	else
+		dialog --stdout --backtitle "$TITLE" "$@"
+	fi
+}
+
 ui_error() {
 	local msg=$1
 	log "ERROR: $msg"
 	case $UI in
 	yad) yad_run --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
 	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
-	dialog) dialog --title "$TITLE" --msgbox "$msg" 10 60 ;;
+	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 12 70 || true ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
 }
@@ -99,23 +118,29 @@ ui_info() {
 	case $UI in
 	yad) yad_run --info --text="$msg" --width=480 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --info --text="$msg" --width=480 ;;
-	dialog) dialog --title "$TITLE" --msgbox "$msg" 12 60 ;;
+	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 14 70 || true ;;
 	*) printf '%s\n' "$msg" ;;
 	esac
 }
 
 # Returns: 0=yes/next/ok, 1=no/back, 2=abort (close)
 ui_confirm() {
-	local msg=$1
+	local msg=$1 rc=0
 	case $UI in
 	yad) yad_run --text="$msg" --width=520 --button="No:1" --button="Yes:0" ;;
 	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 --ok-label=Yes --cancel-label=No ;;
-	dialog) dialog --title "$TITLE" --yesno "$msg" 12 60 ;;
+	dialog)
+		dialog_run --title "$TITLE" --yes-label "Yes" --no-label "No" --yesno "$msg" 14 70
+		rc=$?
+		# 0=Yes 1=No 255=ESC
+		[ "$rc" -eq 0 ] && return 0
+		return 1
+		;;
 	*) printf '%s [y/N] ' "$msg" >&2; read -r a; case $a in y|Y|yes|YES) return 0;; *) return 1;; esac ;;
 	esac
 }
 
-# Wizard page: text + Back/Next. 0=next 1=back 2=abort
+# Wizard page: text + Back/Next/Abort. 0=next 1=back 2=abort
 wizard_page() {
 	local msg=$1
 	local rc=0
@@ -134,15 +159,18 @@ wizard_page() {
 		fi
 		;;
 	dialog)
-		# Three-way via menu (more reliable than yesno for Back)
-		dialog --title "$TITLE" --menu "$msg" 18 72 3 \
-			next "Next" back "Back" abort "Abort" 2>/tmp/atelier-wiz.$$ || true
-		case $(cat /tmp/atelier-wiz.$$ 2>/dev/null || true) in
-		next) rc=0 ;;
-		back) rc=1 ;;
+		# Real buttons (not a menu of "next/back/abort" tags).
+		# Exit codes: 0=Yes/Next, 1=No/Back, 3=Extra/Abort, 255=ESC
+		dialog_run --title "$TITLE" \
+			--yes-label "Next" --no-label "Back" \
+			--extra-button --extra-label "Abort" \
+			--yesno "$msg" 16 72
+		rc=$?
+		case $rc in
+		0) rc=0 ;;
+		1) rc=1 ;;
 		*) rc=2 ;;
 		esac
-		rm -f /tmp/atelier-wiz.$$
 		;;
 	*)
 		printf '%s\n[Enter]=Next [b]=Back [q]=Abort: ' "$msg" >&2
@@ -154,28 +182,30 @@ wizard_page() {
 }
 
 ui_entry() {
-	local label=$1 default=${2:-}
+	local label=$1 default=${2:-} val="" rc=0
 	case $UI in
 	yad) yad_run --entry --text="$label" --entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --entry --text="$label" --entry-text="$default" --width=420 ;;
 	dialog)
-		dialog --title "$TITLE" --inputbox "$label" 10 50 "$default" 2>/tmp/atelier-entry.$$
-		cat /tmp/atelier-entry.$$; rm -f /tmp/atelier-entry.$$
+		val=$(dialog_run --title "$TITLE" --inputbox "$label" 10 60 "$default") || rc=$?
+		if [ "$rc" -ne 0 ]; then return 1; fi
+		printf '%s\n' "${val:-$default}"
 		;;
 	*) printf '%s [%s]: ' "$label" "$default" >&2; read -r a; printf '%s\n' "${a:-$default}" ;;
 	esac
 }
 
 ui_password() {
-	local label=$1
+	local label=$1 val="" rc=0
 	case $UI in
 	yad) yad_run --entry --hide-text --text="$label" --width=420 --button=Cancel:1 --button=OK:0 ;;
 	zenity) zenity --title="$TITLE" --password --text="$label" --width=420 ;;
 	dialog)
-		dialog --title "$TITLE" --passwordbox "$label" 10 50 2>/tmp/atelier-pw.$$
-		cat /tmp/atelier-pw.$$; rm -f /tmp/atelier-pw.$$
+		val=$(dialog_run --title "$TITLE" --insecure --passwordbox "$label" 10 60) || rc=$?
+		if [ "$rc" -ne 0 ]; then return 1; fi
+		printf '%s\n' "$val"
 		;;
-	*) printf '%s: ' "$label" >&2; stty -echo; read -r a; stty echo; printf '\n%s\n' "$a" >&2; printf '%s\n' "$a" ;;
+	*) printf '%s: ' "$label" >&2; stty -echo; read -r a; stty echo; printf '\n' >&2; printf '%s\n' "$a" ;;
 	esac
 }
 
@@ -183,6 +213,7 @@ ui_password() {
 # Exit status: 0 ok, 1 cancel/back
 ui_list_pick() {
 	local text=$1; shift
+	local pick="" rc=0
 	case $UI in
 	yad)
 		yad_run --list --text="$text" --width=640 --height=400 \
@@ -196,12 +227,14 @@ ui_list_pick() {
 	dialog)
 		local items=()
 		while [ $# -ge 2 ]; do items+=("$1" "$2"); shift 2; done
-		if ! dialog --title "$TITLE" --menu "$text" 20 72 14 "${items[@]}" 2>/tmp/atelier-pick.$$; then
-			rm -f /tmp/atelier-pick.$$
+		# shellcheck disable=SC2034
+		pick=$(dialog_run --title "$TITLE" --menu "$text" 20 72 12 "${items[@]}") || rc=$?
+		if [ "$rc" -ne 0 ]; then return 1; fi
+		# Reject empty or control/escape garbage (raw arrow keys, etc.)
+		if [ -z "$pick" ] || printf '%s' "$pick" | grep -q $'[\x00-\x1f\x7f]'; then
 			return 1
 		fi
-		cat /tmp/atelier-pick.$$
-		rm -f /tmp/atelier-pick.$$
+		printf '%s\n' "$pick"
 		;;
 	*) printf '%s\n' "$text" >&2; printf '%s\n' "$@" >&2; read -r a; printf '%s\n' "$a" ;;
 	esac
@@ -232,19 +265,16 @@ ui_checklist() {
 			"${args[@]}" 2>/dev/null | sed '/^$/d'
 		;;
 	dialog)
-		local items=() t l s
+		local items=() t l s out rc=0
 		while [ $# -ge 3 ]; do
 			t=$1; l=$2; s=$3; shift 3
 			items+=("$t" "$l" "$s")
 		done
-		if ! dialog --title "$TITLE" --checklist "$text" 18 72 8 "${items[@]}" 2>/tmp/atelier-chk.$$; then
-			rm -f /tmp/atelier-chk.$$
-			return 1
-		fi
-		# dialog prints quoted tags: "extra_cli" "media"
+		out=$(dialog_run --title "$TITLE" --checklist "$text" 18 72 8 "${items[@]}") || rc=$?
+		if [ "$rc" -ne 0 ]; then return 1; fi
+		# dialog --stdout prints quoted tags: "extra_cli" "media"
 		# shellcheck disable=SC2046
-		eval "set -- $(cat /tmp/atelier-chk.$$)"
-		rm -f /tmp/atelier-chk.$$
+		eval "set -- $out"
 		for t in "$@"; do printf '%s\n' "$t"; done
 		;;
 	*)
@@ -263,10 +293,12 @@ ensure_root() {
 			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
 			DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
 			LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-${LANG:-C.UTF-8}}" \
+			TERM="${TERM:-linux}" \
 			"$0" "$@"
 	fi
 	if have sudo; then
-		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL \
+		# TERM is required for dialog/ncurses on a live TTY
+		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL,TERM,COLORTERM \
 			"$0" "$@"
 	fi
 	die "Root privileges required (pkexec or sudo)."
@@ -358,7 +390,12 @@ step_disk() {
 	if [ "$rc" -eq 1 ]; then return 1; fi
 	if [ "$rc" -ge 2 ]; then return 2; fi
 	DISK=${pick//|/}
-	DISK=$(printf '%s' "$DISK" | awk 'NF{print $1; exit}')
+	DISK=$(printf '%s' "$DISK" | tr -d '\r' | awk 'NF{print $1; exit}')
+	# Must be a real block device path (reject empty / escape garbage from bad TUI)
+	case $DISK in
+	/dev/*) ;;
+	*) ui_error "Invalid disk selection (got: ${DISK:-empty}). Use arrow keys inside the dialog, then Enter."; return 1 ;;
+	esac
 	[ -b "$DISK" ] || { ui_error "Invalid disk: $DISK"; return 1; }
 
 	if ! ui_confirm "ALL DATA on $DISK will be DESTROYED.

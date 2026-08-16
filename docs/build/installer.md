@@ -33,7 +33,9 @@ welcome → disk → identity → locale → graphics → software → mirror �
 - **Default dialog (TUI)**; optional GUI with `--gui`
 - **ASCII-only** UI strings
 - Explicit **Yes/No** or **Back/Next/Abort**
-- `ensure_gui_env` + pkexec env preservation
+- dialog: `--stdout` + keys from `/dev/tty` (prevents raw `^[[A`/`^[[B` arrow garbage)
+- Wizard pages: real Next/Back/Abort buttons (`--yesno` + `--extra-button`), not a tag menu
+- `ensure_gui_env` + sudo/pkexec preserve `TERM` (ncurses needs it on a live TTY)
 
 ### Options wired into install phase
 
