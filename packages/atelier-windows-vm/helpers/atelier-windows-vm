@@ -124,6 +124,21 @@ valid_password() {
 }
 
 # --- dialog helpers -----------------------------------------------------------
+# dialog --stdout: result on stdout, UI on the terminal. Avoids broken 2>/tmp
+# capture that leaves the TTY looking frozen (same pattern as atelier-install).
+dialog_run() {
+	if [[ -z ${TERM:-} || $TERM == dumb ]]; then
+		export TERM=linux
+	fi
+	# Drain pending stdin garbage (arrow keys from a previous failed dialog)
+	while read -r -t 0 _junk 2>/dev/null; do :; done || true
+	if [[ -c /dev/tty ]]; then
+		dialog --stdout --backtitle "$TITLE" "$@" </dev/tty
+	else
+		dialog --stdout --backtitle "$TITLE" "$@"
+	fi
+}
+
 require_dialog() {
 	have dialog || die "dialog is required for the install wizard (xbps-install dialog)"
 	# dialog needs a TTY for interactive use
@@ -134,16 +149,16 @@ require_dialog() {
 
 dlg_msgbox() {
 	local msg=$1 h=${2:-12} w=${3:-64}
-	dialog --title "$TITLE" --msgbox "$msg" "$h" "$w"
+	dialog_run --title "$TITLE" --msgbox "$msg" "$h" "$w"
 }
 
 dlg_yesno() {
-	# default no when third arg is "no"
+	# default no when 4th arg is "no"
 	local msg=$1 h=${2:-12} w=${3:-64} def=${4:-yes}
 	if [[ $def == no ]]; then
-		dialog --title "$TITLE" --defaultno --yesno "$msg" "$h" "$w"
+		dialog_run --title "$TITLE" --defaultno --yesno "$msg" "$h" "$w"
 	else
-		dialog --title "$TITLE" --yesno "$msg" "$h" "$w"
+		dialog_run --title "$TITLE" --yesno "$msg" "$h" "$w"
 	fi
 }
 
@@ -152,52 +167,37 @@ dlg_menu() {
 	# prints selected tag to stdout
 	local text=$1 h=$2 w=$3 mh=$4
 	shift 4
-	local tmp rc
-	tmp=$(mktemp_secret)
+	local val rc=0
 	set +e
-	dialog --title "$TITLE" --menu "$text" "$h" "$w" "$mh" "$@" 2>"$tmp"
+	val=$(dialog_run --title "$TITLE" --menu "$text" "$h" "$w" "$mh" "$@")
 	rc=$?
 	set -e
-	if [[ $rc -ne 0 ]]; then
-		rm -f "$tmp"
-		return 1
-	fi
-	cat "$tmp"
-	rm -f "$tmp"
+	[[ $rc -eq 0 ]] || return 1
+	printf '%s\n' "$val"
 	return 0
 }
 
 dlg_input() {
 	local label=$1 default=$2
-	local tmp rc
-	tmp=$(mktemp_secret)
+	local val rc=0
 	set +e
-	dialog --title "$TITLE" --inputbox "$label" 10 50 "$default" 2>"$tmp"
+	val=$(dialog_run --title "$TITLE" --inputbox "$label" 10 50 "$default")
 	rc=$?
 	set -e
-	if [[ $rc -ne 0 ]]; then
-		rm -f "$tmp"
-		return 1
-	fi
-	cat "$tmp"
-	rm -f "$tmp"
+	[[ $rc -eq 0 ]] || return 1
+	printf '%s\n' "$val"
 	return 0
 }
 
 dlg_password() {
 	local label=$1
-	local tmp rc
-	tmp=$(mktemp_secret)
+	local val rc=0
 	set +e
-	dialog --title "$TITLE" --insecure --passwordbox "$label" 10 50 2>"$tmp"
+	val=$(dialog_run --title "$TITLE" --insecure --passwordbox "$label" 10 50)
 	rc=$?
 	set -e
-	if [[ $rc -ne 0 ]]; then
-		rm -f "$tmp"
-		return 1
-	fi
-	cat "$tmp"
-	rm -f "$tmp"
+	[[ $rc -eq 0 ]] || return 1
+	printf '%s\n' "$val"
 	return 0
 }
 
@@ -512,7 +512,7 @@ cmd_install() {
 	local total_ram total_cores storage_free docker_root docker_free
 	local ram cores disk user pass pass_display
 	local ram_args=() disk_args=() opt sel default_disk
-	local max_disk
+	local max_disk rc
 	local noninteractive=false force=false
 	local cli_ram="" cli_cores="" cli_disk="" cli_user="" cli_pass="" cli_image=""
 
@@ -711,21 +711,13 @@ plus (disk size + 10G) on the storage filesystem." 16 64
 	if ! printf '%s\n' "${disk_args[@]}" | grep -qx '64G'; then
 		default_disk=32G
 	fi
-	{
-		tmp=$(mktemp_secret)
-		set +e
-		dialog --title "$TITLE" --default-item "$default_disk" \
-			--menu "Disk size for Windows VM (64G+ recommended)" 16 60 8 \
-			"${disk_args[@]}" 2>"$tmp"
-		rc=$?
-		set -e
-		if [[ $rc -ne 0 ]]; then
-			rm -f "$tmp"
-			die "install cancelled"
-		fi
-		disk=$(cat "$tmp")
-		rm -f "$tmp"
-	}
+	set +e
+	disk=$(dialog_run --title "$TITLE" --default-item "$default_disk" \
+		--menu "Disk size for Windows VM (64G+ recommended)" 16 60 8 \
+		"${disk_args[@]}")
+	rc=$?
+	set -e
+	[[ $rc -eq 0 ]] || die "install cancelled"
 
 	while true; do
 		user=$(dlg_input "Windows username (empty = docker)" "docker") || die "install cancelled"
@@ -786,20 +778,6 @@ freerdp_bin() {
 	else
 		die "FreeRDP client not found (need xfreerdp3 from package freerdp)"
 	fi
-}
-
-# Prefer /from-stdin so password is not on argv; fall back to /p: only if unsupported.
-freerdp_supports_from_stdin() {
-	local bin=$1
-	# FreeRDP 3 documents /from-stdin; probe help text when possible
-	if "$bin" /help 2>&1 | grep -qi 'from-stdin'; then
-		return 0
-	fi
-	# freerdp 3.x typically supports it even if help grep fails
-	case $bin in
-	xfreerdp3) return 0 ;;
-	*) return 1 ;;
-	esac
 }
 
 read_compose_credentials() {
@@ -875,7 +853,7 @@ Leave the container running; re-run launch after Windows finishes installing."
 
 cmd_launch() {
 	local KEEP_ALIVE=false
-	local WIN_USER WIN_PASS RDP_SCALE rdp_bin rdp_rc use_stdin
+	local WIN_USER WIN_PASS RDP_SCALE rdp_bin rdp_rc
 	local -a rdp_args
 
 	while [[ $# -gt 0 ]]; do
@@ -900,7 +878,8 @@ cmd_launch() {
 	rdp_bin=$(freerdp_bin)
 
 	read_compose_credentials
-	# Never log WIN_PASS
+	# Never log WIN_PASS. /p: puts it on argv briefly (local-only); /from-stdin
+	# is unreliable here — FreeRDP 3 still prompts Domain then Password.
 
 	if ! container_running; then
 		log "starting Windows VM..."
@@ -917,15 +896,13 @@ cmd_launch() {
 	wait_windows_ready
 
 	rdp_scale_flag
-	use_stdin=0
-	if freerdp_supports_from_stdin "$rdp_bin"; then
-		use_stdin=1
-	else
-		log "warning: FreeRDP may not support /from-stdin; using /p: (password visible in process list)"
-	fi
 
+	# /d:. = local account (dockur). /p: required — without it FreeRDP prompts
+	# and NLA cancels when stdin is not a TTY (e.g. desktop launcher).
 	rdp_args=(
 		/u:"$WIN_USER"
+		/d:.
+		/p:"$WIN_PASS"
 		/v:127.0.0.1:3389
 		-grab-keyboard
 		/sound
@@ -952,13 +929,8 @@ cmd_launch() {
 
 	# Isolate FreeRDP exit from set -e / pipefail so auto-stop always runs
 	set +e
-	if [[ $use_stdin -eq 1 ]]; then
-		printf '%s\n' "$WIN_PASS" | "$rdp_bin" "${rdp_args[@]}" /from-stdin
-		rdp_rc=$?
-	else
-		"$rdp_bin" "${rdp_args[@]}" /p:"$WIN_PASS"
-		rdp_rc=$?
-	fi
+	"$rdp_bin" "${rdp_args[@]}"
+	rdp_rc=$?
 	t1=$(date +%s)
 	elapsed=$((t1 - t0))
 
@@ -971,20 +943,20 @@ cmd_launch() {
 			rdp_args_nografx+=("$a")
 		done
 		log "retrying FreeRDP without /gfx:AVC444 (quick failure, exit $rdp_rc, ${elapsed}s)"
-		if [[ $use_stdin -eq 1 ]]; then
-			printf '%s\n' "$WIN_PASS" | "$rdp_bin" "${rdp_args_nografx[@]}" /from-stdin
-			rdp_rc=$?
-		else
-			"$rdp_bin" "${rdp_args_nografx[@]}" /p:"$WIN_PASS"
-			rdp_rc=$?
-		fi
+		"$rdp_bin" "${rdp_args_nografx[@]}"
+		rdp_rc=$?
 	fi
 	set -e
 
-	# Drop password from shell environment ASAP
+	# Drop password from shell environment ASAP (array still holds /p: until function returns)
 	WIN_PASS=""
 
 	log "RDP session ended (exit ${rdp_rc:-?})"
+	if (( rdp_rc != 0 && elapsed < 8 )); then
+		log "hint: if this was an auth failure, confirm USERNAME/PASSWORD in $COMPOSE_FILE
+  Browser UI still works: $WEB_URL
+  Or: atelier-windows-vm status; docker logs $CONTAINER_NAME"
+	fi
 
 	if [[ $KEEP_ALIVE != true ]]; then
 		log "stopping Windows VM (default; use --keep-alive to leave running)"
