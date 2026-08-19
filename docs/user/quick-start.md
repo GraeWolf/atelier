@@ -28,9 +28,9 @@ Details: [installer.md](installer.md).
 | Action | How |
 |--------|-----|
 | Open terminal | **Super+Enter** (ghostty) |
-| App launcher | **Super+d** (rofi) |
+| App launcher | **Super+Space** (rofi; Super+d also works) |
 | Run command | **Super+Shift+d** |
-| File manager | **Super+e** (nemo) |
+| File manager | **Super+Shift+F** (nemo; Super+e also works) |
 | Lock screen | **Super+Shift+l** |
 | Quit session | **Super+Shift+q** |
 

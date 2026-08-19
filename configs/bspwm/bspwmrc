@@ -128,5 +128,7 @@ bspc config presel_feedback_color "#bb9af7"
 # Floating helpers (one-shot -o also set by the launcher scripts)
 bspc rule -a XTerm:atelier-nmtui state=floating center=on focus=on
 bspc rule -a XTerm:atelier-keys state=floating center=on focus=on
+bspc rule -a XTerm:atelier-btop state=floating center=on focus=on
+# Scratchpad members are marked sticky+floating by atelier-scratchpad
 # bspc rule -a Gimp desktop='^8' state=floating follow=on
 # bspc rule -a Brave-browser desktop='^2'

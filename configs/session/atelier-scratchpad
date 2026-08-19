@@ -1,0 +1,83 @@
+#!/bin/sh
+# Atelier — scratchpad (Omarchy-inspired Super+S / Super+Alt+S)
+# Windows are floating + sticky + marked, then hidden. Toggle shows/hides them.
+# Usage: atelier-scratchpad {toggle|send}
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+have bspc || {
+	printf 'atelier-scratchpad: bspc not found\n' >&2
+	exit 1
+}
+
+# Scratch members: marked + sticky (set by send)
+scratch_nodes() {
+	bspc query -N -n .floating.sticky.marked.window 2>/dev/null || true
+}
+
+any_visible() {
+	for n in $(scratch_nodes); do
+		# hidden flag absent ⇒ visible
+		if bspc query -N -n "${n}.!hidden" >/dev/null 2>&1; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+hide_all() {
+	for n in $(scratch_nodes); do
+		bspc node "$n" -g hidden=on 2>/dev/null || true
+	done
+}
+
+show_all() {
+	last=""
+	for n in $(scratch_nodes); do
+		bspc node "$n" -g hidden=off 2>/dev/null || true
+		last=$n
+	done
+	[ -n "$last" ] && bspc node "$last" -f 2>/dev/null || true
+}
+
+do_toggle() {
+	ids=$(scratch_nodes)
+	if [ -z "$ids" ]; then
+		printf 'atelier-scratchpad: empty (send a window with Super+Alt+S)\n' >&2
+		exit 0
+	fi
+	if any_visible; then
+		hide_all
+	else
+		show_all
+	fi
+}
+
+do_send() {
+	id=$(bspc query -N -n focused.window 2>/dev/null || true)
+	[ -n "$id" ] || exit 0
+
+	# If focused is already a scratch member and visible → restore to normal tile
+	if bspc query -N -n "${id}.floating.sticky.marked" >/dev/null 2>&1; then
+		bspc node "$id" -g marked=off sticky=off hidden=off
+		bspc node "$id" -t tiled
+		exit 0
+	fi
+
+	bspc node "$id" -t floating
+	bspc node "$id" -g sticky=on marked=on hidden=on
+}
+
+cmd=${1:-toggle}
+case $cmd in
+toggle) do_toggle ;;
+send | add) do_send ;;
+-h | --help)
+	printf 'Usage: atelier-scratchpad {toggle|send}\n'
+	;;
+*)
+	printf 'atelier-scratchpad: unknown command: %s\n' "$cmd" >&2
+	exit 1
+	;;
+esac

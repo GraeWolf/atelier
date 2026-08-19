@@ -17,6 +17,10 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `nvim/` | `~/.config/nvim/` | Neovim (voidwolf-based; Tokyo Night) |
 | `keybinds/cheatsheet.txt` | `~/.config/atelier/keybinds.txt` + `/usr/share/doc/atelier/` | Super+k cheat sheet |
 | `session/atelier-keybinds` | `/usr/bin/atelier-keybinds` | Floating keybind TUI launcher |
+| `session/atelier-screenshot` | `/usr/bin/atelier-screenshot` | Region/window/full capture (clipboard) |
+| `session/atelier-power-menu` | `/usr/bin/atelier-power-menu` | Rofi lock/logout/suspend/reboot/off |
+| `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
+| `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `gtk/` | `~/.config/gtk-3.0`, `gtk-4.0` | GTK theme overrides |
 | `qt/` | `~/.config/qt5ct`, `qt6ct` | Qt theming via qt5ct/qt6ct |
 | `starship/starship.toml` | `~/.config/starship.toml` | Prompt |

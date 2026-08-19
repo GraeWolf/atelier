@@ -1,0 +1,36 @@
+#!/bin/sh
+# Atelier — floating btop (Omarchy Super+Ctrl+T “Activity”)
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+have btop || {
+	printf 'atelier-btop: btop not found\n' >&2
+	exit 1
+}
+
+# One-shot floating centered rule, then launch a terminal
+if have bspc; then
+	bspc rule -a XTerm:atelier-btop -o state=floating center=on focus=on \
+		rectangle=1100x700+0+0 2>/dev/null || true
+	bspc rule -a com.mitchellh.ghostty -o state=floating center=on focus=on \
+		rectangle=1100x700+0+0 2>/dev/null || true
+	bspc rule -a ghostty -o state=floating center=on focus=on \
+		rectangle=1100x700+0+0 2>/dev/null || true
+fi
+
+if have xterm; then
+	exec xterm -name atelier-btop -T "btop" -geometry 120x40 \
+		-fa "Fira Code" -fs 11 \
+		-bg "#1a1b26" -fg "#c0caf5" \
+		-e btop
+fi
+
+if have ghostty; then
+	if ghostty --help 2>&1 | grep -q -- '--title'; then
+		exec ghostty --title=btop -e btop
+	fi
+	exec ghostty -e btop
+fi
+
+exec btop

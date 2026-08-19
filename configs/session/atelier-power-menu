@@ -1,0 +1,62 @@
+#!/bin/sh
+# Atelier — session power menu (rofi). Bound to Super+Ctrl+Escape.
+# Actions use loginctl / atelier-lock / bspc — no root required for typical seats.
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+have rofi || {
+	printf 'atelier-power-menu: rofi is required\n' >&2
+	exit 1
+}
+
+choice=$(
+	printf '%s\n' \
+		"Lock" \
+		"Logout" \
+		"Suspend" \
+		"Reboot" \
+		"Shutdown" \
+		| rofi -dmenu -i -p "Power" -format s
+) || exit 0
+
+[ -n "$choice" ] || exit 0
+
+case $choice in
+Lock)
+	if have atelier-lock; then
+		exec atelier-lock
+	fi
+	if have xsecurelock; then
+		exec xsecurelock
+	fi
+	printf 'atelier-power-menu: no lock helper found\n' >&2
+	exit 1
+	;;
+Logout)
+	if have bspc; then
+		bspc quit
+		exit 0
+	fi
+	# Fallback if not under bspwm
+	if have loginctl; then
+		exec loginctl terminate-session "${XDG_SESSION_ID:-}"
+	fi
+	exit 1
+	;;
+Suspend)
+	have loginctl || exit 1
+	exec loginctl suspend
+	;;
+Reboot)
+	have loginctl || exit 1
+	exec loginctl reboot
+	;;
+Shutdown)
+	have loginctl || exit 1
+	exec loginctl poweroff
+	;;
+*)
+	exit 0
+	;;
+esac

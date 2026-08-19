@@ -1,0 +1,94 @@
+#!/bin/sh
+# Atelier — screenshot helper (Omarchy-inspired; no Print-Screen key required)
+# Usage: atelier-screenshot {menu|region|window|full}
+# Copies PNG to the clipboard; also saves under ~/Pictures/Screenshots/.
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+die() {
+	printf 'atelier-screenshot: %s\n' "$*" >&2
+	if have notify-send; then
+		notify-send -u critical "Screenshot" "$*" 2>/dev/null || true
+	fi
+	exit 1
+}
+
+have maim || die "maim is required (xbps-install maim)"
+have xclip || die "xclip is required (xbps-install xclip)"
+
+# Pictures dir (respect user-dirs when available)
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/user-dirs.dirs" ]; then
+	# shellcheck disable=SC1090
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/user-dirs.dirs" 2>/dev/null || true
+fi
+PIC_ROOT=${XDG_PICTURES_DIR:-$HOME/Pictures}
+SAVE_DIR=${ATELIER_SCREENSHOT_DIR:-$PIC_ROOT/Screenshots}
+mkdir -p "$SAVE_DIR"
+
+stamp=$(date +%Y%m%d-%H%M%S)
+outfile="$SAVE_DIR/atelier-${stamp}.png"
+
+notify_ok() {
+	if have notify-send; then
+		notify-send -t 2500 "Screenshot" "Saved and copied:\n$1" 2>/dev/null || true
+	fi
+}
+
+# Active window id via xprop (avoid xdotool dependency)
+active_wid() {
+	xprop -root _NET_ACTIVE_WINDOW 2>/dev/null | awk '{print $NF}'
+}
+
+do_region() {
+	# -s: select; -u: hide cursor; fails cleanly on Esc
+	maim -s -u "$outfile" || exit 1
+	xclip -selection clipboard -t image/png <"$outfile"
+	notify_ok "$outfile"
+}
+
+do_window() {
+	wid=$(active_wid)
+	[ -n "$wid" ] && [ "$wid" != "0x0" ] || die "no active window"
+	maim -u -i "$wid" "$outfile" || die "maim window capture failed"
+	xclip -selection clipboard -t image/png <"$outfile"
+	notify_ok "$outfile"
+}
+
+do_full() {
+	maim -u "$outfile" || die "maim fullscreen capture failed"
+	xclip -selection clipboard -t image/png <"$outfile"
+	notify_ok "$outfile"
+}
+
+do_menu() {
+	have rofi || die "rofi is required for the capture menu"
+	choice=$(
+		printf '%s\n' \
+			"Region (select)" \
+			"Focused window" \
+			"Full screen" \
+			| rofi -dmenu -i -p "Screenshot" -format s
+	) || exit 0
+	[ -n "$choice" ] || exit 0
+	case $choice in
+	Region*) do_region ;;
+	Focused*) do_window ;;
+	"Full screen") do_full ;;
+	*) exit 0 ;;
+	esac
+}
+
+cmd=${1:-menu}
+case $cmd in
+menu) do_menu ;;
+region | select) do_region ;;
+window) do_window ;;
+full | fullscreen | output) do_full ;;
+-h | --help)
+	printf 'Usage: atelier-screenshot {menu|region|window|full}\n'
+	;;
+*)
+	die "unknown command: $cmd (try menu|region|window|full)"
+	;;
+esac

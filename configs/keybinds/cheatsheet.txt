@@ -5,10 +5,13 @@
  ── Launch ────────────────────────────────────────────────────────────────
   Super+Enter          Terminal (ghostty)
   Super+Shift+Enter    Terminal + neovim
-  Super+d              App launcher (rofi)
+  Super+Space          App launcher (rofi)  [primary]
+  Super+d              App launcher (alias)
   Super+Shift+d        Run command (rofi)
-  Super+e              File manager (nemo)
+  Super+Shift+F        File manager (nemo)  [primary]
+  Super+e              File manager (alias)
   Super+b              Browser (Brave if installed)
+  Super+Ctrl+T         Activity (btop, floating)
   Super+k              This cheat sheet (toggle)
 
  ── Windows ───────────────────────────────────────────────────────────────
@@ -21,28 +24,41 @@
   Super+Alt+h/j/k/l    Resize
   Super+f              Fullscreen
   Super+t              Tiled
-  Super+Shift+Space    Floating toggle
+  Super+Shift+Space    Floating
   Super+Ctrl+h/j/k/l   Preselect split
   Super+Ctrl+Space     Cancel preselect
   Super+r              Rotate tree 90°
   Super+=              Balance tree
+  Super+S              Scratchpad toggle (show/hide)
+  Super+Alt+S          Scratchpad send / restore focused
 
  ── Desktops ──────────────────────────────────────────────────────────────
   Super+1 … 6          Primary monitor desktops
   Super+7 … 9          Secondary monitor desktops (dual-head)
   Super+Shift+1 … 9    Send window to desktop (follow)
 
+ ── Capture ───────────────────────────────────────────────────────────────
+  Super+Ctrl+C         Screenshot menu (region / window / full)
+  Super+Shift+S        Region screenshot → clipboard
+  Super+Shift+Ctrl+S   Full screen screenshot
+  Super+Shift+Alt+S    Focused window screenshot
+  (saved under ~/Pictures/Screenshots/ as well)
+
  ── Session / system ──────────────────────────────────────────────────────
-  Super+Shift+l        Lock screen (atelier-lock / xsecurelock)
+  Super+Shift+l        Lock screen (atelier-lock)
+  Super+Ctrl+l         Lock screen (alias)
+  Super+Ctrl+Escape    Power menu (lock / logout / suspend / reboot / off)
   Super+Shift+q        Quit bspwm
   Super+Escape         Reload sxhkd
   Super+Shift+r        Restart bspwm (reload session configs)
   Super+Shift+m        Multi-monitor layout wizard
   Super+Shift+v        Volume mixer (pavucontrol)
-  Media volume keys    Raise / lower / mute
+  Media volume keys    Raise / lower / mute (±5%; Alt+ for ±1%)
+  Brightness keys      Raise / lower (brightnessctl, if present)
   Idle ~5 min          Auto-lock; ~2 min later while locked → suspend
 
  ── Notes ─────────────────────────────────────────────────────────────────
   Full map:  ~/.config/sxhkd/sxhkdrc
   Desktop:   docs/user/desktop.md (on the website / package docs)
   Theme:     Tokyo Night · bspwm
+  Inspired in part by Omarchy hotkeys, adapted for X11/bspwm.

@@ -6,16 +6,22 @@ Modifier key: **Super** (Windows / Command key).
 
 ## Essential keybindings
 
+Several chords are **Omarchy-inspired** (launcher on Super+Space, scratchpad, screenshots without a Print key, power menu) but adapted for **bspwm + X11**.
+
 ### Launch & apps
 
 | Keys | Action |
 |------|--------|
 | Super+Enter | Terminal (ghostty; falls back to xterm) |
 | Super+Shift+Enter | Terminal with neovim |
-| Super+d | Application launcher (rofi; second press closes if still open) |
+| Super+Space | Application launcher (rofi; primary) |
+| Super+d | Application launcher (alias) |
 | Super+Shift+d | Run command (rofi) |
-| Super+e | File manager (nemo) |
+| Super+Shift+F | File manager (nemo; primary) |
+| Super+e | File manager (alias) |
 | Super+b | Browser (Brave if packaged; falls back to chromium/xdg-open) |
+| Super+Ctrl+T | Activity monitor (`btop`, floating) |
+| Super+k | Keybind cheat sheet (floating; toggle) |
 
 ### Windows
 
@@ -25,15 +31,16 @@ Modifier key: **Super** (Windows / Command key).
 | Super+Shift+w | Kill window |
 | Super+h/j/l | Focus left/down/right |
 | Super+arrows | Focus (all directions; Up = north) |
-| Super+k | Keybind cheat sheet (floating; toggle) |
 | Super+Shift+h/j/k | Swap left / down / up |
 | Super+Shift+arrows | Swap (all directions; Right = east) |
 | Super+Alt+h/j/k/l | Resize |
 | Super+f | Fullscreen |
 | Super+t | Tiled |
-| Super+Shift+Space | Floating toggle |
+| Super+Shift+Space | Floating |
 | Super+Ctrl+h/j/k/l | Preselect split direction |
 | Super+Ctrl+Space | Cancel preselect |
+| Super+S | Scratchpad toggle (show/hide marked sticky floats) |
+| Super+Alt+S | Send focused window to scratchpad (again to restore) |
 
 ### Desktops
 
@@ -47,17 +54,33 @@ On a **single** monitor, desktops **1–9** all live on that screen.
 
 Bindings use desktop **names** (`bspc desktop -f 7`), not `^7` (which means “7th desktop in global order” and mis-fires when monitors are ordered secondary-first).
 
+### Capture
+
+No Print-Screen key required (Omarchy-style chords):
+
+| Keys | Action |
+|------|--------|
+| Super+Ctrl+C | Screenshot menu (region / window / full) |
+| Super+Shift+S | Region select → clipboard |
+| Super+Shift+Ctrl+S | Full screen → clipboard |
+| Super+Shift+Alt+S | Focused window → clipboard |
+
+Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; needs `maim` + `xclip`).
+
 ### Session
 
 | Keys | Action |
 |------|--------|
 | Super+Shift+l | Lock screen (`atelier-lock` / xsecurelock) |
+| Super+Ctrl+l | Lock screen (alias) |
+| Super+Ctrl+Escape | Power menu (lock / logout / suspend / reboot / shutdown) |
 | Super+Shift+q | Quit bspwm (end session) |
 | Super+Shift+m | Multi-monitor layout wizard |
 | Super+Shift+v | Volume mixer (pavucontrol) |
 | Super+Escape | Reload sxhkd |
 | Super+Shift+r | Restart bspwm |
-| Media volume keys | Raise / lower / mute (via `pactl`) |
+| Media volume keys | Raise / lower / mute (±5%; Alt+ for ±1%) |
+| Brightness keys | Raise / lower via `brightnessctl` when present |
 
 Full map: `~/.config/sxhkd/sxhkdrc` (from package `atelier-config`).
 

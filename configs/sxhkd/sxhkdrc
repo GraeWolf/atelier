@@ -1,12 +1,17 @@
 # Atelier — sxhkd hotkeys for bspwm
 # Super (mod4) is the main modifier. Keep bindings easy to remember.
+# Omarchy-inspired additions: Space launcher, Shift+F files, scratchpad,
+# screenshots (no Print key), power menu, btop, brightness.
 
 # --- Terminal / launcher -----------------------------------------------------
 # Prefer ghostty; fall back to xterm if ghostty fails to start (e.g. odd GL).
 super + Return
 	sh -c 'command -v ghostty >/dev/null && exec ghostty || exec xterm'
 
-# Call /usr/bin/atelier-rofi (simple path - nested quotes break under sxhkd)
+# Primary launcher (Omarchy-like Super+Space); Super+d kept as alias
+super + space
+	atelier-rofi drun
+
 super + d
 	atelier-rofi drun
 
@@ -46,13 +51,20 @@ super + ctrl + {h,j,k,l}
 super + ctrl + space
 	bspc node -p cancel
 
-# --- State -------------------------------------------------------------------
+# --- State (Atelier semantics: explicit tiled / float / fullscreen) ----------
 super + shift + space
 	bspc node -t floating
 super + f
 	bspc node -t fullscreen
 super + t
 	bspc node -t tiled
+
+# --- Scratchpad (Omarchy-inspired) -------------------------------------------
+super + s
+	atelier-scratchpad toggle
+
+super + alt + s
+	atelier-scratchpad send
 
 # --- Desktops (primary 1-6, secondary 7-9 on dual-head) ----------------------
 # Use desktop NAMES (1-9), not ^N. ^N means "Nth desktop in global order"
@@ -77,20 +89,27 @@ super + Escape
 super + shift + r
 	bspc wm -r
 
-# --- Lock / quit session -----------------------------------------------------
+# --- Lock / quit / power -----------------------------------------------------
 # Use atelier-lock (sources XSECURELOCK_* env; talks to xss-lock when running)
 super + shift + l
 	sh -c 'command -v atelier-lock >/dev/null 2>&1 && exec atelier-lock; exec "$HOME/bin/atelier-lock"'
 
+# Omarchy-like lock alias
+super + ctrl + l
+	sh -c 'command -v atelier-lock >/dev/null 2>&1 && exec atelier-lock; exec "$HOME/bin/atelier-lock"'
+
 super + shift + q
 	bspc quit
+
+# Power menu (do not steal Super+Escape — that reloads sxhkd)
+super + ctrl + Escape
+	atelier-power-menu
 
 # Multi-monitor layout wizard (writes ~/.config/atelier/monitors.conf)
 super + shift + m
 	atelier-monitors setup
 
 # Keybind cheat sheet (floating centered TUI; toggle)
-# Prefer PATH (/usr/bin from package); fall back to ~/bin for local installs
 super + k
 	sh -c 'command -v atelier-keybinds >/dev/null 2>&1 && exec atelier-keybinds; exec "$HOME/bin/atelier-keybinds"'
 
@@ -104,16 +123,56 @@ XF86AudioLowerVolume
 XF86AudioMute
 	pactl set-sink-mute @DEFAULT_SINK@ toggle
 
+# Fine volume (±1%)
+alt + XF86AudioRaiseVolume
+	pactl set-sink-volume @DEFAULT_SINK@ +1%
+
+alt + XF86AudioLowerVolume
+	pactl set-sink-volume @DEFAULT_SINK@ -1%
+
 # Volume mixer GUI
 super + shift + v
 	pavucontrol
 
-# --- Common apps (PLAN set) --------------------------------------------------
+# --- Brightness (laptops; no-op friendly if brightnessctl missing) -----------
+XF86MonBrightnessUp
+	sh -c 'command -v brightnessctl >/dev/null && brightnessctl set +5% || true'
+
+XF86MonBrightnessDown
+	sh -c 'command -v brightnessctl >/dev/null && brightnessctl set 5%- || true'
+
+# --- Capture (no Print key — Omarchy-style chords) ---------------------------
+# Menu: region / window / full
+super + ctrl + c
+	atelier-screenshot menu
+
+# Region select → clipboard + ~/Pictures/Screenshots
+super + shift + s
+	atelier-screenshot region
+
+# Full screen
+super + shift + ctrl + s
+	atelier-screenshot full
+
+# Focused window
+super + shift + alt + s
+	atelier-screenshot window
+
+# --- Activity / apps (PLAN set) ----------------------------------------------
+# Floating btop (Omarchy Super+Ctrl+T)
+super + ctrl + t
+	atelier-btop
+
 super + shift + b
 	xdg-open about:blank 2>/dev/null || true
+
 # Prefer brave when packaged; fall back is intentional for Step 2
 super + b
 	sh -c 'command -v brave-browser >/dev/null && exec brave-browser || command -v brave >/dev/null && exec brave || command -v chromium >/dev/null && exec chromium || exec xdg-open about:blank'
+
+# Files: Omarchy-like Super+Shift+F primary; Super+e kept as alias
+super + shift + f
+	nemo
 
 super + e
 	nemo

@@ -172,7 +172,8 @@ Bluetooth audio (`libspa-bluetooth`, etc.) is optional later.
 Unless later requested or proven required for a listed app to run:
 
 - Display managers (lightdm/sddm) — session start approach TBD with Xlibre  
-- dunst, extra screenshots tools  
+- dunst (notifications optional later; screenshots use maim/xclip via atelier-screenshot)  
+
 - Full `xorg` / `xorg-video-drivers` metapackage (NVIDIA is Step 6; Xlibre is external)  
 - NetworkManager on every install (live ISO includes it; revisit for installer UX)
 

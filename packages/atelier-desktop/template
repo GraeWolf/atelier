@@ -3,7 +3,7 @@
 # brave-origin: GraeWolf void-repo (optional; large). dropbox: Void nonfree (required).
 # Does not hard-depend on: font-jetbrains-mono, xlibre package (external setup helpers).
 pkgname=atelier-desktop
-version=0.2.0
+version=0.2.1
 revision=1
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
