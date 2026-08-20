@@ -22,6 +22,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |
+| `session/atelier-pkg` | `/usr/bin/atelier-pkg` | XBPS install/remove/update (fzf; from Install menu) |
 | `gtk/` | `~/.config/gtk-3.0`, `gtk-4.0` | GTK theme overrides |
 | `qt/` | `~/.config/qt5ct`, `qt6ct` | Qt theming via qt5ct/qt6ct |
 | `starship/starship.toml` | `~/.config/starship.toml` | Prompt |

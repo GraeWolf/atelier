@@ -1,7 +1,7 @@
 #!/bin/sh
 # Atelier — nested system menu (Omarchy-inspired control hub)
 # UI: rofi -dmenu (same role as Omarchy's walker --dmenu).
-# Bind: Super+Alt+Space    CLI: atelier-menu [power|lock|capture|…]
+# Bind: Super+Alt+Space    CLI: atelier-menu [power|lock|capture|install|…]
 set -eu
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -118,6 +118,42 @@ show_session() {
 	esac
 }
 
+show_install() {
+	choice=$(
+		printf '%s\n' \
+			"Package" \
+			"Remove" \
+			"Update" \
+			| pick "Install"
+	)
+	case $choice in
+	"Package")
+		if have atelier-pkg; then
+			exec atelier-pkg install
+		fi
+		printf 'atelier-menu: atelier-pkg not found\n' >&2
+		exit 1
+		;;
+	"Remove")
+		if have atelier-pkg; then
+			exec atelier-pkg remove
+		fi
+		printf 'atelier-menu: atelier-pkg not found\n' >&2
+		exit 1
+		;;
+	"Update")
+		if have atelier-pkg; then
+			exec atelier-pkg update
+		fi
+		printf 'atelier-menu: atelier-pkg not found\n' >&2
+		exit 1
+		;;
+	*)
+		back_to show_main
+		;;
+	esac
+}
+
 show_main() {
 	choice=$(
 		printf '%s\n' \
@@ -126,6 +162,7 @@ show_main() {
 			"Displays" \
 			"Audio" \
 			"Network" \
+			"Install" \
 			"Capture" \
 			"Activity" \
 			"Scratchpad" \
@@ -166,6 +203,9 @@ go_to_menu() {
 		;;
 	network | wifi | *network*)
 		run_nmtui
+		;;
+	install | *install*)
+		show_install
 		;;
 	capture | screenshot | *capture*)
 		if have atelier-screenshot; then

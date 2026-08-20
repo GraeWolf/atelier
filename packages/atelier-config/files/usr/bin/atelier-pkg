@@ -1,0 +1,200 @@
+#!/bin/sh
+# Atelier — XBPS package helper (Omarchy pkg-install / pkg-remove analogue)
+# UI: fzf in a floating terminal (menu entry comes from atelier-menu → Install).
+# Usage: atelier-pkg install | remove | update
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+	printf 'Usage: atelier-pkg install | remove | update\n' >&2
+	exit 2
+}
+
+[ "$#" -ge 1 ] || usage
+mode=$1
+
+self=$0
+case $self in
+/*) ;;
+*)
+	self=$(command -v atelier-pkg 2>/dev/null || true)
+	if [ -z "$self" ] || [ ! -x "$self" ]; then
+		self=$(pwd)/$0
+	fi
+	;;
+esac
+
+pause_close() {
+	printf '\nPress Enter to close…'
+	# stdin may be closed in some launchers; ignore read failures
+	read -r _ || true
+}
+
+# Re-launch this script inside a floating terminal unless already floated.
+launch_float() {
+	if [ "${ATELIER_PKG_FLOAT:-0}" = 1 ]; then
+		return 0
+	fi
+
+	if have bspc; then
+		bspc rule -a XTerm:atelier-pkg -o state=floating center=on focus=on \
+			rectangle=1100x700+0+0 2>/dev/null || true
+		bspc rule -a com.mitchellh.ghostty -o state=floating center=on focus=on \
+			rectangle=1100x700+0+0 2>/dev/null || true
+		bspc rule -a ghostty -o state=floating center=on focus=on \
+			rectangle=1100x700+0+0 2>/dev/null || true
+	fi
+
+	title="atelier-pkg ${mode}"
+	if have xterm; then
+		exec xterm -name atelier-pkg -T "$title" -geometry 120x40 \
+			-fa "Fira Code" -fs 11 \
+			-bg "#1a1b26" -fg "#c0caf5" \
+			-e env ATELIER_PKG_FLOAT=1 "$self" "$mode"
+	fi
+	if have ghostty; then
+		if ghostty --help 2>&1 | grep -q -- '--title'; then
+			exec ghostty --title="$title" -e env ATELIER_PKG_FLOAT=1 "$self" "$mode"
+		fi
+		exec ghostty -e env ATELIER_PKG_FLOAT=1 "$self" "$mode"
+	fi
+
+	# No graphical terminal — run inline
+	export ATELIER_PKG_FLOAT=1
+	exec "$self" "$mode"
+}
+
+nvrs_to_names() {
+	# stdin: newline-separated name-version_rev → stdout: pkg names (one per line)
+	while IFS= read -r nvr || [ -n "${nvr:-}" ]; do
+		[ -n "${nvr:-}" ] || continue
+		xbps-uhelper getpkgname "$nvr" 2>/dev/null || true
+	done
+}
+
+run_install() {
+	have fzf || {
+		printf 'atelier-pkg: fzf is required\n' >&2
+		pause_close
+		exit 1
+	}
+	have xbps-query && have xbps-install && have xbps-uhelper || {
+		printf 'atelier-pkg: xbps tools are required\n' >&2
+		pause_close
+		exit 1
+	}
+
+	# Remote package list (~15k). Item = NVR; preview resolves pkgname.
+	pkg_nvrs=$(
+		xbps-query -Rs '.' | awk '{print $2}' | fzf \
+			--multi \
+			--prompt='Install > ' \
+			--preview 'xbps-query -R -S "$(xbps-uhelper getpkgname {})" 2>/dev/null' \
+			--preview-label='alt-p: toggle preview · tab: multi-select' \
+			--preview-label-pos=bottom \
+			--preview-window 'down:65%:wrap' \
+			--bind 'alt-p:toggle-preview' \
+			--bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up' \
+			--color 'pointer:green,marker:green' \
+			|| true
+	)
+
+	if [ -z "${pkg_nvrs:-}" ]; then
+		exit 0
+	fi
+
+	set --
+	while IFS= read -r name || [ -n "${name:-}" ]; do
+		[ -n "${name:-}" ] || continue
+		set -- "$@" "$name"
+	done <<EOF
+$(printf '%s\n' "$pkg_nvrs" | nvrs_to_names)
+EOF
+
+	if [ "$#" -eq 0 ]; then
+		printf 'atelier-pkg: could not resolve package names\n' >&2
+		pause_close
+		exit 1
+	fi
+
+	printf 'Installing: %s\n' "$*"
+	sudo xbps-install -S -y "$@"
+	pause_close
+}
+
+run_remove() {
+	have fzf || {
+		printf 'atelier-pkg: fzf is required\n' >&2
+		pause_close
+		exit 1
+	}
+	have xbps-query && have xbps-remove && have xbps-uhelper || {
+		printf 'atelier-pkg: xbps tools are required\n' >&2
+		pause_close
+		exit 1
+	}
+
+	# Manually installed packages only (Omarchy-style explicit list)
+	pkg_nvrs=$(
+		xbps-query -m | fzf \
+			--multi \
+			--prompt='Remove > ' \
+			--preview 'xbps-query -S "$(xbps-uhelper getpkgname {})" 2>/dev/null' \
+			--preview-label='alt-p: toggle preview · tab: multi-select' \
+			--preview-label-pos=bottom \
+			--preview-window 'down:65%:wrap' \
+			--bind 'alt-p:toggle-preview' \
+			--bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up' \
+			--color 'pointer:red,marker:red' \
+			|| true
+	)
+
+	if [ -z "${pkg_nvrs:-}" ]; then
+		exit 0
+	fi
+
+	set --
+	while IFS= read -r name || [ -n "${name:-}" ]; do
+		[ -n "${name:-}" ] || continue
+		set -- "$@" "$name"
+	done <<EOF
+$(printf '%s\n' "$pkg_nvrs" | nvrs_to_names)
+EOF
+
+	if [ "$#" -eq 0 ]; then
+		printf 'atelier-pkg: could not resolve package names\n' >&2
+		pause_close
+		exit 1
+	fi
+
+	printf 'Removing: %s\n' "$*"
+	sudo xbps-remove -R -y "$@"
+	pause_close
+}
+
+run_update() {
+	have xbps-install || {
+		printf 'atelier-pkg: xbps-install is required\n' >&2
+		pause_close
+		exit 1
+	}
+	printf 'Updating system packages (xbps-install -Su)…\n'
+	sudo xbps-install -Su
+	pause_close
+}
+
+case $mode in
+install | remove | update) ;;
+*)
+	usage
+	;;
+esac
+
+launch_float
+
+case $mode in
+install) run_install ;;
+remove) run_remove ;;
+update) run_update ;;
+esac

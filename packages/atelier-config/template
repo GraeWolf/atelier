@@ -2,7 +2,7 @@
 # Ships Tokyo Night bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.2.12
+version=0.2.13
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (Tokyo Night bspwm session)"
@@ -16,6 +16,7 @@ homepage="https://github.com/kmccuddy/atelier"
 # xrandr: multi-monitor layout helper (atelier-monitors).
 # maim/xclip: atelier-screenshot. brightnessctl: laptop brightness keys.
 # xprop: focused-window screenshots (usually pulled by X stack; keep explicit).
+# fzf: atelier-pkg Package/Remove pickers (Omarchy-style, Void XBPS).
 depends="
  atelier-base>=0
  yaru>=0
@@ -28,6 +29,7 @@ depends="
  xclip>=0
  brightnessctl>=0
  xprop>=0
+ fzf>=0
 "
 
 do_install() {
@@ -62,6 +64,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-scratchpad" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-btop" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-menu" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/share/doc/atelier/keybinds.txt" 644 \
 		usr/share/doc/atelier
 	vinstall "${FILESDIR}/etc/skel/.config/atelier/keybinds.txt" 644 \

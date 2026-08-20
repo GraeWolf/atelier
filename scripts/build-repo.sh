@@ -151,11 +151,27 @@ for pkg in $PACKAGE_ORDER; do
 done
 
 atelier_info "Indexing repository (unsigned)"
-# Force-add so re-runs replace same pkgver entries
+# Force-add so re-runs replace same pkgver entries.
+# Lexical glob order is not version order (e.g. 0.2.9 sorts after 0.2.13),
+# so re-add the versions from current templates last, then drop obsolete .xbps.
 for f in "$REPO_OUT"/*.xbps; do
 	[ -f "$f" ] || continue
 	xbps-rindex -f -a "$f"
 done
+for pkg in $PACKAGE_ORDER; do
+	_tpl="$PACKAGES_DIR/$pkg/template"
+	_pkgname=$(atelier_template_field "$_tpl" pkgname)
+	_version=$(atelier_template_field "$_tpl" version)
+	_revision=$(atelier_template_field "$_tpl" revision)
+	_xbps="$REPO_OUT/${_pkgname}-${_version}_${_revision}.noarch.xbps"
+	if [ -f "$_xbps" ]; then
+		xbps-rindex -f -a "$_xbps"
+	else
+		atelier_die "missing expected package file: $_xbps"
+	fi
+done
+atelier_info "Removing obsolete packages from repo/out"
+xbps-rindex --remove-obsoletes "$REPO_OUT"
 
 atelier_info "Repository packages:"
 xbps-query --repository="$REPO_OUT" -Rs atelier 2>/dev/null || \

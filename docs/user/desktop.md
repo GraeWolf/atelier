@@ -19,6 +19,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Displays | Multi-monitor wizard |
 | Audio | pavucontrol |
 | Network | Floating `nmtui` |
+| Install | XBPS Package / Remove / Update (`atelier-pkg`) |
 | Capture | Screenshot menu |
 | Activity | Floating btop |
 | Scratchpad | Toggle scratchpad |
@@ -26,7 +27,17 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Session | Reload sxhkd / restart bspwm |
 | About | Short Atelier blurb |
 
-CLI jump: `atelier-menu capture`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
+**Install** (Omarchy-style, Void XBPS):
+
+| Submenu | Action |
+|---------|--------|
+| Package | Floating terminal + **fzf** over available packages → `sudo xbps-install -S` (Tab multi-select; preview with alt-p) |
+| Remove | **fzf** over manually installed packages → `sudo xbps-remove -R` |
+| Update | `sudo xbps-install -Su` in a floating terminal |
+
+CLI: `atelier-pkg install`, `atelier-pkg remove`, `atelier-pkg update`.
+
+CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
 
 ### Launch & apps
 

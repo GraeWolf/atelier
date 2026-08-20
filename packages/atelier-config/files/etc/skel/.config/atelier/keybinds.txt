@@ -7,7 +7,7 @@
   Super+Shift+Enter    Terminal + neovim
   Super+Space          App launcher (rofi)  [primary]
   Super+d              App launcher (alias)
-  Super+Alt+Space      System menu (power, displays, capture, …)
+  Super+Alt+Space      System menu (power, install, displays, capture, …)
   Super+Shift+d        Run command (rofi)
   Super+Shift+F        File manager (nemo)  [primary]
   Super+e              File manager (alias)
