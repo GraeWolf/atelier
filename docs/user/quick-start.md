@@ -29,6 +29,7 @@ Details: [installer.md](installer.md).
 |--------|-----|
 | Open terminal | **Super+Enter** (ghostty) |
 | App launcher | **Super+Space** (rofi; Super+d also works) |
+| System menu | **Super+Alt+Space** (power, displays, capture, …) |
 | Run command | **Super+Shift+d** |
 | File manager | **Super+Shift+F** (nemo; Super+e also works) |
 | Lock screen | **Super+Shift+l** |

@@ -63,6 +63,7 @@ install -m 755 "$src/session/atelier-screenshot" "$dst/usr/bin/atelier-screensho
 install -m 755 "$src/session/atelier-power-menu" "$dst/usr/bin/atelier-power-menu"
 install -m 755 "$src/session/atelier-scratchpad" "$dst/usr/bin/atelier-scratchpad"
 install -m 755 "$src/session/atelier-btop"       "$dst/usr/bin/atelier-btop"
+install -m 755 "$src/session/atelier-menu"       "$dst/usr/bin/atelier-menu"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/etc/skel/.config/atelier/keybinds.txt"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"

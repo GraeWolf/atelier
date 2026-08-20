@@ -1,0 +1,228 @@
+#!/bin/sh
+# Atelier — nested system menu (Omarchy-inspired control hub)
+# UI: rofi -dmenu (same role as Omarchy's walker --dmenu).
+# Bind: Super+Alt+Space    CLI: atelier-menu [power|lock|capture|…]
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# When jumping straight to a submenu via CLI, Esc exits instead of returning
+BACK_TO_EXIT=0
+
+ensure_env() {
+	if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR}" ] || [ ! -w "${XDG_RUNTIME_DIR}" ]; then
+		if [ -d "/run/user/$(id -u)" ] && [ -w "/run/user/$(id -u)" ]; then
+			export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+		else
+			export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+			mkdir -p "$XDG_RUNTIME_DIR"
+			chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+		fi
+	fi
+	if [ -z "${DISPLAY:-}" ]; then
+		if [ -n "${XAUTHORITY:-}" ] || [ -f "$HOME/.Xauthority" ]; then
+			export DISPLAY="${DISPLAY:-:0}"
+		fi
+	fi
+}
+
+# Close an already-open dmenu rofi (second Super+Alt+Space = dismiss)
+toggle_existing() {
+	if pgrep -f 'rofi.*-dmenu' >/dev/null 2>&1; then
+		pkill -f 'rofi.*-dmenu' 2>/dev/null || true
+		exit 0
+	fi
+}
+
+# pick PROMPT and options on stdin (newline-separated). Prints selection or empty.
+pick() {
+	prompt=$1
+	have rofi || {
+		printf 'atelier-menu: rofi is required\n' >&2
+		exit 1
+	}
+	rofi -dmenu -i -p "$prompt" -format s || true
+}
+
+back_to() {
+	parent=$1
+	if [ "$BACK_TO_EXIT" -eq 1 ]; then
+		exit 0
+	fi
+	"$parent"
+}
+
+run_nmtui() {
+	script=""
+	for cand in \
+		"${XDG_CONFIG_HOME:-$HOME/.config}/polybar/nmtui-float.sh" \
+		"$HOME/.config/polybar/nmtui-float.sh"
+	do
+		if [ -x "$cand" ]; then
+			script=$cand
+			break
+		fi
+	done
+	if [ -n "$script" ]; then
+		exec "$script"
+	fi
+	if have nmtui; then
+		if have bspc && have xterm; then
+			bspc rule -a XTerm:atelier-nmtui -o state=floating center=on focus=on
+			exec xterm -name atelier-nmtui -T nmtui -geometry 100x35 -e nmtui
+		fi
+		exec nmtui
+	fi
+	printf 'atelier-menu: nmtui not found\n' >&2
+	exit 1
+}
+
+show_about() {
+	msg="Atelier Linux
+Tokyo Night · bspwm · sxhkd · rofi
+Void + XBPS
+
+System menu: Super+Alt+Space
+App launcher: Super+Space
+Keybinds: Super+k
+Power: Super+Ctrl+Escape
+
+Docs: ~/.config/atelier/ and docs/user/"
+	if have rofi; then
+		printf '%s\n' "$msg" | rofi -dmenu -p "About" -format s >/dev/null || true
+	elif have notify-send; then
+		notify-send "Atelier" "$msg" || true
+	else
+		printf '%s\n' "$msg"
+	fi
+	back_to show_main
+}
+
+show_session() {
+	choice=$(
+		printf '%s\n' \
+			"Reload sxhkd" \
+			"Restart bspwm" \
+			| pick "Session"
+	)
+	case $choice in
+	"Reload sxhkd")
+		pkill -USR1 -x sxhkd 2>/dev/null || true
+		;;
+	"Restart bspwm")
+		bspc wm -r 2>/dev/null || true
+		;;
+	*)
+		back_to show_main
+		;;
+	esac
+}
+
+show_main() {
+	choice=$(
+		printf '%s\n' \
+			"Power" \
+			"Lock" \
+			"Displays" \
+			"Audio" \
+			"Network" \
+			"Capture" \
+			"Activity" \
+			"Scratchpad" \
+			"Keybinds" \
+			"Session" \
+			"About" \
+			| pick "Atelier"
+	)
+	go_to_menu "$choice"
+}
+
+go_to_menu() {
+	# Match Omarchy-style: accept full label or short keyword
+	key=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+	case $key in
+	power | *power*)
+		if have atelier-power-menu; then
+			exec atelier-power-menu
+		fi
+		printf 'atelier-menu: atelier-power-menu not found\n' >&2
+		exit 1
+		;;
+	lock | *lock*)
+		if have atelier-lock; then
+			exec atelier-lock
+		fi
+		exec xsecurelock
+		;;
+	displays | display | monitors | *display*)
+		if have atelier-monitors; then
+			exec atelier-monitors setup
+		fi
+		printf 'atelier-menu: atelier-monitors not found\n' >&2
+		exit 1
+		;;
+	audio | *audio*)
+		exec pavucontrol
+		;;
+	network | wifi | *network*)
+		run_nmtui
+		;;
+	capture | screenshot | *capture*)
+		if have atelier-screenshot; then
+			exec atelier-screenshot menu
+		fi
+		printf 'atelier-menu: atelier-screenshot not found\n' >&2
+		exit 1
+		;;
+	activity | btop | *activity*)
+		if have atelier-btop; then
+			exec atelier-btop
+		fi
+		exec btop
+		;;
+	scratchpad | scratch | *scratch*)
+		if have atelier-scratchpad; then
+			exec atelier-scratchpad toggle
+		fi
+		exit 1
+		;;
+	keybinds | keys | *keybind*)
+		if have atelier-keybinds; then
+			exec atelier-keybinds
+		fi
+		exit 1
+		;;
+	session | *session*)
+		show_session
+		;;
+	about | *about*)
+		show_about
+		;;
+	"")
+		# Esc on main menu → quit quietly
+		exit 0
+		;;
+	*)
+		if [ "$BACK_TO_EXIT" -eq 1 ]; then
+			printf 'atelier-menu: unknown submenu: %s\n' "$1" >&2
+			exit 1
+		fi
+		show_main
+		;;
+	esac
+}
+
+ensure_env
+have rofi || {
+	printf 'atelier-menu: rofi is required\n' >&2
+	exit 1
+}
+
+toggle_existing
+
+if [ "$#" -gt 0 ]; then
+	BACK_TO_EXIT=1
+	go_to_menu "$1"
+else
+	show_main
+fi

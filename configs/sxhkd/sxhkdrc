@@ -12,6 +12,10 @@ super + Return
 super + space
 	atelier-rofi drun
 
+# System control menu (Omarchy-like Super+Alt+Space)
+super + alt + space
+	atelier-menu
+
 super + d
 	atelier-rofi drun
 

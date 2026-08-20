@@ -6,7 +6,27 @@ Modifier key: **Super** (Windows / Command key).
 
 ## Essential keybindings
 
-Several chords are **Omarchy-inspired** (launcher on Super+Space, scratchpad, screenshots without a Print key, power menu) but adapted for **bspwm + X11**.
+Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on Super+Alt+Space, scratchpad, screenshots without a Print key, power menu) but adapted for **bspwm + X11**.
+
+## System menu
+
+**Super+Alt+Space** opens `atelier-menu` — a nested **rofi** control hub (same idea as Omarchy’s `omarchy-menu` + Walker, without Wayland/Quickshell).
+
+| Entry | Action |
+|-------|--------|
+| Power | Same as Super+Ctrl+Escape (`atelier-power-menu`) |
+| Lock | `atelier-lock` |
+| Displays | Multi-monitor wizard |
+| Audio | pavucontrol |
+| Network | Floating `nmtui` |
+| Capture | Screenshot menu |
+| Activity | Floating btop |
+| Scratchpad | Toggle scratchpad |
+| Keybinds | Cheat sheet |
+| Session | Reload sxhkd / restart bspwm |
+| About | Short Atelier blurb |
+
+CLI jump: `atelier-menu capture`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
 
 ### Launch & apps
 
@@ -16,6 +36,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, scratchpad, sc
 | Super+Shift+Enter | Terminal with neovim |
 | Super+Space | Application launcher (rofi; primary) |
 | Super+d | Application launcher (alias) |
+| Super+Alt+Space | System menu (nested rofi: power, displays, capture, …) |
 | Super+Shift+d | Run command (rofi) |
 | Super+Shift+F | File manager (nemo; primary) |
 | Super+e | File manager (alias) |
