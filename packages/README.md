@@ -30,7 +30,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | Package | Type | Role |
 |---------|------|------|
 | `atelier-base` | metapackage | Fonts (FiraCode, Nerd Symbols) + xinit/xsetroot/xrdb |
-| `atelier-config` | files | Tokyo Night session configs → `/etc/skel` + xsessions |
+| `atelier-config` | files | Themed session configs + `atelier-theme` → `/etc/skel` + xsessions |
 | `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + PipeWire audio + `atelier-config` |
 | `atelier-installer` | files | `atelier-install` GUI + desktop entry |
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |

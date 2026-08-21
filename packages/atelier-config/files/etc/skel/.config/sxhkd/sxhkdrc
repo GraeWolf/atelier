@@ -16,6 +16,10 @@ super + space
 super + alt + space
 	atelier-menu
 
+# Theme picker (Omarchy-like Super+Ctrl+Shift+Space)
+super + ctrl + shift + space
+	atelier-menu theme
+
 super + d
 	atelier-rofi drun
 

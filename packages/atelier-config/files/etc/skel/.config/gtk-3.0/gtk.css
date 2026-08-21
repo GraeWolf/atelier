@@ -1,21 +1,11 @@
-/* Atelier — GTK3 color overrides (Tokyo Night on Yaru-dark)
+/* Atelier — GTK3 color overrides (Yaru-dark + atelier-theme palette)
  *
  * Yaru-dark is the real theme package (Void: yaru). This file only nudges
- * colors toward Tokyo Night and keeps contrast readable in sidebars,
- * file choosers, and views. Always set both background-color and color.
+ * colors and keeps contrast readable in sidebars, file choosers, and views.
+ * Palette variables come from atelier-colors.css (symlink to current theme).
  */
 
-@define-color atelier_bg #1a1b26;
-@define-color atelier_bg_alt #292e42;
-@define-color atelier_bg_deep #16161e;
-@define-color atelier_fg #c0caf5;
-@define-color atelier_fg_dim #a9b1d6;
-@define-color atelier_blue #7aa2f7;
-@define-color atelier_magenta #bb9af7;
-@define-color atelier_red #f7768e;
-@define-color atelier_green #9ece6a;
-@define-color atelier_comment #565f89;
-@define-color atelier_border #3b4261;
+@import url("atelier-colors.css");
 
 /* --- Windows & chrome ---------------------------------------------------- */
 

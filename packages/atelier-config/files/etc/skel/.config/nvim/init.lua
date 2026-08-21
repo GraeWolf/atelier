@@ -6,5 +6,10 @@ require("pack")
 require("treesitter")
 require("lsp")
 
-vim.cmd.colorscheme("tokyonight-night")
+local theme = vim.fn.expand("~/.config/atelier/current/nvim.lua")
+if vim.fn.filereadable(theme) == 1 then
+	dofile(theme)
+else
+	pcall(vim.cmd.colorscheme, "tokyonight-night")
+end
 

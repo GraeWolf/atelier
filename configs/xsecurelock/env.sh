@@ -17,10 +17,17 @@ export XSECURELOCK_SHOW_KEYBOARD_LAYOUT=1
 # "INCOMPATIBLE COMPOSITOR, PLEASE FIX!" flash on unlock. Disable it.
 export XSECURELOCK_COMPOSITE_OBSCURER=0
 
-# Tokyo Night-ish auth dialog
-export XSECURELOCK_AUTH_BACKGROUND_COLOR="#1a1b26"
-export XSECURELOCK_AUTH_FOREGROUND_COLOR="#c0caf5"
-export XSECURELOCK_BACKGROUND_COLOR="#16161e"
+# Palette from atelier-theme (fallback Tokyo Night)
+_atelier_lock="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/xsecurelock-colors.sh"
+if [ -f "$_atelier_lock" ]; then
+	# shellcheck source=/dev/null
+	. "$_atelier_lock"
+else
+	export XSECURELOCK_AUTH_BACKGROUND_COLOR="#1a1b26"
+	export XSECURELOCK_AUTH_FOREGROUND_COLOR="#c0caf5"
+	export XSECURELOCK_BACKGROUND_COLOR="#16161e"
+fi
+unset _atelier_lock
 
 # Dimmer (xss-lock -n) timings when supported
 export XSECURELOCK_DIM_TIME_MS="${XSECURELOCK_DIM_TIME_MS:-2000}"

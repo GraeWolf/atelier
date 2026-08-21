@@ -8,7 +8,7 @@ Phase 1 (MVP) is split into small, reviewable steps.
 |------|------|--------|
 | 0 | Repository scaffolding | Complete |
 | 1 | Package lists & base metapackages | Complete |
-| 2 | Desktop config packages (Tokyo Night) | Complete |
+| 2 | Desktop config packages (theme engine) | Complete (Tokyo Night default; switchable palettes) |
 | 3 | Local personal XBPS repository | Complete |
 | 4 | First bootable live ISO | Complete |
 | 5 | Custom simple GUI installer | Complete |
@@ -24,7 +24,7 @@ Directory layout, docs stubs, README layout overview.
 Declarative package lists from `PLAN.md`; `atelier-base` / `atelier-desktop`; source notes.
 
 ### Step 2 — Desktop config packages
-Tokyo Night bspwm stack configs shipped as `atelier-config`.
+Themed bspwm stack configs shipped as `atelier-config` (`atelier-theme`; Tokyo Night default).
 
 ### Step 3 — Local personal XBPS repository
 `scripts/build-repo.sh` → `repo/out/`. Public extras (brave-origin, etc.) via GraeWolf/void-repo + `atelier-void-repo`.
@@ -49,7 +49,7 @@ User guides + end-to-end build docs; README status updated.
 | NVIDIA proprietary support | nonfree + `atelier-nvidia` + setup/installer |
 | Personal extra repository | `repo/out`, embedded on ISO |
 | Fully themed bspwm desktop | `atelier-desktop` + `atelier-config` |
-| Consistent Tokyo Night theming | configs across stack |
+| Consistent theming (Tokyo Night default) | `atelier-theme` + configs across stack |
 | Basic user + detailed build docs | `docs/user/`, `docs/build/` |
 
 **Resolved:** public package hosting and brave-origin via [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) (`atelier-void-repo` on live/ISO).

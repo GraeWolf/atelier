@@ -15,6 +15,6 @@ Guides for people **using** Atelier (live session or installed system).
 
 - Extreme minimalism  
 - Clarity over cleverness  
-- Opinionated Tokyo Night desktop that stays editable  
+- Opinionated themed desktop (Tokyo Night default) that stays editable  
 
 For builders and packaging, see [../build/README.md](../build/README.md) and [PLAN.md](../../PLAN.md).

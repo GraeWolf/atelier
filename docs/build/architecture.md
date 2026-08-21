@@ -12,7 +12,7 @@ This document records the technical choices locked for the Phase 1 MVP.
 | Display server | Xlibre (external repo) | Fallback: X.Org on live/VM |
 | Window manager | bspwm | Single fixed setup |
 | Primary hardware | Desktop PC | NVIDIA proprietary (Void nonfree) |
-| Theming | Tokyo Night (dark) | GTK, Qt, terminals, TUIs, rofi, polybar, etc. |
+| Theming | Tokyo Night default + `atelier-theme` | Named palettes (Nord, Catppuccin Mocha, …); one wallpaper recolored with gowall |
 
 ## ISO and installer
 

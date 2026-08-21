@@ -77,10 +77,103 @@ run_nmtui() {
 	exit 1
 }
 
+pick_image() {
+	prompt=$1
+	pics="${XDG_PICTURES_DIR:-$HOME/Pictures}"
+	list=$(
+		{
+			[ -d "$pics" ] && find "$pics" -maxdepth 3 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) 2>/dev/null
+			[ -f /usr/share/atelier/wallpaper.png ] && printf '%s\n' /usr/share/atelier/wallpaper.png
+		} | sort
+	)
+	if [ -z "$list" ]; then
+		printf 'atelier-menu: no images in %s\n' "$pics" >&2
+		back_to show_style
+		return
+	fi
+	printf '%s\n' "$list" | pick "$prompt"
+}
+
+show_theme() {
+	have atelier-theme || {
+		printf 'atelier-menu: atelier-theme not found\n' >&2
+		exit 1
+	}
+	choice=$(atelier-theme list | awk -F '\t' '{
+		mark = ($2 ~ / \*$/) ? "* " : "  "
+		name = $2
+		sub(/ \*$/, "", name)
+		printf "%s%s  (%s)\n", mark, name, $1
+	}' | pick "Theme")
+	[ -n "$choice" ] || {
+		back_to show_style
+		return
+	}
+	slug=$(printf '%s' "$choice" | sed 's/.*(\([^)]*\))$/\1/')
+	[ -n "$slug" ] || {
+		back_to show_style
+		return
+	}
+	atelier-theme set "$slug"
+}
+
+show_from_wallpaper() {
+	have atelier-theme || {
+		printf 'atelier-menu: atelier-theme not found\n' >&2
+		exit 1
+	}
+	img=$(pick_image "From wallpaper")
+	[ -n "$img" ] || {
+		back_to show_style
+		return
+	}
+	base=$(basename "$img")
+	name=${base%.*}
+	atelier-theme from-wallpaper "$img" --name "$name"
+}
+
+show_wallpaper_source() {
+	have atelier-theme || {
+		printf 'atelier-menu: atelier-theme not found\n' >&2
+		exit 1
+	}
+	img=$(pick_image "Wallpaper source")
+	[ -n "$img" ] || {
+		back_to show_style
+		return
+	}
+	atelier-theme wallpaper "$img"
+}
+
+show_style() {
+	choice=$(
+		printf '%s\n' \
+			"Theme" \
+			"From wallpaper" \
+			"Wallpaper source" \
+			| pick "Style"
+	)
+	case $choice in
+	"Theme")
+		show_theme
+		;;
+	"From wallpaper")
+		show_from_wallpaper
+		;;
+	"Wallpaper source")
+		show_wallpaper_source
+		;;
+	*)
+		back_to show_main
+		;;
+	esac
+}
+
 show_about() {
 	msg="Atelier Linux
-Tokyo Night · bspwm · sxhkd · rofi
+bspwm · sxhkd · rofi
 Void + XBPS
+Default theme: Tokyo Night
 
 System menu: Super+Alt+Space
 App launcher: Super+Space
@@ -167,6 +260,7 @@ show_main() {
 			"Activity" \
 			"Scratchpad" \
 			"Keybinds" \
+			"Style" \
 			"Session" \
 			"About" \
 			| pick "Atelier"
@@ -231,6 +325,16 @@ go_to_menu() {
 			exec atelier-keybinds
 		fi
 		exit 1
+		;;
+	style | theme | *style*)
+		case $key in
+		theme)
+			show_theme
+			;;
+		*)
+			show_style
+			;;
+		esac
 		;;
 	session | *session*)
 		show_session

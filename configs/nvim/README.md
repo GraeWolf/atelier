@@ -15,7 +15,7 @@ Synced into this tree for distro packaging (`atelier-config` → `/etc/skel/.con
 
 | File | Role |
 |------|------|
-| `init.lua` | Entry + Tokyo Night |
+| `init.lua` | Entry + `atelier-theme` / Tokyo Night fallback |
 | `lua/options.lua` | Options |
 | `lua/keymaps.lua` | Keymaps (leader = Space) |
 | `lua/pack.lua` | Plugins + mini.* |

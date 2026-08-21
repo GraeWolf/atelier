@@ -1,6 +1,6 @@
 # Quick start
 
-Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm desktop (Tokyo Night).
+Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm desktop (Tokyo Night by default).
 
 ## First boot (installed system)
 
@@ -11,7 +11,7 @@ Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm
    startx
    ```
 
-3. You should see bspwm with polybar (Tokyo Night colors) and the nord wallpaper.
+3. You should see bspwm with polybar (Tokyo Night colors) and the stock wallpaper tinted to match. Switch palettes from **Super+Alt+Space → Style**, or **Super+Ctrl+Shift+Space**.
 
 ### Live medium
 
@@ -29,7 +29,8 @@ Details: [installer.md](installer.md).
 |--------|-----|
 | Open terminal | **Super+Enter** (ghostty) |
 | App launcher | **Super+Space** (rofi; Super+d also works) |
-| System menu | **Super+Alt+Space** (power, displays, capture, …) |
+| System menu | **Super+Alt+Space** (power, style, displays, capture, …) |
+| Theme picker | **Super+Ctrl+Shift+Space** |
 | Run command | **Super+Shift+d** |
 | File manager | **Super+Shift+F** (nemo; Super+e also works) |
 | Lock screen | **Super+Shift+l** |

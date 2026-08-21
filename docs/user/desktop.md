@@ -25,6 +25,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Scratchpad | Toggle scratchpad |
 | Keybinds | Cheat sheet |
 | Session | Reload sxhkd / restart bspwm |
+| Style | Theme / From wallpaper / Wallpaper source (`atelier-theme`) |
 | About | Short Atelier blurb |
 
 **Install** (Omarchy-style, Void XBPS):
@@ -47,7 +48,8 @@ CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, 
 | Super+Shift+Enter | Terminal with neovim |
 | Super+Space | Application launcher (rofi; primary) |
 | Super+d | Application launcher (alias) |
-| Super+Alt+Space | System menu (nested rofi: power, displays, capture, …) |
+| Super+Alt+Space | System menu (nested rofi: power, style, displays, capture, …) |
+| Super+Ctrl+Shift+Space | Theme picker |
 | Super+Shift+d | Run command (rofi) |
 | Super+Shift+F | File manager (nemo; primary) |
 | Super+e | File manager (alias) |
@@ -243,4 +245,4 @@ Log: `~/.cache/atelier/monitors.log`
 
 - Focus follows the mouse pointer (`focus_follows_pointer` in bspwm).
 - Keep configs simple — Atelier prefers clarity over heavy automation.
-- Theme colors: Tokyo Night dark (see customization guide).
+- Theme: `atelier-theme` (default Tokyo Night; see customization guide).

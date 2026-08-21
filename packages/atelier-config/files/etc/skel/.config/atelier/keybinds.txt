@@ -7,7 +7,8 @@
   Super+Shift+Enter    Terminal + neovim
   Super+Space          App launcher (rofi)  [primary]
   Super+d              App launcher (alias)
-  Super+Alt+Space      System menu (power, install, displays, capture, …)
+  Super+Alt+Space      System menu (power, style, install, displays, …)
+  Super+Ctrl+Shift+Space  Theme picker
   Super+Shift+d        Run command (rofi)
   Super+Shift+F        File manager (nemo)  [primary]
   Super+e              File manager (alias)
@@ -61,5 +62,5 @@
  ── Notes ─────────────────────────────────────────────────────────────────
   Full map:  ~/.config/sxhkd/sxhkdrc
   Desktop:   docs/user/desktop.md (on the website / package docs)
-  Theme:     Tokyo Night · bspwm
+  Theme:     atelier-theme (default Tokyo Night) · bspwm
   Inspired in part by Omarchy hotkeys, adapted for X11/bspwm.

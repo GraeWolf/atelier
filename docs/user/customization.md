@@ -21,7 +21,74 @@ Atelier is opinionated but meant to stay **easy to understand and modify**. Pref
 
 Defaults are installed from **`atelier-config`** into `/etc/skel` for new users. Your home directory copies are yours to edit.
 
-### GTK theme (Yaru-dark + Tokyo Night)
+## Themes
+
+Switch the whole desktop palette (terminals, GTK, Qt, polybar, rofi, neovim, btop, starship, lock screen) and recolor the stock wallpaper:
+
+```bash
+atelier-theme list
+atelier-theme set tokyo-night    # default
+atelier-theme set nord
+atelier-theme set catppuccin-mocha
+```
+
+Or **Super+Alt+Space → Style → Theme** (direct: **Super+Ctrl+Shift+Space**).
+
+Build a palette from an image (does **not** replace the wallpaper photo; it recolors the stock image):
+
+```bash
+atelier-theme from-wallpaper ~/Pictures/foo.jpg --name foo
+```
+
+Use a different photo as the recolor source:
+
+```bash
+atelier-theme wallpaper ~/Pictures/bar.png
+```
+
+Hand-made themes: copy a directory from `/usr/share/atelier/themes/` to `~/.config/atelier/themes/<name>/` and edit `colors.conf`. Template overrides: `~/.config/atelier/templates/*.tpl`.
+
+Existing accounts created before the theme engine need the new skel includes (or a recopy of the listed configs from `/etc/skel`) plus one `atelier-theme set tokyo-night`.
+
+### Apply on a running install (this machine)
+
+From the git clone, after `./scripts/build-repo.sh`:
+
+```bash
+# 1. Official Void extras the engine uses
+sudo xbps-install -S gowall matugen
+
+# 2. New Atelier packages from the local repo
+sudo xbps-install --repository=$PWD/repo/out -u atelier-config atelier-desktop
+
+# 3. Existing home copies do not update with the package. Recopy the
+#    files the engine now includes (back up first if you edited them):
+for f in \
+  .xinitrc \
+  .config/bspwm/bspwmrc \
+  .config/sxhkd/sxhkdrc \
+  .config/polybar/config.ini \
+  .config/polybar/net-status.sh \
+  .config/ghostty/config \
+  .config/rofi/config.rasi \
+  .config/gtk-3.0/gtk.css \
+  .config/gtk-4.0/gtk.css \
+  .config/nvim/init.lua \
+  .config/btop/btop.conf \
+  .config/qt5ct/qt5ct.conf \
+  .config/qt6ct/qt6ct.conf \
+  .config/xsecurelock/env.sh
+do
+  cp -a "/etc/skel/$f" "$HOME/$f"
+done
+
+# 4. Generate ~/.config/atelier/current/ and recolor the wallpaper
+atelier-theme set tokyo-night
+```
+
+Then Super+Escape (reload sxhkd) or log out and `startx` again. Theme picker: Super+Ctrl+Shift+Space.
+
+### GTK theme (Yaru-dark + palette overlay)
 
 Void does not ship an Adwaita-dark theme package. Atelier uses:
 
@@ -49,7 +116,7 @@ cp -a /etc/skel/.config/gtk-4.0 ~/.config/
 
 In the Git repository, edit `configs/` and rebuild packages — do not treat a single machine as the only copy.
 
-## Tokyo Night palette (reference)
+## Tokyo Night palette (default)
 
 | Role | Hex |
 |------|-----|
@@ -63,31 +130,27 @@ In the Git repository, edit `configs/` and rebuild packages — do not treat a s
 | Cyan | `#7dcfff` |
 | Comment | `#565f89` |
 
-Also documented in `/usr/share/doc/atelier/tokyo-night-palette.conf` when `atelier-config` is installed.
+Live file: `/usr/share/atelier/themes/tokyo-night/colors.conf`. Also copied to `/usr/share/doc/atelier/tokyo-night-palette.conf`.
 
 ## Wallpaper
 
-Default background: **nord.png** via `feh`.
+One stock image (`/usr/share/atelier/wallpaper.png`) is **recolored** to the active palette (`gowall`) into `~/.config/atelier/current/wallpaper.png`.
 
 ```bash
-# shipped paths
-ls /usr/share/atelier/wallpapers/
+# change which photo is recolored (keeps the current colorscheme)
+atelier-theme wallpaper ~/Pictures/my.png
 
-# switch to the alternate
-feh --no-fehbg --bg-fill /usr/share/atelier/wallpapers/catppuccin-mocha.png
-
-# persist for your user session (bspwmrc reads ATELIER_WALLPAPER if set, else nord)
-# or edit ~/.config/bspwm/bspwmrc WALL= line / export ATELIER_WALLPAPER in ~/.xinitrc
+# override source without the helper (then re-apply the theme)
+cp ~/Pictures/my.png ~/.config/atelier/wallpaper.png
+atelier-theme set "$(atelier-theme current)"
 ```
-
-To publish a new default for everyone, put the image in repo `configs/wallpapers/`, set `nord.png` (or change bspwmrc), rebuild packages/ISO.
 
 ## Safe first edits
 
 1. **Keybindings** — edit `~/.config/sxhkd/sxhkdrc`, then Super+Escape to reload.
 2. **Bar modules** — edit `~/.config/polybar/config.ini`, re-login or re-run launch script.
 3. **Terminal colors/font** — `~/.config/ghostty/config`.
-4. **Wallpaper** — set with a tool of your choice in `bspwmrc` (feh is not required by PLAN; add only if you want it).
+4. **Wallpaper source** — `atelier-theme wallpaper` or Style → Wallpaper source.
 
 ## Fonts
 

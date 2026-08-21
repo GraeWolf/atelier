@@ -8,6 +8,12 @@ ICON_ETH='󰈀'    # nf-md-ethernet
 ICON_DOWN='󰈂'   # nf-md-ethernet-off
 COLOR_UP='#9ece6a'
 COLOR_DOWN='#f7768e'
+_sc="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/shell-colors.sh"
+if [ -f "$_sc" ]; then
+	# shellcheck source=/dev/null
+	. "$_sc"
+fi
+unset _sc
 
 iface=""
 # Prefer default IPv4 route device

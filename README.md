@@ -9,7 +9,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 - Extreme minimalism
 - Simplicity and clarity over features
 - Opinionated but easy to understand and modify
-- Clean, elegant aesthetics (Tokyo Night dark theme applied consistently)
+- Clean, elegant aesthetics (Tokyo Night default; switchable palettes via `atelier-theme`)
 
 ## Current status
 
@@ -20,7 +20,7 @@ What that means in-tree:
 - Bootable live ISO build path (void-mklive wrappers)
 - Whole-disk installer (`atelier-install`: TUI default; live boots to TTY)
 - Personal XBPS repository build and ISO integration
-- Tokyo Night themed bspwm desktop packages
+- Themed bspwm desktop packages (Tokyo Night default)
 - Proprietary NVIDIA + optional Xlibre setup path
 - User documentation and detailed build documentation
 
@@ -78,7 +78,7 @@ atelier/
 | GPU | NVIDIA proprietary (Void nonfree) on primary desktop |
 | Configs | XBPS packages from `configs/` |
 | Personal repo | Local/build-time first; publish-ready layout |
-| Theme | Tokyo Night dark |
+| Theme | Tokyo Night dark (default); `atelier-theme` |
 
 ## Development
 

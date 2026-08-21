@@ -1,0 +1,712 @@
+#!/bin/sh
+# Atelier — theme engine (named palettes + wallpaper recolor)
+# Usage: atelier-theme list|current|set <name>|from-wallpaper <img> [--name N] [--mode dark|light]
+#        atelier-theme save <name>|wallpaper <path>
+set -eu
+
+SHARE="${ATELIER_SHARE:-/usr/share/atelier}"
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/atelier"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/atelier"
+CURRENT="$CFG/current"
+NEXT="$CFG/current.next"
+THEMES_USER="$CFG/themes"
+THEMES_SYS="$SHARE/themes"
+TEMPLATES_USER="$CFG/templates"
+TEMPLATES_SYS="$SHARE/templates"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+	printf 'Usage: atelier-theme list|current|set <name>|save <name>|wallpaper <path>\n' >&2
+	printf '       atelier-theme from-wallpaper <image> [--name <name>] [--mode dark|light]\n' >&2
+	exit 2
+}
+
+slugify() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//'
+}
+
+read_sidecar() {
+	# read_sidecar file default
+	if [ -f "$1" ]; then
+		# first non-comment, non-empty line
+		sed -n '/^[[:space:]]*#/d;/^[[:space:]]*$/d;p' "$1" | sed -n '1p'
+	else
+		printf '%s' "$2"
+	fi
+}
+
+theme_slug_from_dir() {
+	basename "$1"
+}
+
+theme_dirs() {
+	# print existing theme directories (user overrides system by slug later)
+	if [ -d "$THEMES_USER" ]; then
+		find "$THEMES_USER" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true
+	fi
+	if [ -d "$THEMES_SYS" ]; then
+		find "$THEMES_SYS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true
+	fi
+}
+
+find_theme_dir() {
+	slug=$1
+	if [ -f "$THEMES_USER/$slug/colors.conf" ]; then
+		printf '%s' "$THEMES_USER/$slug"
+		return 0
+	fi
+	if [ -f "$THEMES_SYS/$slug/colors.conf" ]; then
+		printf '%s' "$THEMES_SYS/$slug"
+		return 0
+	fi
+	return 1
+}
+
+cmd_list() {
+	seen=" "
+	theme_dirs | while IFS= read -r dir || [ -n "${dir:-}" ]; do
+		[ -n "${dir:-}" ] || continue
+		[ -f "$dir/colors.conf" ] || continue
+		slug=$(theme_slug_from_dir "$dir")
+		case $seen in
+		*" $slug "*) continue ;;
+		esac
+		seen="$seen$slug "
+		disp=$(sed -n 's/^name=//p' "$dir/colors.conf" | sed -n '1p')
+		[ -n "$disp" ] || disp=$slug
+		mark=""
+		if [ -f "$CURRENT/theme.name" ] && [ "$(cat "$CURRENT/theme.name")" = "$slug" ]; then
+			mark=" *"
+		fi
+		printf '%s\t%s%s\n' "$slug" "$disp" "$mark"
+	done | sort -u
+}
+
+cmd_current() {
+	if [ -f "$CURRENT/theme.name" ]; then
+		cat "$CURRENT/theme.name"
+		return 0
+	fi
+	printf 'tokyo-night\n'
+}
+
+palette_defaults() {
+	printf '%s\n' \
+		"name='Theme'" \
+		"mode='dark'" \
+		"background='#1a1b26'" \
+		"background_alt='#292e42'" \
+		"background_deep='#16161e'" \
+		"foreground='#c0caf5'" \
+		"foreground_dim='#a9b1d6'" \
+		"comment='#565f89'" \
+		"border='#3b4261'" \
+		"accent='#7aa2f7'" \
+		"red='#f7768e'" \
+		"green='#9ece6a'" \
+		"yellow='#e0af68'" \
+		"blue='#7aa2f7'" \
+		"magenta='#bb9af7'" \
+		"cyan='#7dcfff'" \
+		"orange='#ff9e64'" \
+		"cursor='#c0caf5'" \
+		"selection_background='#33467c'" \
+		"selection_foreground='#c0caf5'" \
+		"color0='#15161e'" \
+		"color1='#f7768e'" \
+		"color2='#9ece6a'" \
+		"color3='#e0af68'" \
+		"color4='#7aa2f7'" \
+		"color5='#bb9af7'" \
+		"color6='#7dcfff'" \
+		"color7='#a9b1d6'" \
+		"color8='#414868'" \
+		"color9='#f7768e'" \
+		"color10='#9ece6a'" \
+		"color11='#e0af68'" \
+		"color12='#7aa2f7'" \
+		"color13='#bb9af7'" \
+		"color14='#7dcfff'" \
+		"color15='#c0caf5'"
+}
+
+# Parse colors.conf into KEY='value' lines (sourceable). Last assignment wins.
+parse_colors() {
+	conf=$1
+	[ -f "$conf" ] || return 1
+	while IFS= read -r line || [ -n "${line:-}" ]; do
+		case $line in
+		'' | \#*) continue ;;
+		esac
+		# strip inline comments that start with space+#
+		case $line in
+		*' #'*) line=${line%% \#*} ;;
+		esac
+		case $line in
+		*=*) ;;
+		*) continue ;;
+		esac
+		key=${line%%=*}
+		val=${line#*=}
+		key=$(printf '%s' "$key" | tr -d ' \t"'"'")
+		val=$(printf '%s' "$val" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		val=${val#\"}
+		val=${val%\"}
+		val=${val#\'}
+		val=${val%\'}
+		# skip empty keys; quote value for POSIX source
+		[ -n "$key" ] || continue
+		printf "%s='%s'\n" "$key" "$(printf '%s' "$val" | sed "s/'/'\\\\''/g")"
+	done <"$conf"
+}
+
+hex_to_rgb() {
+	hex=${1#\#}
+	r=$(printf '%s' "$hex" | cut -c1-2)
+	g=$(printf '%s' "$hex" | cut -c3-4)
+	b=$(printf '%s' "$hex" | cut -c5-6)
+	printf '%d,%d,%d' "0x$r" "0x$g" "0x$b"
+}
+
+# Build a sed script from sourced palette.env
+write_sed_script() {
+	envfile=$1
+	sedfile=$2
+	: >"$sedfile"
+	# shellcheck disable=SC1090
+	set -a
+	# shellcheck source=/dev/null
+	. "$envfile"
+	set +a
+	# Iterate known keys plus extras from envfile
+	keys=$(sed -n "s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p" "$envfile")
+	for key in $keys; do
+		eval "val=\${$key-}"
+		# Escape sed replacement: \, &, |
+		esc=$(printf '%s' "$val" | sed -e 's/[\\|&]/\\&/g')
+		printf 's|{{ %s }}|%s|g\n' "$key" "$esc" >>"$sedfile"
+		strip=${val#\#}
+		esc_s=$(printf '%s' "$strip" | sed -e 's/[\\|&]/\\&/g')
+		printf 's|{{ %s_strip }}|%s|g\n' "$key" "$esc_s" >>"$sedfile"
+		case $val in
+		\#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
+			rgb=$(hex_to_rgb "$val")
+			printf 's|{{ %s_rgb }}|%s|g\n' "$key" "$rgb" >>"$sedfile"
+			;;
+		esac
+	done
+}
+
+render_templates() {
+	sedfile=$1
+	outdir=$2
+	# User templates first, then shipped (do not overwrite existing)
+	for dir in "$TEMPLATES_USER" "$TEMPLATES_SYS"; do
+		[ -d "$dir" ] || continue
+		for tpl in "$dir"/*.tpl; do
+			[ -f "$tpl" ] || continue
+			base=$(basename "$tpl" .tpl)
+			out="$outdir/$base"
+			if [ -f "$out" ]; then
+				continue
+			fi
+			sed -f "$sedfile" "$tpl" >"$out"
+		done
+	done
+}
+
+write_nvim_lua() {
+	outdir=$1
+	envfile=$2
+	scheme_file=$outdir/nvim.colorscheme
+	if [ -f "$scheme_file" ]; then
+		scheme=$(read_sidecar "$scheme_file" "tokyonight-night")
+		printf 'pcall(vim.cmd.colorscheme, "%s")\n' "$scheme" >"$outdir/nvim.lua"
+		return
+	fi
+	# shellcheck disable=SC1090
+	set -a
+	# shellcheck source=/dev/null
+	. "$envfile"
+	set +a
+	cat >"$outdir/nvim.lua" <<EOF
+local ok, base16 = pcall(require, "mini.base16")
+if not ok then
+	return
+end
+base16.setup({
+	palette = {
+		base00 = "${background}",
+		base01 = "${background_alt}",
+		base02 = "${border}",
+		base03 = "${comment}",
+		base04 = "${foreground_dim}",
+		base05 = "${foreground}",
+		base06 = "${color7}",
+		base07 = "${color15}",
+		base08 = "${red}",
+		base09 = "${orange}",
+		base0A = "${yellow}",
+		base0B = "${green}",
+		base0C = "${cyan}",
+		base0D = "${blue}",
+		base0E = "${magenta}",
+		base0F = "${color8}",
+	},
+})
+EOF
+}
+
+write_gowall_json() {
+	outdir=$1
+	envfile=$2
+	# shellcheck disable=SC1090
+	set -a
+	# shellcheck source=/dev/null
+	. "$envfile"
+	set +a
+	cat >"$outdir/gowall.json" <<EOF
+{"name":"atelier","colors":["${foreground}","${foreground_dim}","${comment}","${accent}","${red}","${orange}","${yellow}","${green}","${cyan}","${blue}","${magenta}","${color0}","${color1}","${color2}","${color3}","${color4}","${color5}","${color6}","${color7}","${color8}","${color9}","${color10}","${color11}","${color12}","${color13}","${color14}","${color15}","${background}","${background_alt}","${background_deep}","${border}"]}
+EOF
+}
+
+source_wallpaper() {
+	for f in \
+		"$CFG/wallpaper.png" "$CFG/wallpaper.jpg" "$CFG/wallpaper.jpeg" "$CFG/wallpaper.webp" \
+		"$SHARE/wallpaper.png" "$SHARE/wallpaper.jpg" "$SHARE/wallpaper.jpeg" "$SHARE/wallpaper.webp" \
+		"$SHARE/wallpapers/default.png" "$SHARE/wallpapers/default.jpg"
+	do
+		if [ -f "$f" ]; then
+			printf '%s' "$f"
+			return 0
+		fi
+	done
+	return 1
+}
+
+recolor_wallpaper() {
+	src=$1
+	dest=$2
+	json=$3
+	if ! have gowall; then
+		cp -f "$src" "$dest"
+		return 0
+	fi
+	# Isolate gowall from opening a GUI preview when possible.
+	set +e
+	gowall convert "$src" "$dest" -t "$json" --preview false >/dev/null 2>&1
+	st=$?
+	if [ "$st" -ne 0 ] || [ ! -s "$dest" ]; then
+		gowall convert "$src" "$dest" -t "$json" >/dev/null 2>&1
+		st=$?
+	fi
+	if [ "$st" -ne 0 ] || [ ! -s "$dest" ]; then
+		gowall convert "$src" -t "$json" --output "$dest" --preview false >/dev/null 2>&1
+		st=$?
+	fi
+	set -e
+	if [ ! -s "$dest" ]; then
+		cp -f "$src" "$dest"
+	fi
+}
+
+apply_wallpaper() {
+	img=$1
+	bg=${2:-#1a1b26}
+	if [ -f "$img" ] && have feh; then
+		feh --no-fehbg --bg-fill "$img" || true
+	elif have xsetroot; then
+		xsetroot -solid "$bg" || true
+	fi
+}
+
+install_symlinks() {
+	outdir=$1
+	mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
+	mkdir -p "$HOME/.config/qt5ct/colors" "$HOME/.config/qt6ct/colors"
+	if [ -f "$outdir/gtk-colors.css" ]; then
+		ln -sfn "$outdir/gtk-colors.css" "$HOME/.config/gtk-3.0/atelier-colors.css"
+		ln -sfn "$outdir/gtk-colors.css" "$HOME/.config/gtk-4.0/atelier-colors.css"
+	fi
+	if [ -f "$outdir/qt-colors.conf" ]; then
+		ln -sfn "$outdir/qt-colors.conf" "$HOME/.config/qt5ct/colors/atelier.conf"
+		ln -sfn "$outdir/qt-colors.conf" "$HOME/.config/qt6ct/colors/atelier.conf"
+	fi
+	if [ -f "$outdir/btop.theme" ]; then
+		mkdir -p "$HOME/.config/btop/themes"
+		ln -sfn "$outdir/btop.theme" "$HOME/.config/btop/themes/atelier.theme"
+	fi
+}
+
+reload_session() {
+	outdir=$1
+	envfile=$2
+	# shellcheck disable=SC1090
+	set -a
+	# shellcheck source=/dev/null
+	. "$envfile"
+	set +a
+
+	if have bspc; then
+		bspc config normal_border_color "${color8}" 2>/dev/null || true
+		bspc config active_border_color "${accent}" 2>/dev/null || true
+		bspc config focused_border_color "${accent}" 2>/dev/null || true
+		bspc config presel_feedback_color "${magenta}" 2>/dev/null || true
+	fi
+
+	# Polybar needs bspwm; skip during ~/.xinitrc (bspwmrc launches bars).
+	if pgrep -u "$(id -u)" -x bspwm >/dev/null 2>&1 \
+		&& [ -x "$HOME/.config/polybar/launch.sh" ]; then
+		"$HOME/.config/polybar/launch.sh" >/dev/null 2>&1 || true
+	fi
+
+	if have xrdb && [ -f "$outdir/Xresources" ]; then
+		# Keep font/dpi from ~/.Xresources, overlay palette
+		if [ -f "$HOME/.Xresources" ]; then
+			xrdb -merge "$HOME/.Xresources" || true
+		fi
+		xrdb -merge "$outdir/Xresources" || true
+	fi
+
+	gtk_theme=${gtk_theme:-Yaru-dark}
+	icon_theme=${icon_theme:-Papirus-Dark}
+	color_scheme=${color_scheme:-prefer-dark}
+	if have gsettings; then
+		gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme" 2>/dev/null || true
+		gsettings set org.gnome.desktop.interface icon-theme "$icon_theme" 2>/dev/null || true
+		gsettings set org.gnome.desktop.interface color-scheme "$color_scheme" 2>/dev/null || true
+		gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || true
+	fi
+
+	apply_wallpaper "$outdir/wallpaper.png" "${background}"
+}
+
+cmd_set() {
+	raw=${1:-}
+	[ -n "$raw" ] || usage
+	slug=$(slugify "$raw")
+	sys=""
+	usr=""
+	[ -f "$THEMES_SYS/$slug/colors.conf" ] && sys="$THEMES_SYS/$slug"
+	[ -f "$THEMES_USER/$slug/colors.conf" ] && usr="$THEMES_USER/$slug"
+	if [ -z "$sys" ] && [ -z "$usr" ]; then
+		printf 'atelier-theme: unknown theme: %s\n' "$slug" >&2
+		exit 1
+	fi
+
+	rm -rf "$NEXT"
+	mkdir -p "$NEXT"
+
+	# Official first, user overlay
+	if [ -n "$sys" ]; then
+		cp -a "$sys"/. "$NEXT"/
+	fi
+	if [ -n "$usr" ]; then
+		cp -a "$usr"/. "$NEXT"/
+	fi
+
+	[ -f "$NEXT/colors.conf" ] || {
+		printf 'atelier-theme: missing colors.conf\n' >&2
+		exit 1
+	}
+
+	{
+		palette_defaults
+		parse_colors "$NEXT/colors.conf"
+	} >"$NEXT/palette.env.raw"
+	# Compact last-wins so sed replacements are unique
+	awk -F= '
+		/^[A-Za-z_][A-Za-z0-9_]*=/ { k=$1; last[k]=$0 }
+		END { for (k in last) print last[k] }
+	' "$NEXT/palette.env.raw" >"$NEXT/palette.env"
+	rm -f "$NEXT/palette.env.raw"
+
+	# Sidecars → extra template keys
+	mode=$(grep "^mode=" "$NEXT/palette.env" | tail -n 1 | sed -n "s/^mode='\\(.*\\)'/\\1/p")
+	[ -n "$mode" ] || mode=dark
+	if [ "$mode" = light ]; then
+		gtk_default=Yaru
+		icons_default=Papirus
+		scheme=prefer-light
+	else
+		gtk_default=Yaru-dark
+		icons_default=Papirus-Dark
+		scheme=prefer-dark
+	fi
+	gtk_theme=$(read_sidecar "$NEXT/gtk.theme" "$gtk_default")
+	icon_theme=$(read_sidecar "$NEXT/icons.theme" "$icons_default")
+	printf "gtk_theme='%s'\nicon_theme='%s'\ncolor_scheme='%s'\n" \
+		"$gtk_theme" "$icon_theme" "$scheme" >>"$NEXT/palette.env"
+
+	write_sed_script "$NEXT/palette.env" "$NEXT/sed.script"
+	render_templates "$NEXT/sed.script" "$NEXT"
+	write_nvim_lua "$NEXT" "$NEXT/palette.env"
+	write_gowall_json "$NEXT" "$NEXT/palette.env"
+
+	printf '%s\n' "$slug" >"$NEXT/theme.name"
+
+	# Wallpaper: cache by theme + palette + source
+	src=$(source_wallpaper || true)
+	mkdir -p "$CACHE/wallpapers"
+	if [ -n "$src" ] && [ -f "$src" ]; then
+		ph=$(cksum "$NEXT/colors.conf" | awk '{print $1"-"$2}')
+		sh=$(cksum "$src" | awk '{print $1"-"$2}')
+		cached="$CACHE/wallpapers/${slug}-${ph}-${sh}.png"
+		if [ ! -s "$cached" ]; then
+			recolor_wallpaper "$src" "$cached" "$NEXT/gowall.json"
+		fi
+		cp -f "$cached" "$NEXT/wallpaper.png"
+	fi
+
+	# BAT theme sidecar → shell-colors
+	if [ -f "$NEXT/bat.theme" ]; then
+		bt=$(read_sidecar "$NEXT/bat.theme" "")
+		if [ -n "$bt" ] && [ -f "$NEXT/shell-colors.sh" ]; then
+			printf "export BAT_THEME='%s'\n" "$bt" >>"$NEXT/shell-colors.sh"
+		fi
+	fi
+
+	rm -f "$NEXT/sed.script"
+
+	mkdir -p "$CFG"
+	rm -rf "$CURRENT"
+	mv "$NEXT" "$CURRENT"
+
+	install_symlinks "$CURRENT"
+	reload_session "$CURRENT" "$CURRENT/palette.env"
+	printf 'atelier-theme: applied %s\n' "$slug"
+}
+
+cmd_save() {
+	name=${1:-}
+	[ -n "$name" ] || usage
+	slug=$(slugify "$name")
+	[ -d "$CURRENT" ] || {
+		printf 'atelier-theme: nothing to save (run set first)\n' >&2
+		exit 1
+	}
+	dest="$THEMES_USER/$slug"
+	mkdir -p "$dest"
+	cp -f "$CURRENT/colors.conf" "$dest/colors.conf"
+	# Keep display name
+	if grep -q '^name=' "$dest/colors.conf"; then
+		sed -i "s/^name=.*/name=$name/" "$dest/colors.conf"
+	else
+		printf 'name=%s\n' "$name" | cat - "$dest/colors.conf" >"$dest/colors.conf.new"
+		mv "$dest/colors.conf.new" "$dest/colors.conf"
+	fi
+	[ -f "$CURRENT/nvim.colorscheme" ] && cp -f "$CURRENT/nvim.colorscheme" "$dest/"
+	[ -f "$CURRENT/gtk.theme" ] && cp -f "$CURRENT/gtk.theme" "$dest/"
+	[ -f "$CURRENT/icons.theme" ] && cp -f "$CURRENT/icons.theme" "$dest/"
+	[ -f "$CURRENT/bat.theme" ] && cp -f "$CURRENT/bat.theme" "$dest/"
+	printf 'atelier-theme: saved %s → %s\n' "$slug" "$dest"
+}
+
+cmd_wallpaper() {
+	path=${1:-}
+	[ -n "$path" ] || usage
+	[ -f "$path" ] || {
+		printf 'atelier-theme: not a file: %s\n' "$path" >&2
+		exit 1
+	}
+	mkdir -p "$CFG"
+	ext=$(printf '%s' "$path" | sed 's/.*\.//')
+	case $ext in
+	png | PNG) cp -f "$path" "$CFG/wallpaper.png" ;;
+	jpg | jpeg | JPG | JPEG | webp | WEBP)
+		if have convert; then
+			convert "$path" "$CFG/wallpaper.png"
+		elif have gowall; then
+			# convert format via gowall if it can write png
+			gowall convert "$path" "$CFG/wallpaper.png" >/dev/null 2>&1 || cp -f "$path" "$CFG/wallpaper.png"
+		else
+			cp -f "$path" "$CFG/wallpaper.png"
+		fi
+		;;
+	*)
+		cp -f "$path" "$CFG/wallpaper.png"
+		;;
+	esac
+	# Drop cached recolors so the new source is used
+	rm -rf "$CACHE/wallpapers"
+	if [ -f "$CURRENT/theme.name" ]; then
+		cmd_set "$(cat "$CURRENT/theme.name")"
+	else
+		cmd_set tokyo-night
+	fi
+}
+
+write_matugen_config() {
+	outconf=$1
+	outfile=$2
+	mode=$3
+	tpl="$SHARE/matugen/colors.conf.tpl"
+	[ -f "$tpl" ] || tpl="$TEMPLATES_SYS/../matugen/colors.conf.tpl"
+	cat >"$outconf" <<EOF
+[config]
+reload_apps = false
+
+[templates.atelier]
+input_path = '$tpl'
+output_path = '$outfile'
+EOF
+}
+
+gowall_extract_fallback() {
+	img=$1
+	outfile=$2
+	mode=$3
+	have gowall || return 1
+	# Best-effort: dump extract output and pick hex codes
+	tmp=$(mktemp)
+	if ! gowall extract "$img" >"$tmp" 2>/dev/null; then
+		rm -f "$tmp"
+		return 1
+	fi
+	hexes=$(grep -oE '#[0-9A-Fa-f]{6}' "$tmp" | head -n 16)
+	rm -f "$tmp"
+	[ -n "$hexes" ] || return 1
+	i=0
+	# shellcheck disable=SC2086
+	set -- $hexes
+	bg=${1:-#1a1b26}
+	fg=${2:-#c0caf5}
+	acc=${3:-#7aa2f7}
+	cat >"$outfile" <<EOF
+name=Generated
+mode=$mode
+background=$bg
+background_alt=${4:-$bg}
+background_deep=$bg
+foreground=$fg
+foreground_dim=$fg
+comment=${5:-#565f89}
+border=${6:-#3b4261}
+accent=$acc
+red=${7:-#f7768e}
+green=${8:-#9ece6a}
+yellow=${9:-#e0af68}
+blue=$acc
+magenta=${10:-#bb9af7}
+cyan=${11:-#7dcfff}
+orange=${12:-#ff9e64}
+cursor=$fg
+selection_background=${4:-$bg}
+selection_foreground=$fg
+color0=${1:-#15161e}
+color1=${7:-#f7768e}
+color2=${8:-#9ece6a}
+color3=${9:-#e0af68}
+color4=$acc
+color5=${10:-#bb9af7}
+color6=${11:-#7dcfff}
+color7=$fg
+color8=${6:-#414868}
+color9=${7:-#f7768e}
+color10=${8:-#9ece6a}
+color11=${9:-#e0af68}
+color12=$acc
+color13=${10:-#bb9af7}
+color14=${11:-#7dcfff}
+color15=$fg
+EOF
+}
+
+cmd_from_wallpaper() {
+	img=${1:-}
+	[ -n "$img" ] || usage
+	shift
+	name=""
+	mode=dark
+	while [ "$#" -gt 0 ]; do
+		case $1 in
+		--name)
+			name=$2
+			shift 2
+			;;
+		--mode)
+			mode=$2
+			shift 2
+			;;
+		*)
+			printf 'atelier-theme: unknown option: %s\n' "$1" >&2
+			exit 2
+			;;
+		esac
+	done
+	[ -f "$img" ] || {
+		printf 'atelier-theme: not a file: %s\n' "$img" >&2
+		exit 1
+	}
+	[ -n "$name" ] || name="generated"
+	slug=$(slugify "$name")
+	dest="$THEMES_USER/$slug"
+	mkdir -p "$dest"
+	outfile="$dest/colors.conf"
+
+	ok=0
+	if have matugen; then
+		tmpc=$(mktemp)
+		write_matugen_config "$tmpc" "$outfile" "$mode"
+		if matugen image "$img" --mode "$mode" --config "$tmpc" >/dev/null 2>&1; then
+			ok=1
+		fi
+		rm -f "$tmpc"
+	fi
+	if [ "$ok" -eq 0 ]; then
+		if gowall_extract_fallback "$img" "$outfile" "$mode"; then
+			ok=1
+		fi
+	fi
+	if [ "$ok" -eq 0 ]; then
+		printf 'atelier-theme: need matugen (preferred) or gowall extract\n' >&2
+		printf '  sudo xbps-install -S matugen\n' >&2
+		exit 1
+	fi
+	# Ensure name/mode
+	if grep -q '^name=' "$outfile"; then
+		sed -i "s/^name=.*/name=$name/" "$outfile"
+	else
+		printf 'name=%s\n' "$name" | cat - "$outfile" >"$outfile.new"
+		mv "$outfile.new" "$outfile"
+	fi
+	if grep -q '^mode=' "$outfile"; then
+		sed -i "s/^mode=.*/mode=$mode/" "$outfile"
+	fi
+	cmd_set "$slug"
+}
+
+# --- dispatch --------------------------------------------------------------
+
+[ "$#" -ge 1 ] || usage
+cmd=$1
+shift
+
+case $cmd in
+list)
+	cmd_list
+	;;
+current)
+	cmd_current
+	;;
+set)
+	cmd_set "${1:-}"
+	;;
+save)
+	cmd_save "${1:-}"
+	;;
+wallpaper)
+	cmd_wallpaper "${1:-}"
+	;;
+from-wallpaper)
+	cmd_from_wallpaper "$@"
+	;;
+-h | --help | help)
+	usage
+	;;
+*)
+	printf 'atelier-theme: unknown command: %s\n' "$cmd" >&2
+	usage
+	;;
+esac

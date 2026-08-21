@@ -1,4 +1,4 @@
-/* Atelier — rofi main config (Tokyo Night) */
+/* Atelier — rofi main config (palette from atelier-theme) */
 configuration {
 	modi: "drun,run,window";
 	show-icons: true;
@@ -13,4 +13,4 @@ configuration {
 	   rofi defaults (e.g. Control+k is already bound) and abort startup. */
 }
 
-@theme "~/.config/rofi/themes/tokyo-night"
+@theme "~/.config/atelier/current/rofi"

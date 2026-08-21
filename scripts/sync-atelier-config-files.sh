@@ -40,7 +40,8 @@ mkdir -p \
 	"$dst/etc/bash/bashrc.d" \
 	"$dst/usr/share/xsessions" \
 	"$dst/usr/share/doc/atelier" \
-	"$dst/usr/share/atelier/wallpapers"
+	"$dst/usr/share/atelier/templates" \
+	"$dst/usr/share/atelier/matugen"
 
 install -m 755 "$src/bspwm/bspwmrc"              "$dst/etc/skel/.config/bspwm/bspwmrc"
 install -m 644 "$src/sxhkd/sxhkdrc"              "$dst/etc/skel/.config/sxhkd/sxhkdrc"
@@ -51,8 +52,6 @@ install -m 755 "$src/polybar/net-status.sh"      "$dst/etc/skel/.config/polybar/
 install -m 755 "$src/polybar/nmtui-float.sh"     "$dst/etc/skel/.config/polybar/nmtui-float.sh"
 install -m 644 "$src/rofi/config.rasi"           "$dst/etc/skel/.config/rofi/config.rasi"
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/etc/skel/.config/rofi/atelier-rofi.sh"
-mkdir -p "$dst/etc/skel/.config/rofi/themes"
-install -m 644 "$src/rofi/themes/tokyo-night.rasi" "$dst/etc/skel/.config/rofi/themes/tokyo-night.rasi"
 mkdir -p "$dst/usr/bin" "$dst/usr/share/doc/atelier" \
 	"$dst/etc/skel/.config/atelier"
 install -m 755 "$src/rofi/atelier-rofi.sh"       "$dst/usr/bin/atelier-rofi"
@@ -65,6 +64,7 @@ install -m 755 "$src/session/atelier-scratchpad" "$dst/usr/bin/atelier-scratchpa
 install -m 755 "$src/session/atelier-btop"       "$dst/usr/bin/atelier-btop"
 install -m 755 "$src/session/atelier-menu"       "$dst/usr/bin/atelier-menu"
 install -m 755 "$src/session/atelier-pkg"        "$dst/usr/bin/atelier-pkg"
+install -m 755 "$src/session/atelier-theme"      "$dst/usr/bin/atelier-theme"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/etc/skel/.config/atelier/keybinds.txt"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"
@@ -85,20 +85,49 @@ install -m 644 "$src/gtk/gtk-3.0/gtk.css"        "$dst/etc/skel/.config/gtk-3.0/
 install -m 644 "$src/gtk/gtk-4.0/settings.ini"   "$dst/etc/skel/.config/gtk-4.0/settings.ini"
 install -m 644 "$src/gtk/gtk-4.0/gtk.css"        "$dst/etc/skel/.config/gtk-4.0/gtk.css"
 install -m 644 "$src/qt/qt5ct/qt5ct.conf"        "$dst/etc/skel/.config/qt5ct/qt5ct.conf"
-install -m 644 "$src/qt/qt5ct/colors/tokyo-night.conf" \
-	"$dst/etc/skel/.config/qt5ct/colors/tokyo-night.conf"
 install -m 644 "$src/qt/qt6ct/qt6ct.conf"        "$dst/etc/skel/.config/qt6ct/qt6ct.conf"
-install -m 644 "$src/qt/qt6ct/colors/tokyo-night.conf" \
-	"$dst/etc/skel/.config/qt6ct/colors/tokyo-night.conf"
 install -m 644 "$src/xsecurelock/env.sh"         "$dst/etc/skel/.config/xsecurelock/env.sh"
 install -m 755 "$src/session/xinitrc"            "$dst/etc/skel/.xinitrc"
 install -m 644 "$src/session/Xresources"         "$dst/etc/skel/.Xresources"
 install -m 644 "$src/session/atelier.desktop"    "$dst/usr/share/xsessions/atelier.desktop"
 install -m 644 "$src/shell/bashrc.d-atelier.sh"  "$dst/etc/bash/bashrc.d/atelier.sh"
-install -m 644 "$src/colors/tokyo-night.conf"    "$dst/usr/share/doc/atelier/tokyo-night-palette.conf"
-install -m 644 "$src/wallpapers/nord.png" \
-	"$dst/usr/share/atelier/wallpapers/nord.png"
-install -m 644 "$src/wallpapers/catppuccin-mocha.png" \
-	"$dst/usr/share/atelier/wallpapers/catppuccin-mocha.png"
+install -m 644 "$src/themes/tokyo-night/colors.conf" \
+	"$dst/usr/share/doc/atelier/tokyo-night-palette.conf"
+# Stock wallpaper: keep the original bytes, name the installed file by MIME
+# (the tree may have default.png that is actually JPEG).
+_wall=""
+for _cand in "$src/wallpapers/default.png" "$src/wallpapers/default.jpg" \
+	"$src/wallpapers/default.jpeg" "$src/wallpapers/default.webp"
+do
+	if [ -f "$_cand" ]; then
+		_wall=$_cand
+		break
+	fi
+done
+[ -n "$_wall" ] || die "missing stock wallpaper under $src/wallpapers/default.*"
+_mime=$(file -b --mime-type "$_wall" 2>/dev/null || echo application/octet-stream)
+case $_mime in
+image/jpeg) _wdest=wallpaper.jpg ;;
+image/webp) _wdest=wallpaper.webp ;;
+*) _wdest=wallpaper.png ;;
+esac
+install -m 644 "$_wall" "$dst/usr/share/atelier/$_wdest"
+unset _wall _cand _mime _wdest
+install -m 644 "$src/matugen/colors.conf.tpl" \
+	"$dst/usr/share/atelier/matugen/colors.conf.tpl"
+
+# Theme packs + templates (skip the templates dir when copying theme names)
+for theme in "$src"/themes/*/; do
+	[ -d "$theme" ] || continue
+	tname=$(basename "$theme")
+	[ "$tname" = templates ] && continue
+	mkdir -p "$dst/usr/share/atelier/themes/$tname"
+	find "$theme" -maxdepth 1 -type f -exec install -m 644 {} \
+		"$dst/usr/share/atelier/themes/$tname/" \;
+done
+for tpl in "$src"/themes/templates/*.tpl; do
+	[ -f "$tpl" ] || continue
+	install -m 644 "$tpl" "$dst/usr/share/atelier/templates/"
+done
 
 printf 'Synced %s → %s\n' "$src" "$dst"

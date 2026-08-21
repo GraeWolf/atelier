@@ -43,6 +43,8 @@ tldr
 yt-dlp
 gcc
 feh
+gowall
+matugen
 
 # --- Audio (PipeWire; polybar pulse module + audacity) ---
 pipewire

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Atelier — default X session (~/.xinitrc)
-# Starts a Tokyo Night themed bspwm desktop.
+# Starts a themed bspwm desktop (Tokyo Night unless atelier-theme selected another).
 
 # Merge X resources
 [ -f "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
@@ -22,7 +22,7 @@ fi
 export QT_QPA_PLATFORMTHEME=qt5ct
 export QT_STYLE_OVERRIDE=
 
-# GTK / icons (also set in settings.ini; base theme package: yaru)
+# GTK / icons — defaults, then overlay from atelier-theme if already applied
 export GTK_THEME=Yaru-dark
 export XCURSOR_THEME=Yaru
 export XCURSOR_SIZE=24
@@ -93,19 +93,43 @@ if [ -z "${ATELIER_SKIP_AUDIO:-}" ] && command -v pipewire >/dev/null 2>&1; then
 	fi
 fi
 
-# GNOME/GTK settings (Nemo and many GTK apps prefer gsettings over settings.ini)
-if command -v gsettings >/dev/null 2>&1; then
-	gsettings set org.gnome.desktop.interface gtk-theme 'Yaru-dark' 2>/dev/null || true
-	gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark' 2>/dev/null || true
-	gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || true
-	gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
+# Apply theme (generates ~/.config/atelier/current/ + wallpaper + gsettings)
+if command -v atelier-theme >/dev/null 2>&1; then
+	_cur="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/theme.name"
+	if [ -f "$_cur" ]; then
+		atelier-theme set "$(cat "$_cur")" >/dev/null 2>&1 || true
+	else
+		atelier-theme set tokyo-night >/dev/null 2>&1 || true
+	fi
+	unset _cur
+fi
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/gtk-session.sh" ]; then
+	# shellcheck source=/dev/null
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/gtk-session.sh"
 fi
 
-# Starship for interactive shells started from the session (bash/zsh rc also set this)
-export STARSHIP_CONFIG="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
+# GNOME/GTK settings (Nemo prefers gsettings). Theme script already set these;
+# repeat as a fallback for first-login failures.
+if command -v gsettings >/dev/null 2>&1; then
+	gsettings set org.gnome.desktop.interface gtk-theme "${GTK_THEME:-Yaru-dark}" 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface icon-theme "${ATELIER_ICON_THEME:-Papirus-Dark}" 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || true
+	gsettings set org.gnome.desktop.interface color-scheme "${ATELIER_COLOR_SCHEME:-prefer-dark}" 2>/dev/null || true
+fi
 
-# Root window color (Tokyo Night bg)
-xsetroot -solid "#1a1b26"
+# Starship: generated palette file when present
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/starship.toml" ]; then
+	export STARSHIP_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/starship.toml"
+else
+	export STARSHIP_CONFIG="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
+fi
+
+# Root window color
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/bspwm-colors.sh" ]; then
+	# shellcheck source=/dev/null
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/bspwm-colors.sh"
+fi
+xsetroot -solid "${ATELIER_BG:-#1a1b26}"
 
 # Multi-monitor layout (MVP: 1-2 displays) — before WM so bspwm sees geometry
 # Skip: ATELIER_SKIP_MONITORS=1   Force prompt: ATELIER_MONITORS_FORCE=1

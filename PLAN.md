@@ -42,7 +42,7 @@ Graphical installer
 NVIDIA proprietary driver support
 Personal extra repository integrated
 Fully themed bspwm desktop with the complete application list
-Consistent Tokyo Night theming (GUI + TUI)
+Fully themed bspwm desktop (Tokyo Night default; switchable palettes)
 Basic user documentation + detailed build documentation
 
 
@@ -111,9 +111,9 @@ brave-origin, nemo, neovim, thunderbird, audacity, xfburn, ristretto, exa, bat, 
 
 8. Aesthetics
 
-Color scheme: Tokyo Night (dark)
+Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, terminals, TUIs, rofi, polybar, neovim, and the lock screen.
+Wallpaper: one stock image, **recolored** to the active palette (gowall).
 Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
-Apply theming as widely as possible (GTK, Qt, terminals, TUIs, icons, cursor, rofi, polybar, etc.)
 
 
 9. Installation Experience

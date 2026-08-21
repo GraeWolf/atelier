@@ -36,7 +36,7 @@ Primary goals: extreme minimalism, simplicity, elegant Tokyo Night theming, and 
 - Always follow the current PLAN.md as the source of truth.
 - Prefer extreme minimalism — do not add packages or features unless they are explicitly listed in the plan or requested.
 - Keep configurations clean, readable, and easy to understand/modify.
-- Maintain consistent Tokyo Night (dark) theming across GTK, Qt, terminals, TUIs, rofi, polybar, etc.
+- Maintain consistent theming via `atelier-theme` (Tokyo Night dark is the default palette) across GTK, Qt, terminals, TUIs, rofi, polybar, etc.
 - Use pure XBPS + the personal extra repository. Do not introduce other package formats unless asked.
 - Init system is runit. Display server is Xlibre. Window manager is bspwm (single fixed setup).
 
