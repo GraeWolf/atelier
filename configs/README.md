@@ -32,6 +32,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `fastfetch/config.jsonc` | `~/.config/fastfetch/` | System info |
 | `btop/btop.conf` | `~/.config/btop/` | Monitor |
 | `xsecurelock/env.sh` | `~/.config/xsecurelock/` | Lock screen env |
+| `ssh/agent-env.sh` | `~/.config/ssh/agent-env.sh` | Session ssh-agent (xinitrc + bashrc.d) |
 | `session/xinitrc` | `~/.xinitrc` | Session entry |
 | `session/Xresources` | `~/.Xresources` | X resources |
 | `session/atelier.desktop` | `/usr/share/xsessions/` | DM session entry |

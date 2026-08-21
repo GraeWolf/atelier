@@ -37,6 +37,7 @@ mkdir -p \
 	"$dst/etc/skel/.config/qt5ct/colors" \
 	"$dst/etc/skel/.config/qt6ct/colors" \
 	"$dst/etc/skel/.config/xsecurelock" \
+	"$dst/etc/skel/.config/ssh" \
 	"$dst/etc/bash/bashrc.d" \
 	"$dst/usr/share/xsessions" \
 	"$dst/usr/share/doc/atelier" \
@@ -87,6 +88,7 @@ install -m 644 "$src/gtk/gtk-4.0/gtk.css"        "$dst/etc/skel/.config/gtk-4.0/
 install -m 644 "$src/qt/qt5ct/qt5ct.conf"        "$dst/etc/skel/.config/qt5ct/qt5ct.conf"
 install -m 644 "$src/qt/qt6ct/qt6ct.conf"        "$dst/etc/skel/.config/qt6ct/qt6ct.conf"
 install -m 644 "$src/xsecurelock/env.sh"         "$dst/etc/skel/.config/xsecurelock/env.sh"
+install -m 644 "$src/ssh/agent-env.sh"           "$dst/etc/skel/.config/ssh/agent-env.sh"
 install -m 755 "$src/session/xinitrc"            "$dst/etc/skel/.xinitrc"
 install -m 644 "$src/session/Xresources"         "$dst/etc/skel/.Xresources"
 install -m 644 "$src/session/atelier.desktop"    "$dst/usr/share/xsessions/atelier.desktop"

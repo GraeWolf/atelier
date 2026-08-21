@@ -2,6 +2,12 @@
 
 Atelier is opinionated but meant to stay **easy to understand and modify**. Prefer small, documented changes.
 
+## ssh-agent
+
+Graphical sessions start one `ssh-agent` (socket under `$XDG_RUNTIME_DIR`). Interactive bash sources the same helper so terminals reuse it. Keys are **not** loaded automatically; the first `git push` / `ssh` in a session may still ask for the passphrase once.
+
+Helper: `~/.config/ssh/agent-env.sh` (from `atelier-config`). Do not put private keys in the Atelier repo.
+
 ## Where configs live
 
 | Area | Path |

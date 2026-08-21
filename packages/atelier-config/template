@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.0
+version=0.3.1
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -18,6 +18,7 @@ homepage="https://github.com/kmccuddy/atelier"
 # xprop: focused-window screenshots (usually pulled by X stack; keep explicit).
 # fzf: atelier-pkg Package/Remove pickers (Omarchy-style, Void XBPS).
 # gowall: recolor the stock wallpaper to the active palette.
+# openssh: ssh-agent for the graphical session (configs/ssh/agent-env.sh).
 depends="
  atelier-base>=0
  yaru>=0
@@ -32,6 +33,7 @@ depends="
  xprop>=0
  fzf>=0
  gowall>=0
+ openssh>=0
 "
 
 do_install() {
@@ -109,6 +111,8 @@ do_install() {
 		etc/skel/.config/qt6ct
 	vinstall "${FILESDIR}/etc/skel/.config/xsecurelock/env.sh" 644 \
 		etc/skel/.config/xsecurelock
+	vinstall "${FILESDIR}/etc/skel/.config/ssh/agent-env.sh" 644 \
+		etc/skel/.config/ssh
 	vinstall "${FILESDIR}/etc/skel/.xinitrc" 755 etc/skel
 	vinstall "${FILESDIR}/etc/skel/.Xresources" 644 etc/skel
 

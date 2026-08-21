@@ -1,6 +1,12 @@
 # Atelier — bash snippet (installed under /etc/bash/bashrc.d/ or sourced from skel)
 # Safe to source multiple times.
 
+# Reuse (or start) the session ssh-agent so git/ssh do not re-prompt
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/ssh/agent-env.sh" ]; then
+	# shellcheck source=/dev/null
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/ssh/agent-env.sh"
+fi
+
 # Starship prompt (themed file from atelier-theme when present)
 if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/starship.toml" ]; then
 	export STARSHIP_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/starship.toml"

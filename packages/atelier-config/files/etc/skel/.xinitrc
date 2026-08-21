@@ -81,6 +81,13 @@ if command -v dbus-launch >/dev/null 2>&1 && [ -z "$DBUS_SESSION_BUS_ADDRESS" ];
 	eval "$(dbus-launch --sh-syntax --exit-with-session)"
 fi
 
+# ssh-agent: one agent for the whole X session (git push, ssh, etc.)
+# Socket: $XDG_RUNTIME_DIR/ssh-agent.socket — also sourced from bashrc.d
+if [ -f "$HOME/.config/ssh/agent-env.sh" ]; then
+	# shellcheck source=/dev/null
+	. "$HOME/.config/ssh/agent-env.sh"
+fi
+
 # Audio: PipeWire (+ session manager + PulseAudio compatibility for polybar/apps)
 # Requires packages from atelier-desktop. Skip with ATELIER_SKIP_AUDIO=1.
 if [ -z "${ATELIER_SKIP_AUDIO:-}" ] && command -v pipewire >/dev/null 2>&1; then
