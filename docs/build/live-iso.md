@@ -148,4 +148,4 @@ See [nvidia.md](nvidia.md).
 ## Out of scope (later)
 
 - Further hardware beyond primary NVIDIA desktop
-- Full-disk encryption
+- Encrypted `/boot` / LVM (optional LUKS2 root is in the installer)

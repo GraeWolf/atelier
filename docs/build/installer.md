@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.3.0+** |
+| XBPS package | `atelier-installer` **0.4.0+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -16,7 +16,7 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Modes (v0.3)
+## Modes (v0.4)
 
 | Command | UI |
 |---------|-----|
@@ -26,7 +26,7 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
 Stateful Back/Next flow (whole-disk only):
 
-welcome → disk → identity → locale → graphics → software → mirror → bootloader → summary → install
+welcome → disk → encryption → identity → locale → graphics → software → mirror → bootloader → summary → install
 
 ### UI rules
 
@@ -46,13 +46,36 @@ welcome → disk → identity → locale → graphics → software → mirror �
 | `INSTALL_XLIBRE` | atelier-xlibre-repo + xlibre |
 | `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
 | `INSTALL_BOOTLOADER` | GRUB install or skip |
+| `ENCRYPT_DISK` | LUKS2 on root; unencrypted `/boot`; `cryptsetup` on target |
 | (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
 
 After `useradd`, runs `su - $USER -c xdg-user-dirs-update`.
 
+## Optional LUKS2
+
+Opt-in (`ENCRYPT_DISK=0` by default). No LVM, no GRUB cryptodisk, no swap.
+
+| Firmware | Encrypted layout |
+|----------|------------------|
+| EFI | ESP 512MiB `/boot/efi`; 1GiB ext4 `/boot`; LUKS2 → ext4 `/` |
+| BIOS | 1MiB bios_grub; 1GiB ext4 `/boot`; LUKS2 → ext4 `/` |
+
+Unencrypted layout is unchanged (no dedicated `/boot`).
+
+Mapper: `/dev/mapper/cryptroot`.
+
+| File | Role |
+|------|------|
+| `/etc/crypttab` | `cryptroot UUID=<LUKS-UUID> none luks` (container UUID) |
+| `/etc/fstab` | root UUID is the **inner ext4** on the mapper |
+| `/etc/dracut.conf.d/10-atelier-crypt.conf` | `crypt` module + install crypttab |
+| `/etc/default/grub` | `rd.luks.uuid=<LUKS-UUID> rd.luks.name=<UUID>=cryptroot` |
+
+Initramfs is regenerated **after** those files exist (`dracut --force --regenerate-all`). Passphrase is written to a 0600 temp keyfile for `cryptsetup`, never logged.
+
 ## Runtime dependencies
 
-dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, xbps, grub*, sudo, polkit
+dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit
 
 ## Testing checklist
 
@@ -61,3 +84,6 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, xbp
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Optional groups install only when checked
+- [ ] Encryption default No keeps the 2-partition (EFI) / 2-partition (BIOS) layout
+- [ ] Encryption Yes: LUKS2 on p3, ext4 `/boot` on p2, passphrase at dracut, `/boot` not LUKS
+- [ ] `rd.luks.uuid` and crypttab UUID match the LUKS container (not the inner ext4)

@@ -208,7 +208,7 @@ Do not remove `atelier-config` unless you intend to manage all configs yourself.
 
 - Adding large desktop environments or a second WM “just in case”
 - Unrelated package formats (keep pure XBPS)
-- Full-disk encryption tooling (deferred past MVP)
+- Encrypted `/boot`, LVM, or custom partition layouts (installer is whole-disk; optional LUKS2 root only)
 - Opaque automation that hides where files live
 
 ## Further reading

@@ -4,6 +4,8 @@ Welcome to **Atelier Linux** — a minimal Void-based system with a themed bspwm
 
 ## First boot (installed system)
 
+If you enabled disk encryption during install, enter the **LUKS passphrase** at the boot prompt (before the login screen). That passphrase is not your user password.
+
 1. Log in with the user you created during install.
 2. If you are on a TTY (text console), start the graphical session:
 

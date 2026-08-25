@@ -31,7 +31,7 @@ User quick start: [docs/user/quick-start.md](docs/user/quick-start.md)
 **Public package repo:** [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) (e.g. `brave-origin`) is enabled on live/installed systems via `atelier-void-repo`.  
 **Local Atelier packages** still build into `repo/out/` and ship on the ISO at `/usr/share/atelier/repo`.
 
-Remaining gaps (e.g. JetBrains Mono package, encryption) are listed in [docs/build/package-sources.md](docs/build/package-sources.md).
+Remaining gaps (e.g. JetBrains Mono package) are listed in [docs/build/package-sources.md](docs/build/package-sources.md). Optional LUKS2 at install is documented in [docs/user/installer.md](docs/user/installer.md).
 
 ## Quick links
 

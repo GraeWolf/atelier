@@ -27,6 +27,8 @@ zenity
 parted
 e2fsprogs
 dosfstools
+# optional LUKS2 at install (atelier-install 0.4.0+)
+cryptsetup
 
 # void-installer fallback + GRUB tools (text installer from void-mklive include)
 xtools-minimal

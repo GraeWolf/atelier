@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Atelier Linux installer (wizard, whole-disk MVP)
+# Atelier Linux installer (wizard, whole-disk)
 # Default: TUI (dialog). Optional GUI: atelier-install --gui
 # ASCII-only UI strings for locale safety.
+#
+# Optional LUKS2 on the root filesystem. /boot and ESP stay unencrypted
+# so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
 set -euo pipefail
 
-VERSION="0.3.1"
+VERSION="0.4.0"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -18,16 +21,21 @@ INSTALL_XLIBRE=0
 INSTALL_BOOTLOADER=1
 PKG_EXTRA_CLI=0
 PKG_MEDIA=0
+ENCRYPT_DISK=0
 DISK=""
 HOSTNAME="atelier"
 USERNAME="user"
 USERPASS=""
 ROOTPASS=""
+LUKSPASS=""
 TIMEZONE="UTC"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
 PART_ESP=""
+PART_BOOT=""
+PART_CRYPT=""
 PART_ROOT=""
+CRYPT_NAME="cryptroot"
 
 # --- locale / GUI env ---------------------------------------------------------
 ensure_gui_env() {
@@ -313,6 +321,66 @@ part_path() {
 	else printf '%s\n' "${disk}${num}"; fi
 }
 
+# LUKS passphrase lives in a 0600 keyfile, never on argv or in the log.
+make_luks_keyfile() {
+	local dir=/tmp f
+	if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+		dir=/dev/shm
+	fi
+	f=$(mktemp "$dir/atelier-luks.XXXXXX")
+	chmod 600 "$f"
+	printf '%s' "$LUKSPASS" >"$f"
+	printf '%s\n' "$f"
+}
+
+wipe_luks_keyfile() {
+	local f=$1
+	[ -n "$f" ] && [ -f "$f" ] || return 0
+	if have shred; then
+		shred -u "$f" 2>/dev/null || rm -f "$f"
+	else
+		rm -f "$f"
+	fi
+}
+
+wipe_luks_pass() {
+	LUKSPASS=""
+}
+
+close_cryptroot() {
+	if have cryptsetup && cryptsetup status "$CRYPT_NAME" >/dev/null 2>&1; then
+		cryptsetup close "$CRYPT_NAME" 2>/dev/null || true
+		log "closed mapper $CRYPT_NAME"
+	fi
+}
+
+luks_format_and_open() {
+	local keyfile=""
+	[ -n "${LUKSPASS:-}" ] || die "LUKS passphrase missing"
+	[ -n "$PART_CRYPT" ] && [ -b "$PART_CRYPT" ] || die "LUKS partition missing: ${PART_CRYPT:-empty}"
+	keyfile=$(make_luks_keyfile)
+	if ! cryptsetup luksFormat --type luks2 --batch-mode --force-password \
+		--key-file="$keyfile" "$PART_CRYPT"; then
+		wipe_luks_keyfile "$keyfile"
+		wipe_luks_pass
+		die "cryptsetup luksFormat failed on $PART_CRYPT"
+	fi
+	if ! cryptsetup open --key-file="$keyfile" "$PART_CRYPT" "$CRYPT_NAME"; then
+		wipe_luks_keyfile "$keyfile"
+		wipe_luks_pass
+		die "cryptsetup open failed on $PART_CRYPT"
+	fi
+	wipe_luks_keyfile "$keyfile"
+	wipe_luks_pass
+	PART_ROOT="/dev/mapper/$CRYPT_NAME"
+	sleep 1
+	udevadm settle 2>/dev/null || sleep 1
+	if [ ! -b "$PART_ROOT" ]; then
+		close_cryptroot
+		die "mapper $PART_ROOT did not appear"
+	fi
+}
+
 list_disks() {
 	lsblk -dn -b -o NAME,SIZE,TYPE,MODEL 2>/dev/null | while read -r name size type model; do
 		[ "$type" = "disk" ] || continue
@@ -356,10 +424,11 @@ step_welcome() {
 	wizard_page "Welcome to Atelier Linux installer v${VERSION}.
 
 WHOLE-DISK install only (erases one selected disk).
-No encryption, no custom partitions.
+Optional LUKS2 encryption (root only; /boot stays
+unencrypted). No custom partitions.
 
-Steps cover identity, locale, graphics, optional software,
-mirror, and bootloader.
+Steps cover disk, encryption, identity, locale,
+graphics, optional software, mirror, and bootloader.
 
 Next to continue."
 }
@@ -405,6 +474,50 @@ No  = go back"; then
 		return 1
 	fi
 	log "DISK=$DISK"
+	return 0
+}
+
+step_encryption() {
+	# ui_confirm No means "do not encrypt", not wizard Back.
+	ENCRYPT_DISK=0
+	wipe_luks_pass
+	if ui_confirm "Encrypt the system disk with LUKS2?
+
+  Yes = LUKS2 on the root filesystem
+        Passphrase required at every boot.
+        /boot and the EFI partition stay unencrypted.
+        A forgotten passphrase means the data is gone.
+
+  No  = no encryption (default)
+
+Yes is optional."; then
+		if ! have cryptsetup; then
+			ui_error "cryptsetup is not installed on this live image.
+Cannot encrypt the disk."
+			return 1
+		fi
+		ENCRYPT_DISK=1
+		local p1 p2
+		while true; do
+			p1=$(ui_password "LUKS passphrase (required at boot):") || return 1
+			p2=$(ui_password "Confirm LUKS passphrase:") || return 1
+			if [ -z "$p1" ]; then
+				ui_error "Passphrase cannot be empty."
+				continue
+			fi
+			if [ "${#p1}" -lt 8 ]; then
+				ui_error "Passphrase must be at least 8 characters."
+				continue
+			fi
+			if [ "$p1" != "$p2" ]; then
+				ui_error "Passphrases do not match. Try again."
+				continue
+			fi
+			LUKSPASS=$p1
+			break
+		done
+	fi
+	log "ENCRYPT_DISK=$ENCRYPT_DISK"
 	return 0
 }
 
@@ -595,12 +708,25 @@ step_mirror() {
 
 step_bootloader() {
 	INSTALL_BOOTLOADER=1
-	if ui_confirm "Install GRUB bootloader?
+	local msg="Install GRUB bootloader?
 
   Yes = recommended (EFI or BIOS auto-detected)
   No  = skip (advanced; you must install a bootloader later)
 
-Yes is recommended."; then
+Yes is recommended."
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		msg="Install GRUB bootloader?
+
+  Encrypted disks NEED GRUB so the kernel can
+  unlock LUKS at boot. Skipping is strongly
+  discouraged.
+
+  Yes = recommended
+  No  = skip (advanced)
+
+Yes is recommended."
+	fi
+	if ui_confirm "$msg"; then
 		INSTALL_BOOTLOADER=1
 	else
 		INSTALL_BOOTLOADER=0
@@ -610,17 +736,19 @@ Yes is recommended."; then
 }
 
 step_summary() {
-	local mode=BIOS ns=no xs=no bl=yes ec=no md=no
+	local mode=BIOS ns=no xs=no bl=yes ec=no md=no enc=no
 	is_efi && mode=EFI
 	[ "$INSTALL_NVIDIA" -eq 1 ] && ns=yes
 	[ "$INSTALL_XLIBRE" -eq 1 ] && xs=yes
 	[ "$INSTALL_BOOTLOADER" -eq 1 ] && bl=yes || bl=no
 	[ "$PKG_EXTRA_CLI" -eq 1 ] && ec=yes
 	[ "$PKG_MEDIA" -eq 1 ] && md=yes
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && enc=yes
 	if ui_confirm "Install summary - proceed?
 
 Disk:        $DISK (ERASED)
 Firmware:    $mode
+Encryption:  $enc
 Hostname:    $HOSTNAME
 User:        $USERNAME
 Timezone:    $TIMEZONE
@@ -642,15 +770,43 @@ No  = go back"; then
 
 # --- install backend ----------------------------------------------------------
 partition_disk() {
-	log "Partitioning $DISK"
+	log "Partitioning $DISK encrypt=$ENCRYPT_DISK"
 	umount -R "$TARGETDIR" 2>/dev/null || true
 	lsblk -ln -o NAME,MOUNTPOINT "$DISK" 2>/dev/null | while read -r n m; do
 		[ -n "$m" ] || continue
 		umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true
 	done
+	close_cryptroot
 	wipefs -a "$DISK" 2>/dev/null || true
 	parted -s "$DISK" mklabel gpt
-	if is_efi; then
+	PART_ESP=""
+	PART_BOOT=""
+	PART_CRYPT=""
+	PART_ROOT=""
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		# Unencrypted /boot so GRUB can read kernel+initramfs without cryptodisk.
+		if is_efi; then
+			parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
+			parted -s "$DISK" set 1 esp on
+			parted -s "$DISK" mkpart boot ext4 513MiB 1537MiB
+			parted -s "$DISK" mkpart luks 1537MiB 100%
+			PART_ESP=$(part_path "$DISK" 1)
+			PART_BOOT=$(part_path "$DISK" 2)
+			PART_CRYPT=$(part_path "$DISK" 3)
+		else
+			parted -s "$DISK" mkpart bios_grub 1MiB 2MiB
+			parted -s "$DISK" set 1 bios_grub on
+			parted -s "$DISK" mkpart boot ext4 2MiB 1026MiB
+			parted -s "$DISK" mkpart luks 1026MiB 100%
+			PART_BOOT=$(part_path "$DISK" 2)
+			PART_CRYPT=$(part_path "$DISK" 3)
+		fi
+		sleep 1; udevadm settle 2>/dev/null || sleep 2
+		[ -n "$PART_ESP" ] && mkfs.vfat -F32 -n EFI "$PART_ESP"
+		mkfs.ext4 -F -L atelier-boot "$PART_BOOT"
+		luks_format_and_open
+		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
+	elif is_efi; then
 		parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
 		parted -s "$DISK" set 1 esp on
 		parted -s "$DISK" mkpart root ext4 513MiB 100%
@@ -663,17 +819,20 @@ partition_disk() {
 		parted -s "$DISK" mkpart bios_grub 1MiB 2MiB
 		parted -s "$DISK" set 1 bios_grub on
 		parted -s "$DISK" mkpart root ext4 2MiB 100%
-		PART_ESP=""
 		PART_ROOT=$(part_path "$DISK" 2)
 		sleep 1; udevadm settle 2>/dev/null || sleep 2
 		mkfs.ext4 -F -L atelier-root "$PART_ROOT"
 	fi
-	log "Partitions: esp=${PART_ESP:-none} root=$PART_ROOT"
+	log "Partitions: esp=${PART_ESP:-none} boot=${PART_BOOT:-none} crypt=${PART_CRYPT:-none} root=$PART_ROOT"
 }
 
 mount_target() {
 	mkdir -p "$TARGETDIR"
 	mount "$PART_ROOT" "$TARGETDIR"
+	if [ -n "${PART_BOOT:-}" ]; then
+		mkdir -p "$TARGETDIR/boot"
+		mount "$PART_BOOT" "$TARGETDIR/boot"
+	fi
 	if [ -n "${PART_ESP:-}" ]; then
 		mkdir -p "$TARGETDIR/boot/efi"
 		mount "$PART_ESP" "$TARGETDIR/boot/efi"
@@ -686,17 +845,82 @@ mount_target() {
 }
 
 write_fstab() {
-	local uuid_root uuid_esp
+	local uuid_root uuid_esp uuid_boot
+	# Root UUID is the ext4 filesystem (mapper when encrypted), not the LUKS container.
 	uuid_root=$(blkid -s UUID -o value "$PART_ROOT")
 	{
 		printf '# /etc/fstab - generated by atelier-install\n'
 		printf 'UUID=%s / ext4 defaults 0 1\n' "$uuid_root"
+		if [ -n "${PART_BOOT:-}" ]; then
+			uuid_boot=$(blkid -s UUID -o value "$PART_BOOT")
+			printf 'UUID=%s /boot ext4 defaults 0 2\n' "$uuid_boot"
+		fi
 		if [ -n "${PART_ESP:-}" ]; then
 			uuid_esp=$(blkid -s UUID -o value "$PART_ESP")
 			printf 'UUID=%s /boot/efi vfat defaults 0 2\n' "$uuid_esp"
 		fi
 		printf 'tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0\n'
 	} >"$TARGETDIR/etc/fstab"
+}
+
+write_crypttab() {
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	local uuid
+	uuid=$(blkid -s UUID -o value "$PART_CRYPT")
+	[ -n "$uuid" ] || die "Could not read LUKS UUID from $PART_CRYPT"
+	{
+		printf '# /etc/crypttab - generated by atelier-install\n'
+		printf '%s UUID=%s none luks\n' "$CRYPT_NAME" "$uuid"
+	} >"$TARGETDIR/etc/crypttab"
+	chmod 600 "$TARGETDIR/etc/crypttab"
+	log "crypttab $CRYPT_NAME UUID=$uuid"
+}
+
+write_dracut_crypt() {
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	mkdir -p "$TARGETDIR/etc/dracut.conf.d"
+	{
+		printf '# generated by atelier-install (keep surrounding spaces in += values)\n'
+		printf 'add_dracutmodules+=" crypt "\n'
+		printf 'install_items+=" /etc/crypttab "\n'
+	} >"$TARGETDIR/etc/dracut.conf.d/10-atelier-crypt.conf"
+}
+
+configure_grub_crypt() {
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	local uuid extra grub="$TARGETDIR/etc/default/grub"
+	uuid=$(blkid -s UUID -o value "$PART_CRYPT")
+	[ -n "$uuid" ] || die "Could not read LUKS UUID from $PART_CRYPT"
+	# rd.luks.uuid = LUKS container (not the inner ext4). rd.luks.name
+	# keeps the mapper at /dev/mapper/cryptroot to match crypttab.
+	extra="rd.luks.uuid=${uuid} rd.luks.name=${uuid}=${CRYPT_NAME}"
+	mkdir -p "$(dirname "$grub")"
+	if [ ! -f "$grub" ]; then
+		printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 %s"\n' "$extra" >"$grub"
+		log "GRUB $extra"
+		return 0
+	fi
+	if grep -q 'rd.luks.uuid=' "$grub"; then
+		sed -i -e "s/rd.luks.uuid=[^ \"']*/rd.luks.uuid=${uuid}/g" \
+			-e "s/rd.luks.name=[^ \"']*/rd.luks.name=${uuid}=${CRYPT_NAME}/g" "$grub"
+	elif grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grub"; then
+		sed -i -e "/^GRUB_CMDLINE_LINUX_DEFAULT=/s/\"[[:space:]]*$/ ${extra}\"/" "$grub"
+	fi
+	if ! grep -q 'rd.luks.uuid=' "$grub"; then
+		printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 %s"\n' "$extra" >>"$grub"
+	fi
+	log "GRUB $extra"
+}
+
+regenerate_initramfs() {
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	# Must run AFTER crypttab + dracut snippet exist; install_packages
+	# reconfigures linux too early (no crypttab yet).
+	log "Regenerating initramfs for LUKS"
+	if ! chroot "$TARGETDIR" command -v dracut >/dev/null 2>&1; then
+		die "dracut not found on target; cannot build LUKS initramfs"
+	fi
+	chroot "$TARGETDIR" dracut --force --regenerate-all >>"$LOG" 2>&1
 }
 
 install_packages() {
@@ -739,6 +963,9 @@ install_packages() {
 		else pkgs+=(grub); fi
 	else
 		is_efi && pkgs+=(dosfstools)
+	fi
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		pkgs+=(cryptsetup)
 	fi
 
 	if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-desktop >/dev/null 2>&1; then
@@ -831,6 +1058,10 @@ configure_system() {
 	enable_sv dbus
 	enable_sv elogind
 	write_fstab
+	write_crypttab
+	write_dracut_crypt
+	configure_grub_crypt
+	regenerate_initramfs
 	rm -f "$TARGETDIR/usr/sbin/void-installer" "$TARGETDIR/usr/bin/void-installer" \
 		"$TARGETDIR/etc/profile.d/atelier-live.sh" 2>/dev/null || true
 }
@@ -851,21 +1082,27 @@ cleanup_mounts() {
 	log "Unmounting target"
 	sync
 	umount -R "$TARGETDIR" 2>/dev/null || umount -Rl "$TARGETDIR" 2>/dev/null || true
+	close_cryptroot
 }
 
 run_install() {
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		have cryptsetup || die "cryptsetup is required for disk encryption"
+		[ -n "${LUKSPASS:-}" ] || die "LUKS passphrase missing"
+	fi
 	ui_info "Installing... This may take a long time.
 
 Log: $LOG
 
 Do not power off."
-	trap 'log "FAILED - see $LOG"; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
+	trap 'log "FAILED - see $LOG"; wipe_luks_pass; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
 	partition_disk
 	mount_target
 	install_packages
 	configure_system
 	install_bootloader
 	trap - ERR
+	wipe_luks_pass
 	cleanup_mounts
 	ui_info "Installation complete.
 
@@ -880,7 +1117,7 @@ Log: $LOG"
 
 usage() {
 	cat <<EOF
-Atelier installer v${VERSION} (whole-disk)
+Atelier installer v${VERSION} (whole-disk, optional LUKS2)
 
 Usage: atelier-install [options]
 
@@ -925,13 +1162,14 @@ main() {
 	fi
 
 	# steps as names; navigate with index
-	local steps=(welcome disk identity locale graphics software mirror bootloader summary)
+	local steps=(welcome disk encryption identity locale graphics software mirror bootloader summary)
 	local i=0 n=${#steps[@]} rc
 	while [ "$i" -ge 0 ] && [ "$i" -lt "$n" ]; do
 		rc=0
 		case ${steps[$i]} in
 		welcome) step_welcome || rc=$? ;;
 		disk) step_disk || rc=$? ;;
+		encryption) step_encryption || rc=$? ;;
 		identity) step_identity || rc=$? ;;
 		locale) step_locale || rc=$? ;;
 		graphics) step_graphics || rc=$? ;;

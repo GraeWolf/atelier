@@ -26,6 +26,7 @@ zenity
 parted
 e2fsprogs
 dosfstools
+cryptsetup
 xtools-minimal
 xmirror
 grub

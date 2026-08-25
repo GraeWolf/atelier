@@ -136,7 +136,7 @@ See [windows-vm.md](windows-vm.md).
 ## Explicit gaps (still open)
 
 1. **JetBrains Mono** — personal font package if PLAN fonts are required as-named (UI currently uses Fira Code)  
-2. Full-disk encryption — deferred past MVP  
+2. ~~Full-disk encryption~~ — optional LUKS2 root in `atelier-install` 0.4.0 (`cryptsetup`; unencrypted `/boot`)  
 
 ### GraeWolf personal Void repository (public)
 

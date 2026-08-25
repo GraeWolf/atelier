@@ -53,7 +53,7 @@ Simplicity and clarity over features
 Opinionated defaults
 Easy to understand and modify
 Elegant, clean, and aesthetically consistent (Tokyo Night dark)
-Security is important, but full-disk encryption is deferred past MVP
+Security is important. Optional LUKS2 root encryption is available at install (post-MVP); /boot and the EFI partition stay unencrypted.
 
 
 6. Technical Specifications
@@ -146,7 +146,9 @@ User documentation: docs/user/
 
 Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-repo) provides packages such as brave-origin; enabled via atelier-void-repo on live and installed systems.
 
-Later phases: Extra hardware support, encryption, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
+Later phases: Extra hardware support, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
+
+Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted.
 
 Post-MVP optional (not part of Phase 1 desktop meta):
 - Windows VM via package `atelier-windows-vm` (Docker + dockur/windows + FreeRDP).
