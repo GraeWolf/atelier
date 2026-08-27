@@ -124,8 +124,9 @@ One bar per monitor (`atelier-primary` / `atelier-secondary`).
 
 | Area | Behavior |
 |------|----------|
-| Primary bar | Desktops **1–6** as **icons** (bspwm module), CPU, mem, net, volume, layout, **tray** |
+| Primary bar | Desktops **1–6** as **icons** (bspwm module), battery, CPU, mem, net, volume, layout, **tray** |
 | Secondary bar | Desktops **7–9** as icons, same modules **without** tray |
+| Battery | Icon + % **before CPU**; **hidden** when no battery (desktops) |
 | Volume | Icon + %; **scroll** wheel changes volume; right-click → pavucontrol |
 | Network | Wi‑Fi or ethernet **icon** + up/down; **left-click** → floating `nmtui` |
 | Tray | **Primary only** (X11 limitation) |

@@ -75,6 +75,7 @@ for f in \
   .config/sxhkd/sxhkdrc \
   .config/polybar/config.ini \
   .config/polybar/net-status.sh \
+  .config/polybar/battery-status.sh \
   .config/ghostty/config \
   .config/rofi/config.rasi \
   .config/gtk-3.0/gtk.css \

@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.1
+version=0.3.2
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -49,6 +49,8 @@ do_install() {
 	vinstall "${FILESDIR}/etc/skel/.config/polybar/launch.sh" 755 \
 		etc/skel/.config/polybar
 	vinstall "${FILESDIR}/etc/skel/.config/polybar/net-status.sh" 755 \
+		etc/skel/.config/polybar
+	vinstall "${FILESDIR}/etc/skel/.config/polybar/battery-status.sh" 755 \
 		etc/skel/.config/polybar
 	vinstall "${FILESDIR}/etc/skel/.config/polybar/nmtui-float.sh" 755 \
 		etc/skel/.config/polybar
