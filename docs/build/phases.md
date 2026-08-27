@@ -76,7 +76,7 @@ Remaining gaps (JetBrains font package, extra hardware polish) are documented in
 | Not included | LVM, swap, GRUB cryptodisk, TPM, encrypted `/boot` |
 | Live package | `cryptsetup` on the live ISO + `atelier-installer` depends |
 | Docs | [installer.md](installer.md); [../user/installer.md](../user/installer.md) |
-| Status | Implemented (`atelier-installer` 0.4.0) |
+| Status | Implemented (`atelier-installer` 0.4.1) |
 
 ## Post-MVP optional: Windows VM
 

@@ -7,7 +7,7 @@
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
 set -euo pipefail
 
-VERSION="0.4.0"
+VERSION="0.4.1"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -916,11 +916,17 @@ regenerate_initramfs() {
 	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
 	# Must run AFTER crypttab + dracut snippet exist; install_packages
 	# reconfigures linux too early (no crypttab yet).
-	log "Regenerating initramfs for LUKS"
-	if ! chroot "$TARGETDIR" command -v dracut >/dev/null 2>&1; then
+	# Do not use `chroot command -v`: command is a shell builtin, not a binary.
+	local dracut_bin=""
+	if [ -x "$TARGETDIR/usr/bin/dracut" ]; then
+		dracut_bin=/usr/bin/dracut
+	elif [ -x "$TARGETDIR/usr/sbin/dracut" ]; then
+		dracut_bin=/usr/sbin/dracut
+	else
 		die "dracut not found on target; cannot build LUKS initramfs"
 	fi
-	chroot "$TARGETDIR" dracut --force --regenerate-all >>"$LOG" 2>&1
+	log "Regenerating initramfs for LUKS ($dracut_bin)"
+	chroot "$TARGETDIR" "$dracut_bin" --force --regenerate-all >>"$LOG" 2>&1
 }
 
 install_packages() {
@@ -965,7 +971,8 @@ install_packages() {
 		is_efi && pkgs+=(dosfstools)
 	fi
 	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
-		pkgs+=(cryptsetup)
+		# linux-base already pulls dracut; list it so the LUKS path is explicit.
+		pkgs+=(cryptsetup dracut)
 	fi
 
 	if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-desktop >/dev/null 2>&1; then
@@ -1046,7 +1053,7 @@ configure_system() {
 	fi
 
 	# XDG user directories (Desktop, Documents, Downloads, ...) for the new user
-	if chroot "$TARGETDIR" command -v xdg-user-dirs-update >/dev/null 2>&1; then
+	if [ -x "$TARGETDIR/usr/bin/xdg-user-dirs-update" ]; then
 		log "running xdg-user-dirs-update for $USERNAME"
 		chroot "$TARGETDIR" su - "$USERNAME" -c 'xdg-user-dirs-update' >>"$LOG" 2>&1 || \
 			log "WARN: xdg-user-dirs-update failed for $USERNAME"
