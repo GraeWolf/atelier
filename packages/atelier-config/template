@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.2
+version=0.3.3
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -70,6 +70,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-menu" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-theme" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-nvidia" 755 usr/bin
 	vinstall "${FILESDIR}/usr/share/doc/atelier/keybinds.txt" 644 \
 		usr/share/doc/atelier
 	vinstall "${FILESDIR}/etc/skel/.config/atelier/keybinds.txt" 644 \

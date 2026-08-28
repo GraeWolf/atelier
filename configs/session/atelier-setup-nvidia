@@ -1,6 +1,7 @@
 #!/bin/sh
 # Enable Void nonfree and install proprietary NVIDIA + Atelier glue.
-# Intended for installed systems (or a live session about to install).
+# Shipped by atelier-config so the command exists even when NVIDIA was
+# skipped at install time (atelier-nvidia depends on nvidia itself).
 # Usage: sudo atelier-setup-nvidia
 set -eu
 
@@ -15,11 +16,13 @@ fi
 
 # Detect GPU (best-effort)
 if command -v lspci >/dev/null 2>&1; then
-	if lspci -nn 2>/dev/null | grep -qi nvidia; then
+	if lspci -nn 2>/dev/null | grep -qiE 'nvidia|\[10de:'; then
 		log "NVIDIA device detected via lspci"
 	else
 		log "warning: no NVIDIA device found via lspci; continuing anyway"
 	fi
+elif grep -q '^0x10de$' /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+	log "NVIDIA PCI vendor 10de detected via sysfs"
 fi
 
 # Enable nonfree repository
@@ -28,34 +31,47 @@ if ! xbps-query -R void-repo-nonfree >/dev/null 2>&1 && \
 	log "installing void-repo-nonfree"
 	xbps-install -Sy void-repo-nonfree
 else
-	# Ensure package is installed so /usr/share/xbps.d snippet is present
 	xbps-install -Sy void-repo-nonfree 2>/dev/null || true
 fi
 
-# If the host only has the share snippet, mirror into /etc/xbps.d when missing
 if [ -f /usr/share/xbps.d/10-repository-nonfree.conf ] && \
 	[ ! -f /etc/xbps.d/10-repository-nonfree.conf ]; then
 	mkdir -p /etc/xbps.d
-	# void-repo-nonfree usually activates via /usr/share/xbps.d — nothing else needed
 	log "nonfree repository configuration available"
 fi
 
 log "syncing repositories"
 xbps-install -S
 
-log "installing proprietary NVIDIA stack (nvidia) and atelier-nvidia"
-# atelier-nvidia may already be partially installed; force full set
-xbps-install -Sy nvidia atelier-nvidia
+# linux-headers required for nvidia-dkms against the running kernel series
+log "installing linux-headers, nvidia, and atelier-nvidia (if available)"
+set -- linux-headers nvidia
+if xbps-query -R atelier-nvidia >/dev/null 2>&1 || \
+	xbps-query --repository=/usr/share/atelier/repo -R atelier-nvidia >/dev/null 2>&1; then
+	set -- "$@" atelier-nvidia
+else
+	log "warning: atelier-nvidia not in repos; nouveau blacklist may be missing"
+fi
+
+if [ -d /usr/share/atelier/repo ] && ls /usr/share/atelier/repo/*.xbps >/dev/null 2>&1; then
+	xbps-install --repository=/usr/share/atelier/repo -Sy "$@" || \
+		xbps-install -Sy "$@"
+else
+	xbps-install -Sy "$@"
+fi
 
 log "rebuilding initramfs (best-effort) for nouveau blacklist"
 if command -v dracut >/dev/null 2>&1; then
-	dracut --force || log "warning: dracut failed; reboot may still work"
+	dracut --force --regenerate-all || log "warning: dracut failed; reboot may still work"
 elif [ -x /usr/bin/xbps-reconfigure ]; then
-	# linux package triggers usually rebuild initramfs
 	xbps-reconfigure -f linux 2>/dev/null || true
 fi
 
 log "done"
-log "reboot recommended, then start X (startx) or your session"
+log "reboot recommended, then confirm: lsmod | grep nvidia && nvidia-smi"
+if xbps-query xlibre-xserver >/dev/null 2>&1 || xbps-query xlibre >/dev/null 2>&1; then
+	log "Xlibre is installed: Atelier uses the modesetting DDX, not nvidia_drv.so"
+	log "hybrid offload (iGPU display + NVIDIA render): prime-run <command>"
+fi
 log "optional: install Xlibre with  sudo atelier-setup-xlibre"
 log "docs: /usr/share/doc/atelier/nvidia-README.txt"

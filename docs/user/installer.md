@@ -19,7 +19,7 @@
    ```
 
 5. Walk **Back / Next** through disk, optional encryption, identity, locale, graphics, optional software, mirror, bootloader, and summary.
-6. Wait for packages (needs network). Log: `/tmp/atelier-install.log`
+6. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 7. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
 Optional on the live medium only:
@@ -70,9 +70,9 @@ Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No 
 
 ## Graphics
 
-- **NVIDIA GPU detected:** Yes/No for proprietary drivers  
-- **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia`  
-- **Xlibre:** Yes/No (usually No in VMs)
+- **NVIDIA GPU detected:** Yes/No for proprietary drivers (separate package transaction; a driver failure does not undo the rest of the install)
+- **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia` (always installed with the desktop)
+- **Xlibre:** Yes/No (usually No in VMs). With NVIDIA, Atelier uses modesetting + `prime-run` on hybrid laptops.
 
 See [nvidia.md](nvidia.md).
 

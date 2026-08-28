@@ -28,7 +28,8 @@ Verified against the host’s official Void `x86_64` repository (2026-08-02). Na
 |------|-----------|--------|-------|
 | Enable nonfree | `void-repo-nonfree` | void | Ships nonfree mirror snippet |
 | Proprietary stack | `nvidia` | **void-nonfree** | Pulls libs/dkms/firmware; **x86_64 only** |
-| Atelier glue | `atelier-nvidia` | **personal** | Blacklist nouveau, modeset, xorg snippet, setup script |
+| Atelier glue | `atelier-nvidia` | **personal** | Blacklist nouveau, modeset, modesetting DDX snippet |
+| Setup helper | `atelier-setup-nvidia` | **personal** (`atelier-config`) | Always on the desktop; installs nvidia later |
 
 See [nvidia.md](nvidia.md).
 

@@ -6,6 +6,7 @@
 # Requires Void nonfree repository enabled during mklive (-r .../nonfree).
 
 void-repo-nonfree
+linux-headers
 nvidia
 atelier-nvidia
 atelier-xlibre-repo

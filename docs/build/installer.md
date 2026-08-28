@@ -42,7 +42,7 @@ welcome → disk → encryption → identity → locale → graphics → softwar
 | Variable | Effect |
 |----------|--------|
 | `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos; **nonfree always** (Dropbox) |
-| `INSTALL_NVIDIA` | nvidia + atelier-nvidia |
+| `INSTALL_NVIDIA` | separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal) |
 | `INSTALL_XLIBRE` | atelier-xlibre-repo + xlibre |
 | `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
 | `INSTALL_BOOTLOADER` | GRUB install or skip |
@@ -50,6 +50,10 @@ welcome → disk → encryption → identity → locale → graphics → softwar
 | (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
 
 After `useradd`, runs `su - $USER -c xdg-user-dirs-update`.
+
+The live log `/tmp/atelier-install.log` is copied to the target as
+`/var/log/atelier-install.log` before unmount (including failed installs
+when the target is still mounted).
 
 ## Optional LUKS2
 

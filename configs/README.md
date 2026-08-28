@@ -24,6 +24,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |
 | `session/atelier-pkg` | `/usr/bin/atelier-pkg` | XBPS install/remove/update (fzf; from Install menu) |
 | `session/atelier-theme` | `/usr/bin/atelier-theme` | Palette apply / wallpaper recolor / from-wallpaper |
+| `session/atelier-setup-nvidia` | `/usr/bin/atelier-setup-nvidia` | Post-install NVIDIA driver setup (always on desktop) |
 | `themes/` | `/usr/share/atelier/themes/` | Named palettes (tokyo-night, nord, catppuccin-mocha) |
 | `themes/templates/` | `/usr/share/atelier/templates/` | Per-app color templates |
 | `gtk/` | `~/.config/gtk-3.0`, `gtk-4.0` | GTK theme overrides |

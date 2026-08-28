@@ -11,6 +11,7 @@
 
 | Package | Role |
 |---------|------|
+| `atelier-config` | Ships `atelier-setup-nvidia` (always on the desktop) |
 | `atelier-nvidia` | Configs + depends on `void-repo-nonfree` + `nvidia` |
 | `atelier-xlibre-repo` | Public key + xbps.d for xlibre-void; `atelier-setup-xlibre` |
 
@@ -21,14 +22,21 @@
 | `/etc/modprobe.d/atelier-blacklist-nouveau.conf` | Blacklist nouveau |
 | `/etc/modprobe.d/atelier-nvidia.conf` | `nvidia-drm modeset=1` |
 | `/etc/modules-load.d/atelier-nvidia.conf` | Load nvidia modules at boot |
-| `/etc/X11/xorg.conf.d/20-nvidia.conf` | OutputClass for nvidia |
+| `/etc/X11/xorg.conf.d/20-nvidia.conf` | OutputClass: **modesetting** DDX (not `nvidia_drv.so`) |
+
+Xlibre video ABI 28 does not match Void's `nvidia_drv.so` (ABI 25). Hybrid
+laptops must not set `PrimaryGPU`; the panel is on the iGPU. Offload with
+`prime-run`.
 
 ### Setup helpers
 
 ```bash
-sudo atelier-setup-nvidia   # enable nonfree, install nvidia + atelier-nvidia
+sudo atelier-setup-nvidia   # enable nonfree, install linux-headers + nvidia + atelier-nvidia
 sudo atelier-setup-xlibre   # enable xlibre-void, install xlibre
 ```
+
+`atelier-setup-nvidia` is in `atelier-config`, not `atelier-nvidia`, so the
+documented recovery path exists when NVIDIA was skipped at install.
 
 ## Void sources
 
@@ -45,8 +53,11 @@ sudo atelier-setup-xlibre   # enable xlibre-void, install xlibre
 1. Whether to install proprietary NVIDIA (default yes if `lspci` sees NVIDIA)
 2. Whether to install Xlibre from the external repo
 
-When NVIDIA is selected, the target gets nonfree enabled and packages  
-`void-repo-nonfree`, `nvidia`, and `atelier-nvidia` (if in personal repo).
+When NVIDIA is selected, the target gets a **separate** xbps transaction
+for `linux-headers`, `nvidia`, and `atelier-nvidia` (if in personal repo).
+Failure of that transaction does not roll back the desktop; it is logged
+to `/var/log/atelier-install.log` and the UI tells the user to run
+`sudo atelier-setup-nvidia` after reboot.
 
 ## Live ISO strategy
 
@@ -89,6 +100,7 @@ xbps-query --repository=$PWD/repo/out -Rs 'atelier-nvidia|atelier-xlibre'
 ## Risks / notes
 
 - `nvidia` is **x86_64-only** on Void
-- DKMS rebuilds against the installed kernel (`linux`)
+- DKMS rebuilds against the installed kernel (`linux`); headers must match `uname -r`
 - Xlibre is third-party; keep TTY recovery + ability to reinstall `xorg-server`
+- Xlibre: use modesetting DDX + nvidia kernel module, not proprietary `nvidia_drv.so`
 - Never commit private signing keys (Xlibre **public** key is shipped on purpose)

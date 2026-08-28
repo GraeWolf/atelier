@@ -7,7 +7,7 @@
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
 set -euo pipefail
 
-VERSION="0.4.1"
+VERSION="0.4.2"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -18,6 +18,7 @@ ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
 # State (wizard)
 INSTALL_NVIDIA=0
 INSTALL_XLIBRE=0
+NVIDIA_INSTALL_STATUS=skipped
 INSTALL_BOOTLOADER=1
 PKG_EXTRA_CLI=0
 PKG_MEDIA=0
@@ -392,7 +393,11 @@ list_disks() {
 }
 
 detect_nvidia_gpu() {
-	have lspci && lspci -nn 2>/dev/null | grep -qi nvidia
+	if have lspci && lspci -nn 2>/dev/null | grep -qiE 'nvidia|\[10de:'; then
+		return 0
+	fi
+	# PCI vendor 10de even if lspci is missing or the string is odd
+	grep -q '^0x10de$' /sys/bus/pci/devices/*/vendor 2>/dev/null
 }
 
 valid_hostname() {
@@ -636,7 +641,8 @@ step_graphics() {
 
 Install proprietary NVIDIA drivers?
   Yes = nonfree nvidia + Atelier config
-  No  = skip (sudo atelier-setup-nvidia later)"; then
+  No  = skip (sudo atelier-setup-nvidia later;
+        that command is always on the desktop)"; then
 			INSTALL_NVIDIA=1
 		fi
 	else
@@ -912,20 +918,33 @@ configure_grub_crypt() {
 	log "GRUB $extra"
 }
 
+copy_install_log() {
+	if [ -d "$TARGETDIR" ] && [ -f "$LOG" ]; then
+		mkdir -p "$TARGETDIR/var/log"
+		cp -a "$LOG" "$TARGETDIR/var/log/atelier-install.log" || true
+		log "copied install log to target /var/log/atelier-install.log"
+	fi
+}
+
 regenerate_initramfs() {
-	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	local need_crypt=0 need_nvidia=0 dracut_bin=""
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && need_crypt=1
+	[ "${NVIDIA_INSTALL_STATUS:-}" = ok ] && need_nvidia=1
+	[ "$need_crypt" -eq 1 ] || [ "$need_nvidia" -eq 1 ] || return 0
 	# Must run AFTER crypttab + dracut snippet exist; install_packages
 	# reconfigures linux too early (no crypttab yet).
 	# Do not use `chroot command -v`: command is a shell builtin, not a binary.
-	local dracut_bin=""
 	if [ -x "$TARGETDIR/usr/bin/dracut" ]; then
 		dracut_bin=/usr/bin/dracut
 	elif [ -x "$TARGETDIR/usr/sbin/dracut" ]; then
 		dracut_bin=/usr/sbin/dracut
-	else
+	elif [ "$need_crypt" -eq 1 ]; then
 		die "dracut not found on target; cannot build LUKS initramfs"
+	else
+		log "WARN: dracut not found; nouveau blacklist may not apply in initramfs"
+		return 0
 	fi
-	log "Regenerating initramfs for LUKS ($dracut_bin)"
+	log "Regenerating initramfs ($dracut_bin)"
 	chroot "$TARGETDIR" "$dracut_bin" --force --regenerate-all >>"$LOG" 2>&1
 }
 
@@ -981,12 +1000,6 @@ install_packages() {
 		log "WARN: atelier-desktop not in personal repo"
 	fi
 
-	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
-		pkgs+=(nvidia)
-		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-nvidia >/dev/null 2>&1; then
-			pkgs+=(atelier-nvidia)
-		fi
-	fi
 	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ]; then
 		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-xlibre-repo >/dev/null 2>&1; then
 			pkgs+=(atelier-xlibre-repo)
@@ -1007,6 +1020,29 @@ install_packages() {
 
 	log "xbps-install ${pkgs[*]}"
 	xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
+
+	# NVIDIA is a separate transaction so a DKMS/driver failure cannot
+	# roll back the rest of the system. Failure is logged, not fatal.
+	NVIDIA_INSTALL_STATUS=skipped
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+		NVIDIA_INSTALL_STATUS=failed
+		local npkgs=(linux-headers nvidia)
+		if [ -d "$ATELIER_REPO_LIVE" ] && \
+			xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-nvidia >/dev/null 2>&1; then
+			npkgs+=(atelier-nvidia)
+		else
+			log "WARN: atelier-nvidia not in personal repo"
+		fi
+		log "xbps-install NVIDIA ${npkgs[*]}"
+		if xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${npkgs[@]}" 2>&1 | tee -a "$LOG" \
+			&& xbps-query -r "$TARGETDIR" nvidia >/dev/null 2>&1; then
+			NVIDIA_INSTALL_STATUS=ok
+			log "NVIDIA packages installed"
+		else
+			log "WARN: NVIDIA install failed; desktop is otherwise complete"
+			log "WARN: after reboot run: sudo atelier-setup-nvidia"
+		fi
+	fi
 
 	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ] && [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
 		xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
@@ -1102,20 +1138,29 @@ run_install() {
 Log: $LOG
 
 Do not power off."
-	trap 'log "FAILED - see $LOG"; wipe_luks_pass; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
+	trap 'log "FAILED - see $LOG"; copy_install_log; wipe_luks_pass; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
 	partition_disk
 	mount_target
 	install_packages
 	configure_system
 	install_bootloader
 	trap - ERR
+	copy_install_log
 	wipe_luks_pass
 	cleanup_mounts
-	ui_info "Installation complete.
+	local done_msg="Installation complete.
 
 Reboot into Atelier Linux and remove the live medium.
 
-Log: $LOG"
+Log: $LOG
+Also copied to the new system as /var/log/atelier-install.log"
+	if [ "${NVIDIA_INSTALL_STATUS:-}" = failed ]; then
+		done_msg="$done_msg
+
+NVIDIA drivers failed to install.
+After reboot: sudo atelier-setup-nvidia"
+	fi
+	ui_info "$done_msg"
 	if ui_confirm "Reboot now?"; then
 		sync
 		reboot || telinit 6 2>/dev/null || true
