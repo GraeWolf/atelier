@@ -111,7 +111,7 @@ brave-origin, nemo, neovim, thunderbird, audacity, xfburn, ristretto, exa, bat, 
 
 8. Aesthetics
 
-Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, terminals, TUIs, rofi, polybar, neovim, and the lock screen.
+Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, terminals, TUIs, rofi, polybar, neovim, the lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed.
 Wallpaper: one stock image, **recolored** to the active palette (gowall).
 Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
 
@@ -155,3 +155,7 @@ Post-MVP optional (not part of Phase 1 desktop meta):
   Opt-in only; not a dependency of `atelier-desktop`; not on live ISO package lists.
   Host packages come from official Void XBPS; at install time Docker may pull the third-party
   image `dockurr/windows` (documented pure-XBPS exception). See docs/build/windows-vm.md.
+- ASUS ROG keyboard backlight via package `atelier-asus` (`atelier-kbd` + udev restore).
+  Opt-in only; not a dependency of `atelier-desktop`; not on live ISO package lists.
+  Fixes hid-asus initializing `asus::kbd_backlight` to 0 (keys dark after boot).
+  See docs/user/asus.md.

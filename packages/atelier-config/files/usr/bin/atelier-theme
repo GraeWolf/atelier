@@ -380,6 +380,15 @@ reload_session() {
 	fi
 
 	apply_wallpaper "$outdir/wallpaper.png" "${background}"
+
+	# ASUS ROG Aura: follow accent (or colors.conf keyboard= override).
+	# No-op when atelier-asus is not installed.
+	_kbd=${accent:-}
+	[ -n "${keyboard:-}" ] && _kbd=$keyboard
+	if [ -n "$_kbd" ] && have atelier-kbd; then
+		atelier-kbd color "$_kbd" >/dev/null 2>&1 || true
+	fi
+	unset _kbd
 }
 
 cmd_set() {

@@ -1,0 +1,311 @@
+#!/bin/sh
+# Restore and step ASUS ROG keyboard backlight, and set Aura RGB colour.
+#
+# hid-asus initializes the LED class device to brightness 0, which turns the
+# keys off after POST. udev runs `atelier-kbd restore` on device add.
+#
+# Colour is a separate Aura HID output report on USB 0b05:19b6 (not sysfs).
+# Missing LED or hidraw is success so this package is harmless elsewhere.
+set -eu
+
+LED_DIR="${ATELIER_KBD_LED_DIR:-/sys/class/leds/asus::kbd_backlight}"
+BRIGHTNESS_FILE="$LED_DIR/brightness"
+MAX_FILE="$LED_DIR/max_brightness"
+STATE_DIR="${ATELIER_KBD_STATE_DIR:-/var/lib/atelier}"
+STATE_FILE="$STATE_DIR/kbd-brightness"
+COLOR_FILE="$STATE_DIR/kbd-color"
+DEFAULT_BRIGHTNESS=2
+# ITE N-KEY / Aura keyboard (GA503RM and similar)
+HID_ID="0003:00000B05:000019B6"
+
+log() { printf 'atelier-kbd: %s\n' "$*"; }
+die() { printf 'atelier-kbd: error: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+	cat <<'EOF'
+Usage: atelier-kbd <restore|up|down|toggle|get|set <n>|color <#rrggbb>|help>
+
+restore        Set last saved brightness (or 2) and last colour
+up             Increase brightness by 1
+down           Decrease brightness by 1
+toggle         Off if on; restore last non-zero if off
+get            Print current brightness
+set <n>        Set absolute brightness (0–max)
+color <#rgb>   Static Aura colour (also rrggbb / 0xrrggbb)
+help           This text
+EOF
+}
+
+have_led() { [ -e "$BRIGHTNESS_FILE" ]; }
+
+# No keyboard LED: nothing to do.
+require_led_or_ok() {
+	if ! have_led; then
+		log "no asus::kbd_backlight; nothing to do"
+		exit 0
+	fi
+}
+
+is_int() {
+	case "$1" in
+	'' | *[!0-9]*) return 1 ;;
+	*) return 0 ;;
+	esac
+}
+
+max_brightness() {
+	if [ -r "$MAX_FILE" ]; then
+		_m=$(cat "$MAX_FILE")
+		if is_int "$_m"; then
+			printf '%s\n' "$_m"
+			return 0
+		fi
+	fi
+	printf '%s\n' 3
+}
+
+current_brightness() {
+	_c=$(cat "$BRIGHTNESS_FILE")
+	if is_int "$_c"; then
+		printf '%s\n' "$_c"
+	else
+		printf '%s\n' 0
+	fi
+}
+
+clamp() {
+	_v=$1
+	_max=$(max_brightness)
+	is_int "$_v" || _v=0
+	if [ "$_v" -lt 0 ]; then
+		_v=0
+	fi
+	if [ "$_v" -gt "$_max" ]; then
+		_v=$_max
+	fi
+	printf '%s\n' "$_v"
+}
+
+save_state() {
+	_v=$1
+	# Never persist 0: boot would leave the keys dark again.
+	if [ "$_v" -le 0 ]; then
+		return 0
+	fi
+	if [ ! -d "$STATE_DIR" ]; then
+		mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+	fi
+	if [ -w "$STATE_DIR" ] || [ -w "$STATE_FILE" ]; then
+		printf '%s\n' "$_v" >"$STATE_FILE" 2>/dev/null || true
+	fi
+}
+
+load_state() {
+	if [ -r "$STATE_FILE" ]; then
+		_s=$(cat "$STATE_FILE")
+		if is_int "$_s" && [ "$_s" -gt 0 ]; then
+			printf '%s\n' "$_s"
+			return 0
+		fi
+	fi
+	printf '%s\n' "$DEFAULT_BRIGHTNESS"
+}
+
+write_brightness() {
+	_v=$(clamp "$1")
+	printf '%s\n' "$_v" >"$BRIGHTNESS_FILE"
+	save_state "$_v"
+	log "brightness ${_v}/$(max_brightness)"
+}
+
+# --- Aura HID colour ---------------------------------------------------------
+
+emit_byte() {
+	# POSIX: dash has no \xHH; %b + octal is portable.
+	printf '%b' "$(printf '\\%03o' "$1")"
+}
+
+# Assemble a report, then one write(). hidraw returns EIO on short writes
+# (a printf loop to the device is one byte per syscall).
+hid_write() {
+	_dev=$1
+	_size=$2
+	shift 2
+	_tmp=$(mktemp "${TMPDIR:-/tmp}/atelier-kbd.XXXXXX") || return 1
+	_i=0
+	{
+		for _b in "$@"; do
+			emit_byte "$_b"
+			_i=$((_i + 1))
+		done
+		while [ "$_i" -lt "$_size" ]; do
+			emit_byte 0
+			_i=$((_i + 1))
+		done
+	} >"$_tmp"
+	# Report ID 0x5d OUTPUT is 62 data bytes + ID = 63.
+	dd if="$_tmp" of="$_dev" bs="$_size" count=1 conv=notrunc 2>/dev/null
+	_st=$?
+	rm -f "$_tmp"
+	return "$_st"
+}
+
+find_aura_hidraw() {
+	if [ -n "${ATELIER_KBD_HIDRAW:-}" ]; then
+		if [ -e "$ATELIER_KBD_HIDRAW" ]; then
+			printf '%s\n' "$ATELIER_KBD_HIDRAW"
+			return 0
+		fi
+		return 1
+	fi
+	_d=
+	for _d in /sys/class/hidraw/hidraw*; do
+		[ -e "$_d/device/uevent" ] || continue
+		if grep -q "^HID_ID=${HID_ID}$" "$_d/device/uevent" 2>/dev/null; then
+			printf '%s\n' "/dev/$(basename "$_d")"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Parse #rrggbb / rrggbb / 0xrrggbb → three decimal bytes on stdout.
+parse_color() {
+	_hex=$1
+	_hex=${_hex#\#}
+	_hex=${_hex#0x}
+	_hex=${_hex#0X}
+	case $_hex in
+	[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
+	*) return 1 ;;
+	esac
+	printf '%d %d %d\n' \
+		"0x$(printf '%s' "$_hex" | cut -c1-2)" \
+		"0x$(printf '%s' "$_hex" | cut -c3-4)" \
+		"0x$(printf '%s' "$_hex" | cut -c5-6)"
+}
+
+save_color() {
+	_hex=$1
+	if [ ! -d "$STATE_DIR" ]; then
+		mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+	fi
+	if [ -w "$STATE_DIR" ] || [ -w "$COLOR_FILE" ]; then
+		printf '%s\n' "$_hex" >"$COLOR_FILE" 2>/dev/null || true
+	fi
+}
+
+# Aura static + SET + APPLY. Report 0x5d OUTPUT is 62 data bytes + ID.
+# Try 63 (descriptor), then 64 (asusctl pad), then 17 (legacy short).
+apply_aura_color() {
+	_r=$1
+	_g=$2
+	_b=$3
+	_dev=$(find_aura_hidraw) || {
+		log "no Aura hidraw (0b05:19b6); colour not set"
+		return 0
+	}
+	if [ ! -w "$_dev" ]; then
+		log "cannot write $_dev (need root or input group + udev rule)"
+		return 0
+	fi
+	_size=
+	for _size in 63 64 17; do
+		# 5d b3 zone=0 mode=static R G B speed=med dir=right 00 c2
+		if hid_write "$_dev" "$_size" \
+			93 179 0 0 "$_r" "$_g" "$_b" 235 0 0 0 0 0 \
+			&& hid_write "$_dev" "$_size" 93 181 \
+			&& hid_write "$_dev" "$_size" 93 180; then
+			return 0
+		fi
+	done
+	log "Aura HID write failed on $_dev"
+	return 0
+}
+
+cmd_color() {
+	[ $# -ge 1 ] || die "color requires #rrggbb"
+	_rgb=$(parse_color "$1") || die "invalid colour: $1 (expected #rrggbb)"
+	# shellcheck disable=SC2086
+	set -- $_rgb
+	apply_aura_color "$1" "$2" "$3"
+	_norm=$(printf '#%02x%02x%02x' "$1" "$2" "$3")
+	save_color "$_norm"
+	log "colour $_norm"
+}
+
+cmd_restore() {
+	require_led_or_ok
+	write_brightness "$(load_state)"
+	if [ -r "$COLOR_FILE" ]; then
+		_c=$(cat "$COLOR_FILE")
+		if parse_color "$_c" >/dev/null 2>&1; then
+			cmd_color "$_c"
+		fi
+	fi
+}
+
+cmd_up() {
+	require_led_or_ok
+	_cur=$(current_brightness)
+	write_brightness $((_cur + 1))
+}
+
+cmd_down() {
+	require_led_or_ok
+	_cur=$(current_brightness)
+	if [ "$_cur" -le 0 ]; then
+		write_brightness 0
+	else
+		write_brightness $((_cur - 1))
+	fi
+}
+
+cmd_toggle() {
+	require_led_or_ok
+	_cur=$(current_brightness)
+	if [ "$_cur" -gt 0 ]; then
+		save_state "$_cur"
+		printf '%s\n' 0 >"$BRIGHTNESS_FILE"
+		log "brightness 0/$(max_brightness) (off)"
+	else
+		write_brightness "$(load_state)"
+	fi
+}
+
+cmd_get() {
+	require_led_or_ok
+	printf '%s\n' "$(current_brightness)"
+}
+
+cmd_set() {
+	require_led_or_ok
+	[ $# -ge 1 ] || die "set requires a brightness value"
+	write_brightness "$1"
+}
+
+[ $# -ge 1 ] || {
+	usage >&2
+	exit 1
+}
+
+case "$1" in
+restore) cmd_restore ;;
+up) cmd_up ;;
+down) cmd_down ;;
+toggle) cmd_toggle ;;
+get) cmd_get ;;
+set)
+	shift
+	cmd_set "$@"
+	;;
+color | colour)
+	shift
+	cmd_color "$@"
+	;;
+help | -h | --help) usage ;;
+*)
+	usage >&2
+	die "unknown command: $1"
+	;;
+esac

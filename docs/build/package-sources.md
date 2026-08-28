@@ -112,6 +112,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | `atelier-xlibre-repo` | Xlibre external repo key + xbps.d | **personal** |
 | `atelier-void-repo` | GraeWolf void-repo public key + xbps.d | **personal** |
 | `atelier-windows-vm` | Optional Windows VM (Docker + FreeRDP + dockur image) | **personal** (post-MVP; opt-in) |
+| `atelier-asus` | Optional ASUS ROG keyboard backlight restore (`atelier-kbd` + udev) | **personal** (post-MVP; opt-in) |
 
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
@@ -126,6 +127,15 @@ Config sources live under `configs/`; sync into the package with `scripts/sync-a
 | Guest image | `dockurr/windows` | Docker registry | Pulled at user install time; not XBPS |
 
 See [windows-vm.md](windows-vm.md).
+
+### Optional ASUS keyboard (`atelier-asus`)
+
+| Role | XBPS | Source | Notes |
+|------|------|--------|-------|
+| Atelier package | `atelier-asus` | **personal** | `atelier-kbd`, udev restore; not on ISO lists |
+| Brightness CLI | `brightnessctl` | void | Direct depend; already pulled by `atelier-config` |
+
+Restores `/sys/class/leds/asus::kbd_backlight` after `hid-asus` initializes it to 0. See [../user/asus.md](../user/asus.md). Do **not** add to `atelier-desktop` or `iso/package-lists/*`.
 
 ## Closed / resolved
 

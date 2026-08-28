@@ -142,12 +142,22 @@ alt + XF86AudioLowerVolume
 super + shift + v
 	pavucontrol
 
-# --- Brightness (laptops; no-op friendly if brightnessctl missing) -----------
+# --- Brightness (laptops; no-op if the matching sysfs node is missing) ------
 XF86MonBrightnessUp
 	sh -c 'command -v brightnessctl >/dev/null && brightnessctl set +5% || true'
 
 XF86MonBrightnessDown
 	sh -c 'command -v brightnessctl >/dev/null && brightnessctl set 5%- || true'
+
+# Keyboard backlight (KEY_KBDILLUM*). atelier-kbd restores ASUS LEDs at boot.
+XF86KbdBrightnessUp
+	sh -c 'if command -v atelier-kbd >/dev/null 2>&1; then exec atelier-kbd up; fi; command -v brightnessctl >/dev/null && brightnessctl -d "*::kbd_backlight" set +1 || true'
+
+XF86KbdBrightnessDown
+	sh -c 'if command -v atelier-kbd >/dev/null 2>&1; then exec atelier-kbd down; fi; command -v brightnessctl >/dev/null && brightnessctl -d "*::kbd_backlight" set 1- || true'
+
+XF86KbdLightOnOff
+	sh -c 'command -v atelier-kbd >/dev/null 2>&1 && exec atelier-kbd toggle || true'
 
 # --- Capture (no Print key — Omarchy-style chords) ---------------------------
 # Menu: region / window / full

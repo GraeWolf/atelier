@@ -56,7 +56,8 @@
   Super+Shift+m        Multi-monitor layout wizard
   Super+Shift+v        Volume mixer (pavucontrol)
   Media volume keys    Raise / lower / mute (±5%; Alt+ for ±1%)
-  Brightness keys      Raise / lower (brightnessctl, if present)
+  Brightness keys      Raise / lower the panel (brightnessctl, if present)
+  Keyboard light keys  Raise / lower / toggle keyboard backlight
   Idle ~5 min          Auto-lock; ~2 min later while locked → suspend
 
  ── Notes ─────────────────────────────────────────────────────────────────

@@ -115,5 +115,6 @@ Optional later: also publish `repo/out` (atelier-*) to a static URL; examples re
 | `atelier-desktop` | metapackage (stack + apps + config + void-repo glue) |
 | `atelier-installer` | graphical installer |
 | `atelier-nvidia` / `atelier-xlibre-repo` / `atelier-void-repo` | hardware / external repos |
+| `atelier-asus` | optional ASUS ROG keyboard backlight (not on ISO) |
 
 See [package-sources.md](package-sources.md) for depends and gaps.

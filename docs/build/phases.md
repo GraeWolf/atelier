@@ -92,3 +92,17 @@ Remaining gaps (JetBrains font package, extra hardware polish) are documented in
 | Status | Implemented (`atelier-windows-vm` 0.2.0); bare-metal support gate in build docs |
 
 This is deliberate optional glue for Office-class apps—not Phase 1 MVP scope.
+
+## Post-MVP optional: ASUS ROG keyboard
+
+| Item | Policy |
+|------|--------|
+| Package | `atelier-asus` (personal repo) |
+| Role | Restore `asus::kbd_backlight` after hid-asus init (brightness 0) |
+| Desktop meta | **Not** a dependency of `atelier-desktop` |
+| Live ISO | **Not** on `iso/package-lists/*` |
+| Host packages | Void XBPS: `brightnessctl` (already in `atelier-config`) |
+| Docs | [../user/asus.md](../user/asus.md) |
+| Status | Implemented (`atelier-asus` 0.2.0); brightness via sysfs, static RGB via Aura HID + `atelier-theme` |
+
+Fn keyboard-light keys live in `atelier-config` sxhkd (no-op without a kbd LED).

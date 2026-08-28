@@ -34,7 +34,7 @@ xbps-query --repository=$PWD/repo/out -Rs atelier
 ```
 
 Produces `repo/out/*.xbps` (gitignored), including:  
-`atelier-base`, `atelier-config`, `atelier-desktop`, `atelier-installer`, `atelier-nvidia`, `atelier-xlibre-repo`, `atelier-void-repo`, and optional **`atelier-windows-vm`** (not on the live ISO).
+`atelier-base`, `atelier-config`, `atelier-desktop`, `atelier-installer`, `atelier-nvidia`, `atelier-xlibre-repo`, `atelier-void-repo`, and optional **`atelier-windows-vm`** / **`atelier-asus`** (not on the live ISO).
 
 Details: [personal-repo.md](personal-repo.md). Optional Windows VM: [windows-vm.md](windows-vm.md).
 

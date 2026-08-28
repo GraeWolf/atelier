@@ -114,7 +114,8 @@ Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; need
 | Super+Escape | Reload sxhkd |
 | Super+Shift+r | Restart bspwm |
 | Media volume keys | Raise / lower / mute (±5%; Alt+ for ±1%) |
-| Brightness keys | Raise / lower via `brightnessctl` when present |
+| Brightness keys | Raise / lower the **panel** via `brightnessctl` when present |
+| Keyboard light keys | Raise / lower / toggle **keyboard** backlight (`atelier-kbd` on ASUS ROG, else `brightnessctl`) |
 
 Full map: `~/.config/sxhkd/sxhkdrc` (from package `atelier-config`).
 
@@ -246,4 +247,4 @@ Log: `~/.cache/atelier/monitors.log`
 
 - Focus follows the mouse pointer (`focus_follows_pointer` in bspwm).
 - Keep configs simple — Atelier prefers clarity over heavy automation.
-- Theme: `atelier-theme` (default Tokyo Night; see customization guide).
+- Theme: `atelier-theme` (default Tokyo Night; see customization guide). ASUS ROG keyboard RGB follows `accent` when `atelier-asus` is installed.

@@ -29,7 +29,7 @@ Defaults are installed from **`atelier-config`** into `/etc/skel` for new users.
 
 ## Themes
 
-Switch the whole desktop palette (terminals, GTK, Qt, polybar, rofi, neovim, btop, starship, lock screen) and recolor the stock wallpaper:
+Switch the whole desktop palette (terminals, GTK, Qt, polybar, rofi, neovim, btop, starship, lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed) and recolor the stock wallpaper:
 
 ```bash
 atelier-theme list
@@ -53,6 +53,8 @@ atelier-theme wallpaper ~/Pictures/bar.png
 ```
 
 Hand-made themes: copy a directory from `/usr/share/atelier/themes/` to `~/.config/atelier/themes/<name>/` and edit `colors.conf`. Template overrides: `~/.config/atelier/templates/*.tpl`.
+
+ASUS ROG keyboard colour (opt-in package `atelier-asus`) follows `accent`. Override with `keyboard=#rrggbb` in `colors.conf`. See [asus.md](asus.md).
 
 Existing accounts created before the theme engine need the new skel includes (or a recopy of the listed configs from `/etc/skel`) plus one `atelier-theme set tokyo-night`.
 

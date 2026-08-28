@@ -61,6 +61,12 @@ Opt-in package for a Windows 11 guest used for Office-class apps. Stack: Void **
 
 This is a **documented exception** to “no foreign package formats”: it does not introduce Flatpak/AppImage/Snap; it uses Docker only for this optional path. Details: [windows-vm.md](windows-vm.md).
 
+### ASUS ROG keyboard (`atelier-asus`)
+
+Opt-in helper for ASUS ROG laptops where `hid-asus` exposes `asus::kbd_backlight` but leaves brightness at 0 after boot (keys dark). Ships `atelier-kbd` and a udev rule. Keyboard-light Fn keys are bound in `atelier-config` sxhkd (no-op without a kbd LED).
+
+**Policy:** not a dependency of `atelier-desktop`; not on live ISO package lists. Details: [../user/asus.md](../user/asus.md).
+
 ## Source of truth
 
 - Product goals and package lists: `PLAN.md`

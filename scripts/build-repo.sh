@@ -40,7 +40,7 @@ command -v xbps-create >/dev/null 2>&1 || atelier_die "xbps-create not found (in
 command -v xbps-rindex >/dev/null 2>&1 || atelier_die "xbps-rindex not found (install xbps)"
 
 # Package build order
-PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer atelier-nvidia atelier-xlibre-repo atelier-void-repo atelier-windows-vm"
+PACKAGE_ORDER="atelier-base atelier-config atelier-desktop atelier-installer atelier-nvidia atelier-xlibre-repo atelier-void-repo atelier-windows-vm atelier-asus"
 
 if [ "$DO_SYNC" -eq 1 ]; then
 	atelier_info "Syncing configs → atelier-config FILESDIR"
@@ -55,6 +55,8 @@ if [ "$DO_SYNC" -eq 1 ]; then
 	"$ROOT/scripts/sync-atelier-void-repo-files.sh"
 	atelier_info "Syncing Windows VM helpers"
 	"$ROOT/scripts/sync-atelier-windows-vm-files.sh"
+	atelier_info "Syncing ASUS keyboard helpers"
+	"$ROOT/scripts/sync-atelier-asus-files.sh"
 fi
 
 if [ -d "$STAGE_ROOT" ]; then
@@ -114,6 +116,7 @@ build_one() {
 	atelier-nvidia) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-nvidia/files" ;;
 	atelier-xlibre-repo) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-xlibre-repo/files" ;;
 	atelier-windows-vm) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-windows-vm/files" ;;
+	atelier-asus) stage_from_files "$_stage" "$PACKAGES_DIR/atelier-asus/files" ;;
 	*) stage_empty "$_stage" ;;
 	esac
 

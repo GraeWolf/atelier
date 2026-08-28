@@ -1,0 +1,30 @@
+# Template file for 'atelier-asus'
+# Opt-in ASUS ROG keyboard backlight restore (hid-asus brightness 0 after boot).
+# NOT a dependency of atelier-desktop. Not on live ISO package lists.
+#
+# NOTE: In this monorepo, build-repo.sh does NOT run do_install.
+# Files come from packages/atelier-asus/files/ via stage_from_files.
+# The do_install block below documents intended payload layout only.
+pkgname=atelier-asus
+version=0.2.1
+revision=1
+create_wrksrc=yes
+short_desc="Atelier ASUS ROG keyboard backlight helper"
+maintainer="Atelier Linux <atelier@localhost>"
+license="MIT"
+homepage="https://github.com/kmccuddy/atelier"
+
+# brightnessctl is already pulled by atelier-config; keep a direct depend so
+# this package works if installed alone on an ASUS machine.
+depends="
+ brightnessctl>=0
+"
+
+# DOCUMENTATION ONLY — not executed by scripts/build-repo.sh
+do_install() {
+	vinstall "${FILESDIR}/usr/bin/atelier-kbd" 755 usr/bin
+	vinstall "${FILESDIR}/etc/udev/rules.d/99-atelier-asus-kbd.rules" 644 \
+		etc/udev/rules.d
+	vinstall "${FILESDIR}/usr/share/doc/atelier/asus-README.txt" 644 \
+		usr/share/doc/atelier
+}

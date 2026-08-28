@@ -17,9 +17,13 @@ packages/
 ├── atelier-installer/
 │   ├── template
 │   └── files/          # from installer/ via sync script
-└── atelier-windows-vm/
+├── atelier-windows-vm/
+│   ├── template
+│   ├── helpers/        # CLI + setup stubs (canonical)
+│   └── files/          # from helpers/ via sync script
+└── atelier-asus/
     ├── template
-    ├── helpers/        # CLI + setup stubs (canonical)
+    ├── helpers/        # atelier-kbd + udev (canonical)
     └── files/          # from helpers/ via sync script
 ```
 
@@ -37,6 +41,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |
 | `atelier-void-repo` | files | GraeWolf personal Void repo (public key + xbps.d) |
 | `atelier-windows-vm` | files | Optional Windows VM (Docker + FreeRDP, v0.2.0); **not** a dep of `atelier-desktop` |
+| `atelier-asus` | files | Optional ASUS ROG keyboard backlight restore; **not** a dep of `atelier-desktop` |
 
 ## Config packaging workflow
 
@@ -45,7 +50,7 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 3. Commit sources and generated `packages/*/files/`
 4. `./scripts/build-repo.sh`
 
-`atelier-windows-vm` is post-MVP optional glue (PLAN note). Do not add it to `atelier-desktop` depends or live ISO lists.
+`atelier-windows-vm` and `atelier-asus` are post-MVP optional glue (PLAN notes). Do not add them to `atelier-desktop` depends or live ISO lists.
 
 ## Source of truth for names and gaps
 
