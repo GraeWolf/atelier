@@ -45,7 +45,7 @@ atelier-theme set "$(atelier-theme current)"
 
 Last non-zero brightness: `/var/lib/atelier/kbd-brightness`  
 Last colour: `/var/lib/atelier/kbd-color`  
-(the udev restore runs as root)
+(the udev restore runs as root; it is skipped in the initramfs until `/usr` is the real root)
 
 Screen brightness keys still control the **panel** (`amdgpu_bl0` / similar).
 

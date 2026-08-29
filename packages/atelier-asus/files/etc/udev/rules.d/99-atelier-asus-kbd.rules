@@ -1,6 +1,7 @@
 # hid-asus creates asus::kbd_backlight at brightness 0 (keys off after POST).
 # Restore the last non-zero brightness (or 2) and last Aura colour.
-ACTION=="add", SUBSYSTEM=="leds", KERNEL=="asus::kbd_backlight", RUN+="/usr/bin/atelier-kbd restore"
+# TEST: skip RUN in the initramfs (atelier-kbd lives on the real root).
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="asus::kbd_backlight", TEST=="/usr/bin/atelier-kbd", RUN+="/usr/bin/atelier-kbd restore"
 
 # User-session colour from atelier-theme (kmccuddy is in group input).
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="19b6", GROUP="input", MODE="0660"

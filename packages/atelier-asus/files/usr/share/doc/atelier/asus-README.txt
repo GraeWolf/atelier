@@ -43,7 +43,7 @@ CLI
 
 Last non-zero brightness: /var/lib/atelier/kbd-brightness
 Last colour:              /var/lib/atelier/kbd-color
-(udev restore runs as root so both persist across reboot)
+(udev restore runs as root so both persist across reboot; skipped in initramfs)
 
 Theme override
 --------------

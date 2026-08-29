@@ -6,7 +6,7 @@
 # Files come from packages/atelier-asus/files/ via stage_from_files.
 # The do_install block below documents intended payload layout only.
 pkgname=atelier-asus
-version=0.2.1
+version=0.2.2
 revision=1
 create_wrksrc=yes
 short_desc="Atelier ASUS ROG keyboard backlight helper"
