@@ -197,3 +197,15 @@ super + e
 
 super + shift + Return
 	sh -c 'command -v ghostty >/dev/null && exec ghostty -e neovim || exec xterm -e neovim'
+
+# --- Web apps (Brave/Chromium --app windows) ---------------------------------
+# Log in first in a normal browser window (Super+b). Add more via
+# Super+Alt+Space → Install → Web App.
+super + shift + g
+	atelier-webapp launch https://grok.com --class=atelier-webapp-grok
+
+super + shift + e
+	atelier-webapp launch https://mail.proton.me --class=atelier-webapp-proton-mail
+
+super + shift + x
+	atelier-webapp launch https://x.com --class=atelier-webapp-x

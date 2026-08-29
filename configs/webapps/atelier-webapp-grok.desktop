@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Grok
+Comment=Grok
+Exec=atelier-webapp launch https://grok.com --class=atelier-webapp-grok
+Icon=/usr/share/atelier/webapps/icons/grok.png
+Terminal=false
+StartupNotify=true
+StartupWMClass=atelier-webapp-grok
+Categories=Network;
+X-Atelier-WebApp=true

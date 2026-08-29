@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Proton Mail
+Comment=Proton Mail
+Exec=atelier-webapp launch https://mail.proton.me --class=atelier-webapp-proton-mail
+Icon=/usr/share/atelier/webapps/icons/proton-mail.png
+Terminal=false
+StartupNotify=true
+StartupWMClass=atelier-webapp-proton-mail
+Categories=Network;
+X-Atelier-WebApp=true

@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.7
+version=0.3.8
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -19,6 +19,8 @@ homepage="https://github.com/kmccuddy/atelier"
 # fzf: atelier-pkg Package/Remove pickers (Omarchy-style, Void XBPS).
 # gowall: recolor the stock wallpaper to the active palette.
 # openssh: ssh-agent for the graphical session (configs/ssh/agent-env.sh).
+# curl: favicon fetch for atelier-webapp install.
+# xdg-utils: xdg-settings (web-app browser lookup).
 depends="
  atelier-base>=0
  yaru>=0
@@ -34,6 +36,8 @@ depends="
  fzf>=0
  gowall>=0
  openssh>=0
+ curl>=0
+ xdg-utils>=0
 "
 
 do_install() {
@@ -68,6 +72,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-scratchpad" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-btop" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-menu" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-webapp" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-theme" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-setup-nvidia" 755 usr/bin
@@ -123,6 +128,12 @@ do_install() {
 	vinstall "${FILESDIR}/etc/bash/bashrc.d/atelier.sh" 644 etc/bash/bashrc.d
 	vinstall "${FILESDIR}/usr/share/xsessions/atelier.desktop" 644 \
 		usr/share/xsessions
+	vinstall "${FILESDIR}/usr/share/applications/atelier-webapp-grok.desktop" 644 \
+		usr/share/applications
+	vinstall "${FILESDIR}/usr/share/applications/atelier-webapp-proton-mail.desktop" 644 \
+		usr/share/applications
+	vinstall "${FILESDIR}/usr/share/applications/atelier-webapp-x.desktop" 644 \
+		usr/share/applications
 	vinstall "${FILESDIR}/usr/share/doc/atelier/tokyo-night-palette.conf" 644 \
 		usr/share/doc/atelier
 	# Themes, templates, stock wallpaper (recolored at apply time)

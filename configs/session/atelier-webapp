@@ -1,0 +1,463 @@
+#!/bin/sh
+# Atelier — Chromium-family web apps (Omarchy-style --app windows)
+# Usage:
+#   atelier-webapp launch <url> [--class NAME] [browser-args…]
+#   atelier-webapp install [name url [icon-url]]
+#   atelier-webapp remove  [name…]
+#   atelier-webapp list
+set -eu
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+USER_DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+USER_ICON_DIR="$USER_DESKTOP_DIR/icons"
+SYS_DESKTOP_DIR="/usr/share/applications"
+
+usage() {
+	printf 'Usage: atelier-webapp launch <url> [--class NAME] [browser-args…]\n' >&2
+	printf '       atelier-webapp install [name url [icon-url]]\n' >&2
+	printf '       atelier-webapp remove [name…]\n' >&2
+	printf '       atelier-webapp list\n' >&2
+	exit 2
+}
+
+die() {
+	printf 'atelier-webapp: %s\n' "$*" >&2
+	if have notify-send; then
+		notify-send -u critical "Web app" "$*" 2>/dev/null || true
+	fi
+	exit 1
+}
+
+notify() {
+	if have notify-send; then
+		notify-send -t 3500 "Web app" "$1" 2>/dev/null || true
+	fi
+}
+
+trim() {
+	printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# "My App!" -> my-app
+slugify() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g;s/--*/-/g;s/^-//;s/-$//'
+}
+
+desktop_escape() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g'
+}
+
+desktop_field() {
+	# desktop_field FILE KEY
+	sed -n "s/^${2}=//p" "$1" 2>/dev/null | head -1
+}
+
+is_webapp_file() {
+	[ -f "$1" ] || return 1
+	grep -q '^X-Atelier-WebApp=true' "$1" 2>/dev/null
+}
+
+need_display() {
+	[ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ] || \
+		die "interactive mode needs a display (or pass name/url arguments)"
+}
+
+# rofi text field (no list). Prints selection or empty.
+prompt_text() {
+	_prompt=$1
+	need_display
+	have rofi || die "rofi is required for interactive mode"
+	printf '' | rofi -dmenu -p "$_prompt" -format s -l 0 2>/dev/null || true
+}
+
+# rofi picker; stdin = lines. Extra args go to rofi (e.g. -multi-select).
+prompt_pick() {
+	_prompt=$1
+	shift
+	need_display
+	have rofi || die "rofi is required for interactive mode"
+	rofi -dmenu -i -p "$_prompt" -format s "$@" 2>/dev/null || true
+}
+
+ensure_url() {
+	_url=$(trim "$1")
+	[ -n "$_url" ] || return 1
+	case $_url in
+	[a-zA-Z][a-zA-Z0-9+.-]*://*)
+		printf '%s\n' "$_url"
+		;;
+	*)
+		printf 'https://%s\n' "$_url"
+		;;
+	esac
+}
+
+url_host() {
+	printf '%s' "$1" | sed -n 's#^[^:]*://\([^/]*\).*#\1#p'
+}
+
+# --- launch ------------------------------------------------------------------
+
+browser_from_desktop() {
+	_desk=$1
+	_path=""
+	for _dir in \
+		"${XDG_DATA_HOME:-$HOME/.local/share}/applications" \
+		/usr/local/share/applications \
+		/usr/share/applications
+	do
+		if [ -f "$_dir/$_desk" ]; then
+			_path="$_dir/$_desk"
+			break
+		fi
+	done
+	[ -n "$_path" ] || return 1
+	_exec=$(desktop_field "$_path" Exec)
+	[ -n "$_exec" ] || return 1
+	# Skip "env VAR=val …" then take the binary token; drop quotes.
+	_bin=$(printf '%s\n' "$_exec" | awk '{
+		i = 1
+		if ($1 == "env") {
+			i = 2
+			while (i <= NF && $i ~ /=/) i++
+		}
+		gsub(/^"/, "", $i)
+		gsub(/"$/, "", $i)
+		print $i
+	}')
+	[ -n "$_bin" ] || return 1
+	if [ -x "$_bin" ]; then
+		printf '%s\n' "$_bin"
+		return 0
+	fi
+	if have "$_bin"; then
+		printf '%s\n' "$_bin"
+		return 0
+	fi
+	return 1
+}
+
+find_browser() {
+	if [ -n "${ATELIER_WEBAPP_BROWSER:-}" ]; then
+		if [ -x "$ATELIER_WEBAPP_BROWSER" ] || have "$ATELIER_WEBAPP_BROWSER"; then
+			printf '%s\n' "$ATELIER_WEBAPP_BROWSER"
+			return 0
+		fi
+		return 1
+	fi
+
+	_desk=""
+	if have xdg-settings; then
+		_desk=$(xdg-settings get default-web-browser 2>/dev/null || true)
+	fi
+	case $_desk in
+	*brave* | *chrome* | *chromium* | *microsoft-edge* | *vivaldi* | *helium*)
+		_bin=$(browser_from_desktop "$_desk" || true)
+		if [ -n "${_bin:-}" ]; then
+			printf '%s\n' "$_bin"
+			return 0
+		fi
+		;;
+	esac
+
+	for _c in brave-browser brave chromium google-chrome-stable google-chrome \
+		microsoft-edge vivaldi
+	do
+		if have "$_c"; then
+			printf '%s\n' "$_c"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Focus an existing window whose WM_CLASS contains the quoted class name.
+focus_class() {
+	_class=$1
+	have bspc || return 1
+	have xprop || return 1
+	_ids=$(bspc query -N -n .window 2>/dev/null) || return 1
+	for _id in $_ids; do
+		_wm=$(xprop -id "$_id" WM_CLASS 2>/dev/null) || continue
+		case $_wm in
+		*"\"$_class\""*)
+			bspc node "$_id" -f 2>/dev/null || return 1
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
+cmd_launch() {
+	[ $# -ge 1 ] || usage
+	_url=$(ensure_url "$1") || die "URL is required"
+	shift
+
+	_class=""
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--class)
+			[ $# -ge 2 ] || die "--class needs a name"
+			_class=$2
+			shift 2
+			;;
+		--class=*)
+			_class=${1#--class=}
+			shift
+			;;
+		*)
+			break
+			;;
+		esac
+	done
+
+	if [ -n "$_class" ] && focus_class "$_class"; then
+		return 0
+	fi
+
+	_browser=$(find_browser) || die \
+		"No Chromium-family browser found (install brave-origin or chromium)"
+
+	if [ -n "$_class" ]; then
+		set -- --class="$_class" --name="$_class" "$@"
+	fi
+
+	if have setsid; then
+		exec setsid "$_browser" --app="$_url" "$@"
+	fi
+	exec "$_browser" --app="$_url" "$@"
+}
+
+# --- install / remove / list -------------------------------------------------
+
+write_desktop() {
+	_name=$1
+	_url=$2
+	_class=$3
+	_icon=$4
+	_file=$5
+	_esc_name=$(desktop_escape "$_name")
+	cat >"$_file" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$_esc_name
+Comment=$_esc_name
+Exec=atelier-webapp launch "$_url" --class=$_class
+Icon=$_icon
+Terminal=false
+StartupNotify=true
+StartupWMClass=$_class
+Categories=Network;
+X-Atelier-WebApp=true
+EOF
+}
+
+download_icon() {
+	_src=$1
+	_dest=$2
+	have curl || return 1
+	mkdir -p "$(dirname "$_dest")"
+	_tmp="${_dest}.tmp"
+	if curl -fsSL --max-time 15 -o "$_tmp" "$_src" && [ -s "$_tmp" ]; then
+		mv "$_tmp" "$_dest"
+		return 0
+	fi
+	rm -f "$_tmp"
+	return 1
+}
+
+cmd_install() {
+	_interactive=0
+	if [ $# -lt 2 ]; then
+		_interactive=1
+		_name=$(trim "$(prompt_text "Name")")
+		[ -n "$_name" ] || exit 0
+		_url=$(ensure_url "$(prompt_text "URL")") || exit 0
+		_icon_ref=$(trim "$(prompt_text "Icon URL (empty = auto)")")
+	else
+		_name=$(trim "$1")
+		_url=$(ensure_url "$2") || die "URL is required"
+		_icon_ref=""
+		[ $# -ge 3 ] && _icon_ref=$(trim "$3")
+	fi
+
+	[ -n "$_name" ] || die "name is required"
+	[ -n "$_url" ] || die "URL is required"
+	case $_name in
+	*[![:print:]]* | *'='*)
+		die "name contains unsupported characters"
+		;;
+	esac
+
+	_slug=$(slugify "$_name")
+	[ -n "$_slug" ] || die "name does not produce a usable filename"
+	_class="atelier-webapp-${_slug}"
+	_desk="$USER_DESKTOP_DIR/${_slug}.desktop"
+	_icon_path="$USER_ICON_DIR/${_slug}.png"
+
+	mkdir -p "$USER_DESKTOP_DIR" "$USER_ICON_DIR"
+
+	_got_icon=0
+	if [ -n "$_icon_ref" ]; then
+		case $_icon_ref in
+		https://* | http://*)
+			download_icon "$_icon_ref" "$_icon_path" && _got_icon=1
+			;;
+		/*)
+			if [ -f "$_icon_ref" ]; then
+				cp "$_icon_ref" "$_icon_path"
+				_got_icon=1
+			fi
+			;;
+		esac
+	fi
+	if [ "$_got_icon" -eq 0 ]; then
+		_host=$(url_host "$_url")
+		if [ -n "$_host" ]; then
+			download_icon \
+				"https://www.google.com/s2/favicons?domain=${_host}&sz=128" \
+				"$_icon_path" && _got_icon=1
+		fi
+	fi
+	if [ "$_got_icon" -eq 0 ] && [ "$_interactive" -eq 1 ]; then
+		_icon_ref=$(trim "$(prompt_text "Icon URL (PNG; see dashboardicons.com)")")
+		if [ -n "$_icon_ref" ]; then
+			download_icon "$_icon_ref" "$_icon_path" && _got_icon=1
+		fi
+	fi
+
+	if [ "$_got_icon" -eq 1 ]; then
+		_icon=$_icon_path
+	else
+		_icon=web-browser
+		printf 'atelier-webapp: no icon; using generic web-browser icon\n' >&2
+	fi
+
+	write_desktop "$_name" "$_url" "$_class" "$_icon" "$_desk"
+	if have update-desktop-database; then
+		update-desktop-database "$USER_DESKTOP_DIR" 2>/dev/null || true
+	fi
+	notify "$_name added. Super+Space to launch."
+	printf 'Created %s\n' "$_desk"
+}
+
+# Print "slug<TAB>Name<TAB>path" for user web apps.
+iter_user_webapps() {
+	[ -d "$USER_DESKTOP_DIR" ] || return 0
+	for _f in "$USER_DESKTOP_DIR"/*.desktop; do
+		[ -f "$_f" ] || continue
+		is_webapp_file "$_f" || continue
+		_bn=$(basename "$_f" .desktop)
+		_nm=$(desktop_field "$_f" Name)
+		[ -n "$_nm" ] || _nm=$_bn
+		printf '%s\t%s\t%s\n' "$_bn" "$_nm" "$_f"
+	done
+}
+
+cmd_remove() {
+	if [ $# -eq 0 ]; then
+		_list=$(iter_user_webapps || true)
+		if [ -z "$_list" ]; then
+			notify "No user web apps to remove."
+			printf 'No user web apps to remove.\n' >&2
+			exit 0
+		fi
+		_labels=$(printf '%s\n' "$_list" | awk -F '\t' '{ printf "%s  (%s)\n", $2, $1 }')
+		_sel=$(printf '%s\n' "$_labels" | prompt_pick "Remove web app" -multi-select)
+		[ -n "$_sel" ] || exit 0
+		# Map "Name  (slug)" → slug
+		_slugs=$(printf '%s\n' "$_sel" | sed -n 's/.*(\([^)]*\))$/\1/p')
+		set -- $_slugs
+		[ $# -ge 1 ] || exit 0
+	fi
+
+	_removed=0
+	for _slug in "$@"; do
+		_slug=$(trim "$_slug")
+		[ -n "$_slug" ] || continue
+		_desk="$USER_DESKTOP_DIR/${_slug}.desktop"
+		if [ ! -f "$_desk" ]; then
+			# Allow passing the display name: match Name= field
+			_found=""
+			while IFS= read -r _line; do
+				_s=$(printf '%s\n' "$_line" | cut -f1)
+				_n=$(printf '%s\n' "$_line" | cut -f2)
+				if [ "$_n" = "$_slug" ] || [ "$_s" = "$_slug" ]; then
+					_found=$_s
+					break
+				fi
+			done <<EOF
+$(iter_user_webapps)
+EOF
+			if [ -n "$_found" ]; then
+				_desk="$USER_DESKTOP_DIR/${_found}.desktop"
+				_slug=$_found
+			fi
+		fi
+		if [ ! -f "$_desk" ]; then
+			printf 'atelier-webapp: not a user web app: %s\n' "$_slug" >&2
+			continue
+		fi
+		is_webapp_file "$_desk" || {
+			printf 'atelier-webapp: not a user web app: %s\n' "$_slug" >&2
+			continue
+		}
+		rm -f "$_desk" "$USER_ICON_DIR/${_slug}.png"
+		printf 'Removed %s\n' "$_slug"
+		_removed=$((_removed + 1))
+	done
+	if [ "$_removed" -gt 0 ]; then
+		if have update-desktop-database; then
+			update-desktop-database "$USER_DESKTOP_DIR" 2>/dev/null || true
+		fi
+		notify "Removed ${_removed} web app(s)."
+	fi
+}
+
+exec_url() {
+	# URL is the token after "launch" in Exec= (quotes stripped).
+	printf '%s\n' "$1" | awk '{
+		for (i = 1; i <= NF; i++)
+			if ($i == "launch" && i < NF) {
+				u = $(i + 1)
+				gsub(/^"/, "", u)
+				gsub(/"$/, "", u)
+				print u
+				exit
+			}
+	}'
+}
+
+cmd_list() {
+	for _dir in "$SYS_DESKTOP_DIR" "$USER_DESKTOP_DIR"; do
+		[ -d "$_dir" ] || continue
+		_src=user
+		[ "$_dir" = "$SYS_DESKTOP_DIR" ] && _src=system
+		for _f in "$_dir"/*.desktop; do
+			[ -f "$_f" ] || continue
+			is_webapp_file "$_f" || continue
+			_nm=$(desktop_field "$_f" Name)
+			_ex=$(desktop_field "$_f" Exec)
+			_url=$(exec_url "$_ex")
+			printf '%s\t%s\t%s\t%s\n' "${_nm:-?}" "${_url:-?}" "$_f" "$_src"
+		done
+	done
+}
+
+# --- main --------------------------------------------------------------------
+
+[ $# -ge 1 ] || usage
+cmd=$1
+shift
+
+case $cmd in
+launch) cmd_launch "$@" ;;
+install | add) cmd_install "$@" ;;
+remove | rm) cmd_remove "$@" ;;
+list) cmd_list ;;
+-h | --help) usage ;;
+*) usage ;;
+esac

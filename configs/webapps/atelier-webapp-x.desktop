@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=X
+Comment=X
+Exec=atelier-webapp launch https://x.com --class=atelier-webapp-x
+Icon=/usr/share/atelier/webapps/icons/x.png
+Terminal=false
+StartupNotify=true
+StartupWMClass=atelier-webapp-x
+Categories=Network;
+X-Atelier-WebApp=true

@@ -65,6 +65,7 @@ install -m 755 "$src/session/atelier-power-menu" "$dst/usr/bin/atelier-power-men
 install -m 755 "$src/session/atelier-scratchpad" "$dst/usr/bin/atelier-scratchpad"
 install -m 755 "$src/session/atelier-btop"       "$dst/usr/bin/atelier-btop"
 install -m 755 "$src/session/atelier-menu"       "$dst/usr/bin/atelier-menu"
+install -m 755 "$src/session/atelier-webapp"     "$dst/usr/bin/atelier-webapp"
 install -m 755 "$src/session/atelier-pkg"        "$dst/usr/bin/atelier-pkg"
 install -m 755 "$src/session/atelier-theme"      "$dst/usr/bin/atelier-theme"
 install -m 755 "$src/session/atelier-setup-nvidia" "$dst/usr/bin/atelier-setup-nvidia"
@@ -95,6 +96,17 @@ install -m 644 "$src/ssh/agent-env.sh"           "$dst/etc/skel/.config/ssh/agen
 install -m 755 "$src/session/xinitrc"            "$dst/etc/skel/.xinitrc"
 install -m 644 "$src/session/Xresources"         "$dst/etc/skel/.Xresources"
 install -m 644 "$src/session/atelier.desktop"    "$dst/usr/share/xsessions/atelier.desktop"
+# Default web apps (Grok, Proton Mail, X) + Tokyo Night placeholder icons
+mkdir -p "$dst/usr/share/applications" "$dst/usr/share/atelier/webapps/icons"
+for _desk in "$src"/webapps/*.desktop; do
+	[ -f "$_desk" ] || continue
+	install -m 644 "$_desk" "$dst/usr/share/applications/$(basename "$_desk")"
+done
+for _icon in "$src"/webapps/icons/*.png; do
+	[ -f "$_icon" ] || continue
+	install -m 644 "$_icon" "$dst/usr/share/atelier/webapps/icons/$(basename "$_icon")"
+done
+unset _desk _icon
 install -m 644 "$src/shell/bashrc.d-atelier.sh"  "$dst/etc/bash/bashrc.d/atelier.sh"
 install -m 644 "$src/themes/tokyo-night/colors.conf" \
 	"$dst/usr/share/doc/atelier/tokyo-night-palette.conf"

@@ -109,6 +109,8 @@ Desktop stack: bspwm + picom + polybar + rofi + ghostty + xsecurelock/xss-lock +
 Applications:
 brave-origin, nemo, neovim, thunderbird, audacity, xfburn, ristretto, exa, bat, tldr, yt-dlp, gcc, dropbox
 
+Default web apps (Brave/Chromium `--app` windows, via `atelier-webapp`): Grok, Proton Mail, X. Users can add more from the system menu (Install → Web App).
+
 8. Aesthetics
 
 Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, terminals, TUIs, rofi, polybar, neovim, the lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed.

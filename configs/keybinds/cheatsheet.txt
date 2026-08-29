@@ -13,6 +13,9 @@
   Super+Shift+F        File manager (nemo)  [primary]
   Super+e              File manager (alias)
   Super+b              Browser (Brave if installed)
+  Super+Shift+G        Grok (web app)
+  Super+Shift+E        Proton Mail (web app)
+  Super+Shift+X        X (web app)
   Super+Ctrl+T         Activity (btop, floating)
   Super+k              This cheat sheet (toggle)
 

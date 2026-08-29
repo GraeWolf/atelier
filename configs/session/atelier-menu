@@ -211,12 +211,37 @@ show_session() {
 	esac
 }
 
+show_webapp() {
+	have atelier-webapp || {
+		printf 'atelier-menu: atelier-webapp not found\n' >&2
+		exit 1
+	}
+	choice=$(
+		printf '%s\n' \
+			"Add" \
+			"Remove" \
+			| pick "Web App"
+	)
+	case $choice in
+	"Add")
+		exec atelier-webapp install
+		;;
+	"Remove")
+		exec atelier-webapp remove
+		;;
+	*)
+		back_to show_install
+		;;
+	esac
+}
+
 show_install() {
 	choice=$(
 		printf '%s\n' \
 			"Package" \
 			"Remove" \
 			"Update" \
+			"Web App" \
 			| pick "Install"
 	)
 	case $choice in
@@ -240,6 +265,9 @@ show_install() {
 		fi
 		printf 'atelier-menu: atelier-pkg not found\n' >&2
 		exit 1
+		;;
+	"Web App")
+		show_webapp
 		;;
 	*)
 		back_to show_main
@@ -300,6 +328,9 @@ go_to_menu() {
 		;;
 	install | *install*)
 		show_install
+		;;
+	webapp | "web app" | *webapp*)
+		show_webapp
 		;;
 	capture | screenshot | *capture*)
 		if have atelier-screenshot; then

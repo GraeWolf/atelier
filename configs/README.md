@@ -23,6 +23,8 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |
+| `session/atelier-webapp` | `/usr/bin/atelier-webapp` | Chromium `--app` web apps (launch / add / remove) |
+| `webapps/` | `/usr/share/applications/` + `/usr/share/atelier/webapps/icons/` | Default web apps (Grok, Proton Mail, X) |
 | `session/atelier-pkg` | `/usr/bin/atelier-pkg` | XBPS install/remove/update (fzf; from Install menu) |
 | `session/atelier-theme` | `/usr/bin/atelier-theme` | Palette apply / wallpaper recolor / from-wallpaper |
 | `session/atelier-setup-nvidia` | `/usr/bin/atelier-setup-nvidia` | Post-install NVIDIA driver setup (always on desktop) |

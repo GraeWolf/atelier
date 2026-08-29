@@ -19,7 +19,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Displays | Multi-monitor wizard |
 | Audio | pavucontrol |
 | Network | Floating `nmtui` |
-| Install | XBPS Package / Remove / Update (`atelier-pkg`) |
+| Install | XBPS Package / Remove / Update (`atelier-pkg`); Web App add/remove (`atelier-webapp`) |
 | Capture | Screenshot menu |
 | Activity | Floating btop |
 | Scratchpad | Toggle scratchpad |
@@ -35,8 +35,9 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Package | Floating terminal + **fzf** over available packages → `sudo xbps-install -S` (Tab multi-select; preview with alt-p) |
 | Remove | **fzf** over manually installed packages → `sudo xbps-remove -R` |
 | Update | `sudo xbps-install -Su` in a floating terminal |
+| Web App | Add or remove a Chromium `--app` launcher (rofi prompts; see **Web apps** below) |
 
-CLI: `atelier-pkg install`, `atelier-pkg remove`, `atelier-pkg update`.
+CLI: `atelier-pkg install`, `atelier-pkg remove`, `atelier-pkg update`. Web apps: `atelier-webapp install`, `atelier-webapp remove`, `atelier-menu webapp`.
 
 CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
 
@@ -54,6 +55,9 @@ CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, 
 | Super+Shift+F | File manager (nemo; primary) |
 | Super+e | File manager (alias) |
 | Super+b | Browser (Brave if packaged; falls back to chromium/xdg-open) |
+| Super+Shift+G | Grok web app (`https://grok.com`) |
+| Super+Shift+E | Proton Mail web app (`https://mail.proton.me`) |
+| Super+Shift+X | X web app (`https://x.com`) |
 | Super+Ctrl+T | Activity monitor (`btop`, floating) |
 | Super+k | Keybind cheat sheet (floating; toggle) |
 
@@ -118,6 +122,31 @@ Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; need
 | Keyboard light keys | Raise / lower / toggle **keyboard** backlight (`atelier-kbd` on ASUS ROG, else `brightnessctl`) |
 
 Full map: `~/.config/sxhkd/sxhkdrc` (from package `atelier-config`).
+
+## Web apps
+
+Sites can run as **standalone windows** (Brave/Chromium `--app=`, no tab bar or omnibox) instead of a normal browser tab. They appear in the app launcher (`Super+Space`) and use a shared browser profile, so log in once in Brave (`Super+b`) first.
+
+| App | URL | Keys |
+|-----|-----|------|
+| Grok | https://grok.com | Super+Shift+G |
+| Proton Mail | https://mail.proton.me | Super+Shift+E |
+| X | https://x.com | Super+Shift+X |
+
+Add another site: **Super+Alt+Space → Install → Web App → Add** (name, URL, optional icon URL; empty icon fetches a favicon). Remove only **user-added** apps from the same submenu; the three packaged defaults stay with `atelier-config`.
+
+CLI:
+
+```bash
+atelier-webapp launch https://example.com --class=my-app
+atelier-webapp install "Name" "https://example.com"
+atelier-webapp remove
+atelier-webapp list
+```
+
+Needs a Chromium-family browser (`brave-origin` from the GraeWolf repo, or `chromium`). Firefox has no `--app` mode. Override the binary with `ATELIER_WEBAPP_BROWSER` if needed.
+
+A second press of a web-app hotkey **focuses** the existing window (matched by `WM_CLASS`) instead of opening a duplicate.
 
 ## Polybar
 

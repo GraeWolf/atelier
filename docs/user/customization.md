@@ -97,6 +97,8 @@ atelier-theme set tokyo-night
 
 Then Super+Escape (reload sxhkd) or log out and `startx` again. Theme picker: Super+Ctrl+Shift+Space.
 
+Web-app hotkeys (Grok, Proton Mail, X) live in `~/.config/sxhkd/sxhkdrc`. Existing accounts need that recopy (above) plus Super+Escape; new users get them from `/etc/skel`. Add more apps from **Super+Alt+Space → Install → Web App** (see [desktop.md](desktop.md)).
+
 ### GTK theme (Yaru-dark + palette overlay)
 
 Void does not ship an Adwaita-dark theme package. Atelier uses:
