@@ -54,6 +54,7 @@ sudo xbps-install -Sy xorg-server xorg-minimal
 | nouveau still loading | Confirm `/etc/modprobe.d/atelier-blacklist-nouveau.conf` exists; rebuild initramfs / reboot |
 | DKMS errors / nvidia-smi cannot talk to the driver | `sudo xbps-install -Sy linux-headers` matching `uname -r`; reinstall `nvidia-dkms`; reboot into that kernel |
 | Hybrid laptop, black screen after NVIDIA | Do not set `PrimaryGPU`. Display should stay on the iGPU; offload with `prime-run` |
+| Hibernate on hybrid NVIDIA does not resume | Void’s nvidia package already installs elogind sleep hooks. Swap/resume is separate (`atelier-setup-swap`). Firmware/driver resume can still fail; suspend-to-RAM is the fallback |
 | VM has no NVIDIA | Do not install proprietary drivers in the VM; use the default mesa live image |
 
 More detail for builders: `docs/build/nvidia.md`.

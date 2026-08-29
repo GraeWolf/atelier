@@ -148,7 +148,7 @@ Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-rep
 
 Later phases: Extra hardware support, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
 
-Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted.
+Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted. Optional `/swapfile` for hibernation (default off; no swap partition).
 
 Post-MVP optional (not part of Phase 1 desktop meta):
 - Windows VM via package `atelier-windows-vm` (Docker + dockur/windows + FreeRDP).

@@ -36,6 +36,7 @@ Details: [installer.md](installer.md).
 | Run command | **Super+Shift+d** |
 | File manager | **Super+Shift+F** (nemo; Super+e also works) |
 | Lock screen | **Super+Shift+l** |
+| Hibernate | Power menu (**Super+Ctrl+Escape**), if a swapfile was created |
 | Quit session | **Super+Shift+q** |
 
 More bindings: [desktop.md](desktop.md).

@@ -105,7 +105,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | Package | Role | Source |
 |---------|------|--------|
 | `atelier-base` | Fonts available today + light session glue | **personal** |
-| `atelier-config` | Themed configs + `atelier-theme` → `/etc/skel`, xsessions, bashrc.d | **personal** |
+| `atelier-config` | Themed configs + `atelier-theme` + `atelier-setup-nvidia` + `atelier-setup-swap` | **personal** |
 | `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
 | `atelier-installer` | Whole-disk graphical installer (`atelier-install`) | **personal** |
 | `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |

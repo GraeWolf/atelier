@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.4.0+** |
+| XBPS package | `atelier-installer` **0.5.0+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -16,7 +16,7 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Modes (v0.4)
+## Modes (v0.5)
 
 | Command | UI |
 |---------|-----|
@@ -26,7 +26,7 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
 Stateful Back/Next flow (whole-disk only):
 
-welcome → disk → encryption → identity → locale → graphics → software → mirror → bootloader → summary → install
+welcome → disk → encryption → swap → identity → locale → graphics → software → mirror → bootloader → summary → install
 
 ### UI rules
 
@@ -47,6 +47,7 @@ welcome → disk → encryption → identity → locale → graphics → softwar
 | `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
 | `INSTALL_BOOTLOADER` | GRUB install or skip |
 | `ENCRYPT_DISK` | LUKS2 on root; unencrypted `/boot`; `cryptsetup` on target |
+| `CREATE_SWAP` | `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
 | (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
 
 After `useradd`, runs `su - $USER -c xdg-user-dirs-update`.
@@ -57,7 +58,9 @@ when the target is still mounted).
 
 ## Optional LUKS2
 
-Opt-in (`ENCRYPT_DISK=0` by default). No LVM, no GRUB cryptodisk, no swap.
+Opt-in (`ENCRYPT_DISK=0` by default). No LVM, no GRUB cryptodisk, no swap *partition*.
+Optional `/swapfile` for hibernation is a separate wizard step (`CREATE_SWAP=0` by default);
+the file sits on encrypted root when LUKS is enabled.
 
 | Firmware | Encrypted layout |
 |----------|------------------|
@@ -77,6 +80,19 @@ Mapper: `/dev/mapper/cryptroot`.
 
 Initramfs is regenerated **after** those files exist (`dracut --force --regenerate-all`). Passphrase is written to a 0600 temp keyfile for `cryptsetup`, never logged.
 
+## Optional swapfile (hibernation)
+
+Opt-in (`CREATE_SWAP=0` by default). No extra partition. File is `/swapfile` on root (ext4), size = `MemTotal` rounded up to the next GiB.
+
+| File | Role |
+|------|------|
+| `/swapfile` | `mkswap --file`; mode 600 |
+| `/etc/fstab` | `/swapfile none swap sw 0 0` |
+| `/etc/dracut.conf.d/20-atelier-resume.conf` | `resume` module (must be explicit in the installer chroot) |
+| `/etc/default/grub` | `resume=UUID=<root ext4 UUID> resume_offset=<filefrag>` |
+
+`resume=` is the **inner ext4** UUID (same as `root=`), never the LUKS container. Existing systems: `sudo atelier-setup-swap`. Helper lives in `atelier-config`.
+
 ## Runtime dependencies
 
 dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit
@@ -91,3 +107,7 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Encryption default No keeps the 2-partition (EFI) / 2-partition (BIOS) layout
 - [ ] Encryption Yes: LUKS2 on p3, ext4 `/boot` on p2, passphrase at dracut, `/boot` not LUKS
 - [ ] `rd.luks.uuid` and crypttab UUID match the LUKS container (not the inner ext4)
+- [ ] Swap default No: no `/swapfile`, no `resume=` on GRUB
+- [ ] Swap Yes: `/swapfile` in fstab, `resume=UUID=<root ext4>` + `resume_offset`, dracut resume module
+- [ ] Swap + LUKS: `rd.luks.*` kept; `resume=` is the inner ext4 UUID
+- [ ] `atelier-setup-swap --yes` is idempotent (no duplicate fstab/GRUB tokens)

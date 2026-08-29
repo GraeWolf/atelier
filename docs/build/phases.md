@@ -73,10 +73,11 @@ Remaining gaps (JetBrains font package, extra hardware polish) are documented in
 | Default | Off (unencrypted whole-disk, unchanged layout) |
 | What is encrypted | Root filesystem only (LUKS2, argon2id) |
 | What is not | `/boot` (1GiB ext4), EFI System Partition / bios_grub |
-| Not included | LVM, swap, GRUB cryptodisk, TPM, encrypted `/boot` |
+| Not included | LVM, swap *partition*, GRUB cryptodisk, TPM, encrypted `/boot` |
+| Optional swapfile | `/swapfile` sized to RAM (rounded up) for hibernation; default off |
 | Live package | `cryptsetup` on the live ISO + `atelier-installer` depends |
 | Docs | [installer.md](installer.md); [../user/installer.md](../user/installer.md) |
-| Status | Implemented (`atelier-installer` 0.4.1) |
+| Status | Implemented (`atelier-installer` 0.5.0; swapfile + LUKS2) |
 
 ## Post-MVP optional: Windows VM
 

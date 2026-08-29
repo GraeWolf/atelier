@@ -18,7 +18,8 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `keybinds/cheatsheet.txt` | `~/.config/atelier/keybinds.txt` + `/usr/share/doc/atelier/` | Super+k cheat sheet |
 | `session/atelier-keybinds` | `/usr/bin/atelier-keybinds` | Floating keybind TUI launcher |
 | `session/atelier-screenshot` | `/usr/bin/atelier-screenshot` | Region/window/full capture (clipboard) |
-| `session/atelier-power-menu` | `/usr/bin/atelier-power-menu` | Rofi lock/logout/suspend/reboot/off |
+| `session/atelier-power-menu` | `/usr/bin/atelier-power-menu` | Rofi lock/logout/suspend/hibernate/reboot/off |
+| `session/atelier-setup-swap` | `/usr/bin/atelier-setup-swap` | Swapfile + hibernation resume (ext4 root) |
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |

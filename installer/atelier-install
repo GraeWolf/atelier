@@ -5,9 +5,10 @@
 #
 # Optional LUKS2 on the root filesystem. /boot and ESP stay unencrypted
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
+# Optional /swapfile for hibernation (default off; no swap partition).
 set -euo pipefail
 
-VERSION="0.4.2"
+VERSION="0.5.0"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -23,6 +24,7 @@ INSTALL_BOOTLOADER=1
 PKG_EXTRA_CLI=0
 PKG_MEDIA=0
 ENCRYPT_DISK=0
+CREATE_SWAP=0
 DISK=""
 HOSTNAME="atelier"
 USERNAME="user"
@@ -425,14 +427,25 @@ list_timezones() {
 # --- wizard steps: print nav code via return; mutate globals -----------------
 # Convention: return 0 next, 1 back, 2 abort
 
+# RAM rounded up to the next GiB (hibernation needs swap >= RAM).
+swap_size_gib() {
+	local mem_kb gib
+	mem_kb=$(awk '/MemTotal:/ { print $2; exit }' /proc/meminfo) || mem_kb=0
+	[ "${mem_kb:-0}" -gt 0 ] || mem_kb=1048576
+	gib=$(((mem_kb * 1024 + 1073741823) / 1073741824))
+	[ "$gib" -ge 1 ] || gib=1
+	printf '%s\n' "$gib"
+}
+
 step_welcome() {
 	wizard_page "Welcome to Atelier Linux installer v${VERSION}.
 
 WHOLE-DISK install only (erases one selected disk).
 Optional LUKS2 encryption (root only; /boot stays
-unencrypted). No custom partitions.
+unencrypted). Optional swapfile for hibernation.
+No custom partitions.
 
-Steps cover disk, encryption, identity, locale,
+Steps cover disk, encryption, swap, identity, locale,
 graphics, optional software, mirror, and bootloader.
 
 Next to continue."
@@ -523,6 +536,30 @@ Cannot encrypt the disk."
 		done
 	fi
 	log "ENCRYPT_DISK=$ENCRYPT_DISK"
+	return 0
+}
+
+step_swap() {
+	# ui_confirm No means "no swapfile", not wizard Back.
+	CREATE_SWAP=0
+	local gib
+	gib=$(swap_size_gib)
+	if ui_confirm "Create a swap file for hibernation?
+
+  Size: ${gib} GiB (this machine's RAM, rounded up).
+  File: /swapfile on the root filesystem.
+  Encrypted automatically if you chose LUKS.
+
+  Needed to hibernate (suspend-to-disk).
+  Skip on desktops that only suspend to RAM.
+
+  Yes = create swapfile
+  No  = no swap (default)
+
+Yes is optional."; then
+		CREATE_SWAP=1
+	fi
+	log "CREATE_SWAP=$CREATE_SWAP size=${gib}GiB"
 	return 0
 }
 
@@ -742,7 +779,7 @@ Yes is recommended."
 }
 
 step_summary() {
-	local mode=BIOS ns=no xs=no bl=yes ec=no md=no enc=no
+	local mode=BIOS ns=no xs=no bl=yes ec=no md=no enc=no sw=no
 	is_efi && mode=EFI
 	[ "$INSTALL_NVIDIA" -eq 1 ] && ns=yes
 	[ "$INSTALL_XLIBRE" -eq 1 ] && xs=yes
@@ -750,11 +787,15 @@ step_summary() {
 	[ "$PKG_EXTRA_CLI" -eq 1 ] && ec=yes
 	[ "$PKG_MEDIA" -eq 1 ] && md=yes
 	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && enc=yes
+	if [ "${CREATE_SWAP:-0}" -eq 1 ]; then
+		sw="yes ($(swap_size_gib) GiB /swapfile)"
+	fi
 	if ui_confirm "Install summary - proceed?
 
 Disk:        $DISK (ERASED)
 Firmware:    $mode
 Encryption:  $enc
+Swapfile:    $sw
 Hostname:    $HOSTNAME
 User:        $USERNAME
 Timezone:    $TIMEZONE
@@ -918,6 +959,81 @@ configure_grub_crypt() {
 	log "GRUB $extra"
 }
 
+# Swapfile + resume= for hibernation. Prefer atelier-setup-swap (live or
+# target); inline fallback keeps the option working without atelier-config.
+setup_swapfile() {
+	[ "${CREATE_SWAP:-0}" -eq 1 ] || return 0
+	log "Setting up swapfile for hibernation"
+	if have atelier-setup-swap; then
+		ATELIER_TARGET="$TARGETDIR" atelier-setup-swap --yes >>"$LOG" 2>&1 \
+			|| die "swapfile setup failed (see $LOG)"
+		return 0
+	fi
+	if [ -x "$TARGETDIR/usr/bin/atelier-setup-swap" ]; then
+		chroot "$TARGETDIR" /usr/bin/atelier-setup-swap --yes >>"$LOG" 2>&1 \
+			|| die "swapfile setup failed (see $LOG)"
+		return 0
+	fi
+	setup_swapfile_inline
+}
+
+setup_swapfile_inline() {
+	local swapfile="$TARGETDIR/swapfile" gib size_bytes uuid offset avail
+	local fstab="$TARGETDIR/etc/fstab" grub="$TARGETDIR/etc/default/grub"
+	local dracut_conf="$TARGETDIR/etc/dracut.conf.d/20-atelier-resume.conf"
+	have mkswap || die "mkswap is required for a swapfile"
+	have filefrag || die "filefrag (e2fsprogs) is required for a swapfile"
+	gib=$(swap_size_gib)
+	size_bytes=$((gib * 1073741824))
+	uuid=$(blkid -s UUID -o value "$PART_ROOT")
+	[ -n "$uuid" ] || die "Could not read root UUID from $PART_ROOT"
+	avail=$(df -B1 --output=avail "$TARGETDIR" | tail -n 1)
+	avail=$(printf '%s' "$avail" | tr -d ' ')
+	[ $((avail + 0)) -ge $((size_bytes + 67108864)) ] || \
+		die "Not enough free space on the target for a ${gib}GiB swapfile"
+	log "creating /swapfile (${gib}GiB) on target"
+	rm -f "$swapfile"
+	mkswap --file --size "$size_bytes" "$swapfile"
+	chmod 600 "$swapfile"
+	offset=$(filefrag -v -b"$(getconf PAGESIZE)" "$swapfile" | awk '
+		/^[[:space:]]*0:/ { gsub(/\./, "", $4); print $4; exit }
+	')
+	case $offset in
+	''|*[!0-9]*) die "could not read resume_offset from filefrag" ;;
+	esac
+	log "resume_offset=$offset"
+	if ! grep -qE '^[[:space:]]*/swapfile[[:space:]]' "$fstab"; then
+		printf '\n# swapfile for hibernation (atelier-install)\n/swapfile none swap sw 0 0\n' \
+			>>"$fstab"
+	fi
+	mkdir -p "$(dirname "$dracut_conf")"
+	{
+		printf '# generated by atelier-install (keep surrounding spaces in += values)\n'
+		printf 'add_dracutmodules+=" resume "\n'
+	} >"$dracut_conf"
+	mkdir -p "$(dirname "$grub")"
+	if [ ! -f "$grub" ]; then
+		printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=UUID=%s resume_offset=%s"\n' \
+			"$uuid" "$offset" >"$grub"
+	else
+		if ! grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grub"; then
+			printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4"\n' >>"$grub"
+		fi
+		sed -i \
+			-e 's/[[:space:]]*resume=UUID=[^ "]*//g' \
+			-e 's/[[:space:]]*resume=[^ "]*//g' \
+			-e 's/[[:space:]]*resume_offset=[^ "]*//g' \
+			"$grub"
+		sed -i -e "/^GRUB_CMDLINE_LINUX_DEFAULT=/s/\"[[:space:]]*$/ resume=UUID=${uuid} resume_offset=${offset}\"/" \
+			"$grub"
+		if ! grep -q 'resume=UUID=' "$grub"; then
+			printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=UUID=%s resume_offset=%s"\n' \
+				"$uuid" "$offset" >>"$grub"
+		fi
+	fi
+	log "GRUB resume=UUID=$uuid resume_offset=$offset"
+}
+
 copy_install_log() {
 	if [ -d "$TARGETDIR" ] && [ -f "$LOG" ]; then
 		mkdir -p "$TARGETDIR/var/log"
@@ -927,10 +1043,11 @@ copy_install_log() {
 }
 
 regenerate_initramfs() {
-	local need_crypt=0 need_nvidia=0 dracut_bin=""
+	local need_crypt=0 need_nvidia=0 need_resume=0 dracut_bin=""
 	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && need_crypt=1
 	[ "${NVIDIA_INSTALL_STATUS:-}" = ok ] && need_nvidia=1
-	[ "$need_crypt" -eq 1 ] || [ "$need_nvidia" -eq 1 ] || return 0
+	[ "${CREATE_SWAP:-0}" -eq 1 ] && need_resume=1
+	[ "$need_crypt" -eq 1 ] || [ "$need_nvidia" -eq 1 ] || [ "$need_resume" -eq 1 ] || return 0
 	# Must run AFTER crypttab + dracut snippet exist; install_packages
 	# reconfigures linux too early (no crypttab yet).
 	# Do not use `chroot command -v`: command is a shell builtin, not a binary.
@@ -938,8 +1055,8 @@ regenerate_initramfs() {
 		dracut_bin=/usr/bin/dracut
 	elif [ -x "$TARGETDIR/usr/sbin/dracut" ]; then
 		dracut_bin=/usr/sbin/dracut
-	elif [ "$need_crypt" -eq 1 ]; then
-		die "dracut not found on target; cannot build LUKS initramfs"
+	elif [ "$need_crypt" -eq 1 ] || [ "$need_resume" -eq 1 ]; then
+		die "dracut not found on target; cannot build LUKS/resume initramfs"
 	else
 		log "WARN: dracut not found; nouveau blacklist may not apply in initramfs"
 		return 0
@@ -992,6 +1109,9 @@ install_packages() {
 	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
 		# linux-base already pulls dracut; list it so the LUKS path is explicit.
 		pkgs+=(cryptsetup dracut)
+	fi
+	if [ "${CREATE_SWAP:-0}" -eq 1 ]; then
+		pkgs+=(dracut)
 	fi
 
 	if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-desktop >/dev/null 2>&1; then
@@ -1104,6 +1224,7 @@ configure_system() {
 	write_crypttab
 	write_dracut_crypt
 	configure_grub_crypt
+	setup_swapfile
 	regenerate_initramfs
 	rm -f "$TARGETDIR/usr/sbin/void-installer" "$TARGETDIR/usr/bin/void-installer" \
 		"$TARGETDIR/etc/profile.d/atelier-live.sh" 2>/dev/null || true
@@ -1169,7 +1290,7 @@ After reboot: sudo atelier-setup-nvidia"
 
 usage() {
 	cat <<EOF
-Atelier installer v${VERSION} (whole-disk, optional LUKS2)
+Atelier installer v${VERSION} (whole-disk, optional LUKS2, optional swapfile)
 
 Usage: atelier-install [options]
 
@@ -1214,7 +1335,7 @@ main() {
 	fi
 
 	# steps as names; navigate with index
-	local steps=(welcome disk encryption identity locale graphics software mirror bootloader summary)
+	local steps=(welcome disk encryption swap identity locale graphics software mirror bootloader summary)
 	local i=0 n=${#steps[@]} rc
 	while [ "$i" -ge 0 ] && [ "$i" -lt "$n" ]; do
 		rc=0
@@ -1222,6 +1343,7 @@ main() {
 		welcome) step_welcome || rc=$? ;;
 		disk) step_disk || rc=$? ;;
 		encryption) step_encryption || rc=$? ;;
+		swap) step_swap || rc=$? ;;
 		identity) step_identity || rc=$? ;;
 		locale) step_locale || rc=$? ;;
 		graphics) step_graphics || rc=$? ;;

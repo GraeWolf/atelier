@@ -8,9 +8,10 @@ Atelier whole-disk installer: **TUI by default** (`dialog`), optional GUI (`--gu
 |-----------|----------------|
 | Whole-disk erase & install | Custom partition layouts |
 | Optional LUKS2 on root (unencrypted `/boot`) | Encrypted `/boot` / GRUB cryptodisk |
+| Optional `/swapfile` for hibernation (default off) | Swap *partition* / LVM |
 | EFI (GPT+ESP) and BIOS (GPT+bios_grub) | Dual-boot / preserve foreign OS |
-| Hostname, user, root password | RAID/LVM |
-| Timezone, locale, keymap (pickers) | Swap (encrypted or not) |
+| Hostname, user, root password | RAID |
+| Timezone, locale, keymap (pickers) | — |
 | base-system + atelier-desktop + GRUB | Automatic dual-GPU polish |
 | Dropbox (nonfree, required) + xdg-user-dirs | |
 | Personal repo when present on live media | |
@@ -36,7 +37,7 @@ sudo atelier-install          # TUI (dialog)
 sudo atelier-install --gui    # after startx, optional
 ```
 
-3. Confirm disk wipe, optionally enable LUKS2, answer prompts, wait for package download/install
+3. Confirm disk wipe, optionally enable LUKS2 and/or a hibernation swapfile, answer prompts, wait for package download/install
 4. Reboot into the installed system (enter the LUKS passphrase at boot if you encrypted)
 
 Log: `/tmp/atelier-install.log`

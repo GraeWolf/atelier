@@ -24,7 +24,7 @@ This document records the technical choices locked for the Phase 1 MVP.
   - Docs: `docs/build/live-iso.md`, `docs/build/nvidia.md`
 - **Installer:** `atelier-install` (package `atelier-installer`)
   - **TUI default** (`dialog`); optional `--gui` (yad/zenity)
-  - Whole-disk only; optional LUKS2 on root (unencrypted `/boot`)
+  - Whole-disk only; optional LUKS2 on root (unencrypted `/boot`); optional `/swapfile` for hibernation
   - Live ISO boots to TTY; run `sudo atelier-install`
   - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`
 

@@ -18,7 +18,7 @@
    sudo atelier-install --gui
    ```
 
-5. Walk **Back / Next** through disk, optional encryption, identity, locale, graphics, optional software, mirror, bootloader, and summary.
+5. Walk **Back / Next** through disk, optional encryption, optional swapfile, identity, locale, graphics, optional software, mirror, bootloader, and summary.
 6. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 7. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
@@ -35,6 +35,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | Welcome | Overview |
 | Disk | Whole disk to erase |
 | Encryption | Optional LUKS2 on root (default: No) |
+| Swapfile | Optional `/swapfile` for hibernation (default: No; size = RAM rounded up) |
 | Identity | Hostname, user, passwords |
 | Locale | Timezone, locale, keymap (lists) |
 | Graphics | NVIDIA (if GPU present), Xlibre |
@@ -59,13 +60,25 @@ Default is **unencrypted**. If you choose Yes:
 - There is **no recovery** if you forget the LUKS passphrase.
 - The LUKS passphrase is separate from your user and root passwords.
 
-Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No LVM and no swap.
+Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No LVM and no swap *partition*.
+
+## Swapfile (optional, hibernation)
+
+Default is **no swap**. If you choose Yes, the installer creates `/swapfile` on root (encrypted if you also chose LUKS), sized to this machine’s RAM rounded up, and sets `resume=` / `resume_offset` so the kernel can hibernate.
+
+On an already-installed system:
+
+```bash
+sudo atelier-setup-swap
+```
+
+Then reboot once so GRUB picks up `resume=`. Hibernate from the power menu (**Super+Ctrl+Escape**).
 
 ## What it does not do
 
 - Encrypted `/boot` (GRUB cryptodisk)
 - Custom partitions / dual-boot
-- RAID / LVM / swap
+- RAID / LVM / swap *partition*
 - Automatic dual-GPU (Optimus) polish
 
 ## Graphics

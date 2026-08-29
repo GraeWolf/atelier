@@ -34,9 +34,9 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 | Package | Type | Role |
 |---------|------|------|
 | `atelier-base` | metapackage | Fonts (FiraCode, Nerd Symbols) + xinit/xsetroot/xrdb |
-| `atelier-config` | files | Themed session configs + `atelier-theme` + `atelier-setup-nvidia` |
+| `atelier-config` | files | Themed session configs + `atelier-theme` + `atelier-setup-nvidia` + `atelier-setup-swap` |
 | `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + PipeWire audio + `atelier-config` |
-| `atelier-installer` | files | `atelier-install` TUI/GUI + desktop entry (optional LUKS2) |
+| `atelier-installer` | files | `atelier-install` TUI/GUI + desktop entry (optional LUKS2 + optional swapfile) |
 | `atelier-nvidia` | files + meta | Proprietary NVIDIA configs; depends on `nvidia` |
 | `atelier-xlibre-repo` | files | Xlibre external repo (public key + xbps.d) |
 | `atelier-void-repo` | files | GraeWolf personal Void repo (public key + xbps.d) |

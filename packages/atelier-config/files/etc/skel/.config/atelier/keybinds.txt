@@ -49,7 +49,7 @@
  ── Session / system ──────────────────────────────────────────────────────
   Super+Shift+l        Lock screen (atelier-lock)
   Super+Ctrl+l         Lock screen (alias)
-  Super+Ctrl+Escape    Power menu (lock / logout / suspend / reboot / off)
+  Super+Ctrl+Escape    Power menu (lock / logout / suspend / hibernate / reboot / off)
   Super+Shift+q        Quit bspwm
   Super+Escape         Reload sxhkd
   Super+Shift+r        Restart bspwm (reload session configs)

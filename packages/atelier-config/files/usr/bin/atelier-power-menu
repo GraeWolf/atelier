@@ -10,14 +10,20 @@ have rofi || {
 	exit 1
 }
 
+items="Lock
+Logout
+Suspend"
+# Hibernate is a kernel S4 action; only list it when the kernel advertises disk.
+if [ -r /sys/power/state ] && grep -qw disk /sys/power/state; then
+	items="$items
+Hibernate"
+fi
+items="$items
+Reboot
+Shutdown"
+
 choice=$(
-	printf '%s\n' \
-		"Lock" \
-		"Logout" \
-		"Suspend" \
-		"Reboot" \
-		"Shutdown" \
-		| rofi -dmenu -i -p "Power" -format s
+	printf '%s\n' "$items" | rofi -dmenu -i -p "Power" -format s
 ) || exit 0
 
 [ -n "$choice" ] || exit 0
@@ -47,6 +53,15 @@ Logout)
 Suspend)
 	have loginctl || exit 1
 	exec loginctl suspend
+	;;
+Hibernate)
+	have loginctl || exit 1
+	if ! awk 'NR > 1 { sz += $3 } END { exit !(sz > 0) }' /proc/swaps 2>/dev/null; then
+		rofi -e "Hibernate needs a swapfile. Run: sudo atelier-setup-swap" 2>/dev/null || \
+			printf 'atelier-power-menu: no swap; sudo atelier-setup-swap\n' >&2
+		exit 1
+	fi
+	exec loginctl hibernate
 	;;
 Reboot)
 	have loginctl || exit 1

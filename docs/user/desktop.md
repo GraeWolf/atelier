@@ -107,7 +107,7 @@ Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; need
 |------|--------|
 | Super+Shift+l | Lock screen (`atelier-lock` / xsecurelock) |
 | Super+Ctrl+l | Lock screen (alias) |
-| Super+Ctrl+Escape | Power menu (lock / logout / suspend / reboot / shutdown) |
+| Super+Ctrl+Escape | Power menu (lock / logout / suspend / hibernate / reboot / shutdown) |
 | Super+Shift+q | Quit bspwm (end session) |
 | Super+Shift+m | Multi-monitor layout wizard |
 | Super+Shift+v | Volume mixer (pavucontrol) |
@@ -177,6 +177,7 @@ Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S 
 | Manual lock | **Super+Shift+l** → `atelier-lock` |
 | Idle lock | After **5 minutes** idle (`xset s`; via xss-lock) |
 | Suspend | **2 minutes after lock** while still locked (`loginctl suspend`) |
+| Hibernate | Power menu (**Super+Ctrl+Escape**); needs a swapfile (`sudo atelier-setup-swap`) |
 | Password feedback | Jumping **cursor** (not hex digits) |
 | Picom flash on unlock | Disabled (`XSECURELOCK_COMPOSITE_OBSCURER=0`) |
 
