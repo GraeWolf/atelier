@@ -176,8 +176,8 @@ Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S 
 |------|---------|
 | Manual lock | **Super+Shift+l** → `atelier-lock` |
 | Idle lock | After **5 minutes** idle (`xset s`; via xss-lock) |
-| Suspend | **2 minutes after lock** while still locked (`loginctl suspend`) |
-| Hibernate | Power menu (**Super+Ctrl+Escape**); needs a swapfile (`sudo atelier-setup-swap`) |
+| Suspend | **2 minutes after lock** while still locked. With a swapfile this is `suspend-then-hibernate` (sleep, then hibernate after **30 minutes** asleep). |
+| Hibernate | Power menu (**Super+Ctrl+Escape**); needs a swapfile (`sudo atelier-setup-swap`). Immediate, not the 30-minute delay. |
 | Password feedback | Jumping **cursor** (not hex digits) |
 | Picom flash on unlock | Disabled (`XSECURELOCK_COMPOSITE_OBSCURER=0`) |
 

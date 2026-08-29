@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.0+** |
+| XBPS package | `atelier-installer` **0.5.1+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -16,7 +16,7 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Modes (v0.5)
+## Modes (v0.5+)
 
 | Command | UI |
 |---------|-----|
@@ -92,6 +92,8 @@ Opt-in (`CREATE_SWAP=0` by default). No extra partition. File is `/swapfile` on 
 | `/etc/default/grub` | `resume=UUID=<root ext4 UUID> resume_offset=<filefrag>` |
 
 `resume=` is the **inner ext4** UUID (same as `root=`), never the LUKS container. Existing systems: `sudo atelier-setup-swap`. Helper lives in `atelier-config`.
+
+elogind drop-ins (`HibernateDelaySec=30min`, lid `suspend-then-hibernate`) are written with the swapfile so sleep automatically hibernates after 30 minutes.
 
 ## Runtime dependencies
 

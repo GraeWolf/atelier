@@ -58,7 +58,15 @@ if [ "$_suspend_sec" -gt 0 ] 2>/dev/null; then
 		# Only suspend if still locked by us
 		if pgrep -u "$(id -u)" -x xsecurelock >/dev/null 2>&1; then
 			if command -v loginctl >/dev/null 2>&1; then
-				loginctl suspend 2>/dev/null || true
+				# Swap + disk hibernate: sleep, then hibernate after 30 min
+				# (elogind HibernateDelaySec from atelier-setup-swap).
+				if [ -r /sys/power/state ] && grep -qw disk /sys/power/state \
+					&& awk 'NR > 1 { sz += $3 } END { exit !(sz > 0) }' /proc/swaps 2>/dev/null
+				then
+					loginctl suspend-then-hibernate 2>/dev/null || loginctl suspend 2>/dev/null || true
+				else
+					loginctl suspend 2>/dev/null || true
+				fi
 			elif command -v zzz >/dev/null 2>&1; then
 				zzz 2>/dev/null || true
 			fi

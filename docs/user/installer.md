@@ -64,7 +64,7 @@ Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No 
 
 ## Swapfile (optional, hibernation)
 
-Default is **no swap**. If you choose Yes, the installer creates `/swapfile` on root (encrypted if you also chose LUKS), sized to this machine’s RAM rounded up, and sets `resume=` / `resume_offset` so the kernel can hibernate.
+Default is **no swap**. If you choose Yes, the installer creates `/swapfile` on root (encrypted if you also chose LUKS), sized to this machine’s RAM rounded up, and sets `resume=` / `resume_offset` so the kernel can hibernate. Suspend then becomes **sleep, then hibernate after 30 minutes** (lid close and the power-menu Suspend action). Immediate Hibernate stays in the power menu.
 
 On an already-installed system:
 

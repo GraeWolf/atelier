@@ -52,6 +52,12 @@ Logout)
 	;;
 Suspend)
 	have loginctl || exit 1
+	# Swapfile present: sleep to RAM, then hibernate after 30 minutes.
+	if [ -r /sys/power/state ] && grep -qw disk /sys/power/state \
+		&& awk 'NR > 1 { sz += $3 } END { exit !(sz > 0) }' /proc/swaps 2>/dev/null
+	then
+		exec loginctl suspend-then-hibernate
+	fi
 	exec loginctl suspend
 	;;
 Hibernate)
