@@ -49,6 +49,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 - Void base, kernel, NetworkManager, **atelier-desktop** (when personal repo is present)
 - **void-repo-nonfree** + **dropbox** (required)
 - **xdg-user-dirs** (+ gtk); installer runs `xdg-user-dirs-update` for your user
+- **gnome-keyring** PAM unlock at TTY login (`atelier-setup-keyring`)
 - GraeWolf void-repo config when present on the live medium
 
 ## Disk encryption (optional)

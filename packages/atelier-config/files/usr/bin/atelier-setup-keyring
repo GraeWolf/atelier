@@ -1,0 +1,125 @@
+#!/bin/sh
+# Idempotently enable gnome-keyring unlock at TTY login (PAM) and keep the
+# login keyring password in sync with passwd(1).
+#
+# /etc/pam.d/login is owned by util-linux and passwd by shadow — this helper
+# edits those config files in place instead of shipping replacements.
+#
+# Usage:
+#   sudo atelier-setup-keyring
+#
+# Installer (live medium, target already mounted):
+#   ATELIER_TARGET=/mnt/atelier-target atelier-setup-keyring
+#
+# Graphical sessions still start the daemon from ~/.xinitrc (--start after
+# dbus). PAM auto_start at login unlocks the login keyring with the user
+# password. startx alone does not re-run PAM — log out of the TTY first.
+set -eu
+
+ROOT="${ATELIER_TARGET:-}"
+
+log() { printf 'atelier-setup-keyring: %s\n' "$*"; }
+die() { printf 'atelier-setup-keyring: error: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+	cat <<EOF
+Usage: atelier-setup-keyring [--help]
+
+  Enable pam_gnome_keyring on TTY login and passwd (idempotent).
+  Run as root. Optional: ATELIER_TARGET=/path/to/root (installer).
+EOF
+}
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		die "unknown option: $1 (try --help)"
+		;;
+	esac
+	shift
+done
+
+[ "$(id -u)" -eq 0 ] || die "run as root (sudo atelier-setup-keyring)"
+
+host_root=$ROOT
+host_login=${host_root}/etc/pam.d/login
+host_passwd=${host_root}/etc/pam.d/passwd
+
+# Live/installed system: pull the daemon if missing. Installer already put
+# packages on the target (ATELIER_TARGET set) — do not xbps-install there.
+if [ -z "$ROOT" ]; then
+	if ! command -v gnome-keyring-daemon >/dev/null 2>&1; then
+		command -v xbps-install >/dev/null 2>&1 || \
+			die "gnome-keyring is not installed and xbps-install is missing"
+		log "installing gnome-keyring"
+		xbps-install -Sy gnome-keyring
+	fi
+fi
+
+pam_has() {
+	_file=$1
+	_group=$2
+	[ -f "$_file" ] || return 1
+	grep -E "^[[:space:]]*${_group}[[:space:]].*pam_gnome_keyring\\.so" \
+		"$_file" >/dev/null 2>&1
+}
+
+# Insert LINE after the last line whose first field is GROUP (auth/session/
+# password). If no such line exists, append. No-op when already present.
+pam_insert_after_last() {
+	_file=$1
+	_group=$2
+	_line=$3
+	[ -f "$_file" ] || die "missing $_file"
+	if pam_has "$_file" "$_group"; then
+		log "already present in $_file ($_group)"
+		return 0
+	fi
+	_tmp=$(mktemp)
+	awk -v grp="$_group" -v ins="$_line" '
+		{
+			lines[NR] = $0
+			if ($0 ~ ("^[[:space:]]*" grp "[[:space:]]"))
+				last = NR
+		}
+		END {
+			if (NR < 1) {
+				print ins
+				exit
+			}
+			if (last < 1)
+				last = NR
+			for (i = 1; i <= NR; i++) {
+				print lines[i]
+				if (i == last)
+					print ins
+			}
+		}
+	' "$_file" >"$_tmp"
+	cat "$_tmp" >"$_file"
+	rm -f "$_tmp"
+	unset _tmp
+	log "inserted $_group pam_gnome_keyring into $_file"
+}
+
+[ -f "$host_login" ] || die "missing $host_login"
+
+pam_insert_after_last "$host_login" auth \
+	'auth optional pam_gnome_keyring.so'
+pam_insert_after_last "$host_login" session \
+	'session optional pam_gnome_keyring.so auto_start'
+
+if [ -f "$host_passwd" ]; then
+	pam_insert_after_last "$host_passwd" password \
+		'password optional pam_gnome_keyring.so'
+else
+	log "warning: missing $host_passwd; skip passwd hook"
+fi
+
+log "done"
+log "log out of the TTY (not only startx) so the next login unlocks the keyring"
+log "existing sessions: recopy or merge ~/.xinitrc from /etc/skel/.xinitrc"

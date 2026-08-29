@@ -199,6 +199,8 @@ Log: `/tmp/atelier-picom.log` if picom fails to start.
 
 Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S brave-origin`). Super+b falls back until it is installed.
 
+Mail clients that use **libsecret** (for example Melia from the GraeWolf repo) store passwords in **gnome-keyring**, started from `~/.xinitrc` and unlocked at TTY login. First launch after setup: enter the mailbox password once. See [customization.md](customization.md#gnome-keyring-secret-service).
+
 ## Screen lock
 
 | Item | Default |

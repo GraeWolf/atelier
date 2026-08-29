@@ -8,7 +8,7 @@
 # Optional /swapfile for hibernation (default off; no swap partition).
 set -euo pipefail
 
-VERSION="0.5.1"
+VERSION="0.5.2"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -977,6 +977,22 @@ setup_swapfile() {
 	setup_swapfile_inline
 }
 
+# PAM gnome-keyring on TTY login / passwd. Helper lives in atelier-config.
+setup_keyring() {
+	log "Enabling gnome-keyring PAM unlock"
+	if have atelier-setup-keyring; then
+		ATELIER_TARGET="$TARGETDIR" atelier-setup-keyring >>"$LOG" 2>&1 || \
+			log "WARN: atelier-setup-keyring failed (see $LOG)"
+		return 0
+	fi
+	if [ -x "$TARGETDIR/usr/bin/atelier-setup-keyring" ]; then
+		chroot "$TARGETDIR" /usr/bin/atelier-setup-keyring >>"$LOG" 2>&1 || \
+			log "WARN: atelier-setup-keyring failed (see $LOG)"
+		return 0
+	fi
+	log "WARN: atelier-setup-keyring not found; after reboot: sudo atelier-setup-keyring"
+}
+
 setup_swapfile_inline() {
 	local swapfile="$TARGETDIR/swapfile" gib size_bytes uuid offset avail
 	local fstab="$TARGETDIR/etc/fstab" grub="$TARGETDIR/etc/default/grub"
@@ -1230,6 +1246,8 @@ configure_system() {
 	else
 		log "WARN: xdg-user-dirs-update not found on target"
 	fi
+
+	setup_keyring
 
 	enable_sv NetworkManager
 	enable_sv dbus

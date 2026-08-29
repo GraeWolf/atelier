@@ -28,6 +28,11 @@ starship
 fastfetch
 btop
 
+# --- Session glue ---
+# gnome-keyring: Secret Service (libsecret / Melia). Started from ~/.xinitrc;
+# TTY login unlock via atelier-setup-keyring (PAM).
+gnome-keyring
+
 # --- Applications ---
 # less: keybind cheat sheet pager (atelier-keybinds / Super+k)
 less

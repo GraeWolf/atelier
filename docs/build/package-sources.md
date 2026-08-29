@@ -57,6 +57,13 @@ Minimal X11 session helpers (not listed in PLAN, but needed to start/control X):
 | Root color / WM hooks | `xsetroot` | void |
 | X resources | `xrdb` | void |
 
+Secret Service (libsecret clients such as Melia; not named in PLAN §7):
+
+| Role | XBPS name | Source | Notes |
+|------|-----------|--------|-------|
+| Secret Service daemon | `gnome-keyring` | void | Depend of `atelier-config`. Started from `~/.xinitrc` (`pkcs11,secrets` only; ssh-agent stays separate). |
+| TTY login unlock | `atelier-setup-keyring` | **personal** (`atelier-config`) | Idempotent PAM lines in `/etc/pam.d/login` and `passwd`. Installer runs it. |
+
 GTK / icon theming glue (not named in PLAN §7, required for consistent dark apps):
 
 | Role | XBPS name | Source | Notes |
@@ -105,7 +112,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | Package | Role | Source |
 |---------|------|--------|
 | `atelier-base` | Fonts available today + light session glue | **personal** |
-| `atelier-config` | Themed configs + `atelier-theme` + `atelier-webapp` + `atelier-setup-nvidia` + `atelier-setup-swap` | **personal** |
+| `atelier-config` | Themed configs + `atelier-theme` + `atelier-webapp` + `atelier-setup-nvidia` + `atelier-setup-swap` + `atelier-setup-keyring` | **personal** |
 | `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
 | `atelier-installer` | Whole-disk graphical installer (`atelier-install`) | **personal** |
 | `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |

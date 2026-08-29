@@ -8,6 +8,19 @@ Graphical sessions start one `ssh-agent` (socket under `$XDG_RUNTIME_DIR`). Inte
 
 Helper: `~/.config/ssh/agent-env.sh` (from `atelier-config`). Do not put private keys in the Atelier repo.
 
+## gnome-keyring (Secret Service)
+
+Apps that use **libsecret** (for example **Melia**) store passwords in the Freedesktop Secret Service. Atelier provides that with Void’s `gnome-keyring`:
+
+- TTY login unlocks the **login** keyring with your user password (`pam_gnome_keyring`; `sudo atelier-setup-keyring`).
+- `~/.xinitrc` starts (or attaches) `gnome-keyring-daemon` after dbus, components `pkcs11,secrets` only — not ssh.
+
+`startx` does **not** re-run PAM. After enabling the helper, log out of the TTY (or reboot), log in, then `startx`. New installs get the PAM lines from the installer.
+
+Skip session start: `export ATELIER_SKIP_KEYRING=1` before `startx`.
+
+If an older `~/.local/share/keyrings/` was created with a different password than your account, remove it once (this deletes saved secrets) so the next login can create a matching login keyring.
+
 ## Where configs live
 
 | Area | Path |

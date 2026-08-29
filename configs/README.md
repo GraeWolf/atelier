@@ -28,6 +28,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-pkg` | `/usr/bin/atelier-pkg` | XBPS install/remove/update (fzf; from Install menu) |
 | `session/atelier-theme` | `/usr/bin/atelier-theme` | Palette apply / wallpaper recolor / from-wallpaper |
 | `session/atelier-setup-nvidia` | `/usr/bin/atelier-setup-nvidia` | Post-install NVIDIA driver setup (always on desktop) |
+| `session/atelier-setup-keyring` | `/usr/bin/atelier-setup-keyring` | PAM gnome-keyring unlock at TTY login (idempotent) |
 | `themes/` | `/usr/share/atelier/themes/` | Named palettes (tokyo-night, nord, catppuccin-mocha) |
 | `themes/templates/` | `/usr/share/atelier/templates/` | Per-app color templates |
 | `gtk/` | `~/.config/gtk-3.0`, `gtk-4.0` | GTK theme overrides |
@@ -67,6 +68,6 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 
 ## Session start
 
-From a TTY after login: `startx` (uses `~/.xinitrc` → `exec bspwm`).
+From a TTY after login: `startx` (uses `~/.xinitrc` → dbus → gnome-keyring → ssh-agent / PipeWire → `exec bspwm`).
 
 Display managers can use the `Atelier` session (`atelier.desktop`).

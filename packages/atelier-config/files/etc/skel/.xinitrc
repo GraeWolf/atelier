@@ -81,6 +81,31 @@ if command -v dbus-launch >/dev/null 2>&1 && [ -z "$DBUS_SESSION_BUS_ADDRESS" ];
 	eval "$(dbus-launch --sh-syntax --exit-with-session)"
 fi
 
+# Secret Service for libsecret clients (Melia, browsers, …).
+# PAM may already have started gnome-keyring-daemon --login at TTY login
+# (atelier-setup-keyring); --start attaches that daemon to this session bus
+# before it times out. Do not start the ssh component — session ssh-agent
+# is separate (agent-env.sh). Skip: ATELIER_SKIP_KEYRING=1
+if [ -z "${ATELIER_SKIP_KEYRING:-}" ] && command -v gnome-keyring-daemon >/dev/null 2>&1; then
+	if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+		dbus-update-activation-environment DISPLAY XAUTHORITY \
+			DBUS_SESSION_BUS_ADDRESS 2>/dev/null || true
+	fi
+	_kr=$(gnome-keyring-daemon --start --components=pkcs11,secrets 2>/dev/null) || true
+	if [ -n "$_kr" ]; then
+		while IFS= read -r _kr_line || [ -n "${_kr_line:-}" ]; do
+			case $_kr_line in
+			GNOME_KEYRING_CONTROL=* | GNOME_KEYRING_PID=*)
+				eval "export $_kr_line"
+				;;
+			esac
+		done <<EOF
+$_kr
+EOF
+	fi
+	unset _kr _kr_line
+fi
+
 # ssh-agent: one agent for the whole X session (git push, ssh, etc.)
 # Socket: $XDG_RUNTIME_DIR/ssh-agent.socket — also sourced from bashrc.d
 if [ -f "$HOME/.config/ssh/agent-env.sh" ]; then

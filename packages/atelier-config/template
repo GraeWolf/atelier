@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.8
+version=0.3.9
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -19,6 +19,7 @@ homepage="https://github.com/kmccuddy/atelier"
 # fzf: atelier-pkg Package/Remove pickers (Omarchy-style, Void XBPS).
 # gowall: recolor the stock wallpaper to the active palette.
 # openssh: ssh-agent for the graphical session (configs/ssh/agent-env.sh).
+# gnome-keyring: Secret Service for libsecret (Melia); started from xinitrc.
 # curl: favicon fetch for atelier-webapp install.
 # xdg-utils: xdg-settings (web-app browser lookup).
 depends="
@@ -36,6 +37,7 @@ depends="
  fzf>=0
  gowall>=0
  openssh>=0
+ gnome-keyring>=0
  curl>=0
  xdg-utils>=0
 "
@@ -76,6 +78,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-theme" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-setup-nvidia" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-setup-keyring" 755 usr/bin
 	vinstall "${FILESDIR}/usr/share/doc/atelier/keybinds.txt" 644 \
 		usr/share/doc/atelier
 	vinstall "${FILESDIR}/etc/skel/.config/atelier/keybinds.txt" 644 \

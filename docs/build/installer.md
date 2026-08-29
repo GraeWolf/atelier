@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.1+** |
+| XBPS package | `atelier-installer` **0.5.2+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -50,7 +50,7 @@ welcome → disk → encryption → swap → identity → locale → graphics �
 | `CREATE_SWAP` | `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
 | (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
 
-After `useradd`, runs `su - $USER -c xdg-user-dirs-update`.
+After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then `atelier-setup-keyring` so TTY login unlocks gnome-keyring.
 
 The live log `/tmp/atelier-install.log` is copied to the target as
 `/var/log/atelier-install.log` before unmount (including failed installs
