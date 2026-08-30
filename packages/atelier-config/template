@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.9
+version=0.3.10
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"

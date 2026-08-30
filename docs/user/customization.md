@@ -37,8 +37,22 @@ If an older `~/.local/share/keyrings/` was created with a different password tha
 | Qt | `~/.config/qt5ct/`, `qt6ct/` |
 | Session | `~/.xinitrc`, `~/.Xresources` |
 | Monitors | `~/.config/atelier/monitors.conf` (via `atelier-monitors`) |
+| Shell | `/etc/bash/bashrc.d/atelier.sh` (system-wide; not copied into `$HOME`) |
 
 Defaults are installed from **`atelier-config`** into `/etc/skel` for new users. Your home directory copies are yours to edit.
+
+## Shell
+
+Interactive bash sources `/etc/bash/bashrc.d/atelier.sh` (from `atelier-config`). That snippet starts starship, sets `ls`/`cat` aliases, and binds **Up** / **Down** to prefix history search: type `git` (or any prefix) and Up cycles earlier lines that start with that text. An empty line still walks full history.
+
+Override in `~/.bashrc` after the system snippet, or rebind the arrows:
+
+```bash
+bind '"\e[A": previous-history'
+bind '"\e[B": next-history'
+```
+
+Existing accounts pick this up after updating `atelier-config` and opening a new terminal (no skel recopy).
 
 ## Themes
 

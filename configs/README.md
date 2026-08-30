@@ -41,7 +41,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/xinitrc` | `~/.xinitrc` | Session entry |
 | `session/Xresources` | `~/.Xresources` | X resources |
 | `session/atelier.desktop` | `/usr/share/xsessions/` | DM session entry |
-| `shell/bashrc.d-atelier.sh` | `/etc/bash/bashrc.d/` | Shell aliases + starship |
+| `shell/bashrc.d-atelier.sh` | `/etc/bash/bashrc.d/` | Shell aliases, starship, prefix history (Up/Down) |
 | `colors/tokyo-night.conf` | *(stub)* | Points at `themes/tokyo-night/` |
 | `nvidia/` | `atelier-nvidia` package | Proprietary NVIDIA modprobe/X11 glue |
 | `xlibre/` | `atelier-xlibre-repo` package | External repo conf + public key |

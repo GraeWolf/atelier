@@ -30,3 +30,12 @@ fi
 if command -v bat >/dev/null 2>&1; then
 	alias cat='bat --paging=never'
 fi
+
+# Prefix history: Up/Down cycle lines that start with the current prefix.
+# Cursor stays on the typed prefix so further arrows keep matching that family.
+# Bind CSI and SS3 sequences (Ghostty, xterm, TTY). Interactive-only here
+# because Void sources /etc/bash/bashrc.d only for interactive shells.
+bind '"\e[A": history-search-backward'
+bind '"\e[B": history-search-forward'
+bind '"\eOA": history-search-backward'
+bind '"\eOB": history-search-forward'
