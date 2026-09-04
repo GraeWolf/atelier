@@ -24,7 +24,7 @@ This document records the technical choices locked for the Phase 1 MVP.
   - Docs: `docs/build/live-iso.md`, `docs/build/nvidia.md`
 - **Installer:** `atelier-install` (package `atelier-installer`)
   - **TUI default** (`dialog`); optional `--gui` (yad/zenity)
-  - Whole-disk only; optional LUKS2 on root (unencrypted `/boot`); optional `/swapfile` for hibernation
+  - Whole-disk only; optional LUKS2 on root (unencrypted `/boot`; USB HID in initramfs, `hid_asus` omitted so ROG N-KEY works at the passphrase prompt); optional `/swapfile` for hibernation
   - Live ISO boots to TTY; run `sudo atelier-install`
   - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`
 
@@ -63,7 +63,7 @@ This is a **documented exception** to “no foreign package formats”: it does 
 
 ### ASUS ROG keyboard (`atelier-asus`)
 
-Opt-in helper for ASUS ROG laptops where `hid-asus` exposes `asus::kbd_backlight` but leaves brightness at 0 after boot (keys dark). Ships `atelier-kbd` and a udev rule. Keyboard-light Fn keys are bound in `atelier-config` sxhkd (no-op without a kbd LED).
+Opt-in helper for ASUS ROG laptops where `hid-asus` exposes `asus::kbd_backlight` but leaves brightness at 0 after boot (keys dark). Ships `atelier-kbd` and a udev rule. Keyboard-light Fn keys are bound in `atelier-config` sxhkd (no-op without a kbd LED). LUKS passphrase typing is handled by the installer (omit `hid_asus` from the initramfs), not this package.
 
 **Policy:** not a dependency of `atelier-desktop`; not on live ISO package lists. Details: [../user/asus.md](../user/asus.md).
 

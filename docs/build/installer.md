@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.2+** |
+| XBPS package | `atelier-installer` **0.5.3+** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -75,7 +75,7 @@ Mapper: `/dev/mapper/cryptroot`.
 |------|------|
 | `/etc/crypttab` | `cryptroot UUID=<LUKS-UUID> none luks` (container UUID) |
 | `/etc/fstab` | root UUID is the **inner ext4** on the mapper |
-| `/etc/dracut.conf.d/10-atelier-crypt.conf` | `crypt` module + install crypttab |
+| `/etc/dracut.conf.d/10-atelier-crypt.conf` | `crypt` module + crypttab; USB HID `force_drivers`; `omit_drivers hid_asus` (N-KEY stays on hid-generic at the passphrase prompt) |
 | `/etc/default/grub` | `rd.luks.uuid=<LUKS-UUID> rd.luks.name=<UUID>=cryptroot` |
 
 Initramfs is regenerated **after** those files exist (`dracut --force --regenerate-all`). Passphrase is written to a 0600 temp keyfile for `cryptsetup`, never logged.
@@ -108,6 +108,7 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Optional groups install only when checked
 - [ ] Encryption default No keeps the 2-partition (EFI) / 2-partition (BIOS) layout
 - [ ] Encryption Yes: LUKS2 on p3, ext4 `/boot` on p2, passphrase at dracut, `/boot` not LUKS
+- [ ] Encryption Yes: initramfs includes `usbhid`/`hid-generic` and omits `hid_asus` (ROG N-KEY types at the passphrase prompt)
 - [ ] `rd.luks.uuid` and crypttab UUID match the LUKS container (not the inner ext4)
 - [ ] Swap default No: no `/swapfile`, no `resume=` on GRUB
 - [ ] Swap Yes: `/swapfile` in fstab, `resume=UUID=<root ext4>` + `resume_offset`, dracut resume module

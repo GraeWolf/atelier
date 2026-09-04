@@ -11,6 +11,10 @@ back on.
 package installed, `atelier-theme` sets a static colour from the palette
 `accent` (Tokyo Night blue, Nord cyan, Catppuccin blue, …).
 
+This package does **not** fix typing at the LUKS passphrase prompt. Encrypted
+installs omit `hid-asus` from the initramfs so the N-KEY stays on
+`hid-generic` until the real root mounts (see [installer.md](installer.md)).
+
 ## Install (opt-in)
 
 `atelier-asus` is **not** part of `atelier-desktop` and is **not** on the live
