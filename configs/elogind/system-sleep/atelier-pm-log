@@ -1,0 +1,142 @@
+#!/bin/sh
+# Atelier — elogind system-sleep hook (Void runs /etc/elogind/system-sleep).
+#
+# Called as: atelier-pm-log <pre|post> <suspend|hibernate|hybrid-sleep|...>
+# Snapshots enough state to diagnose a delayed reboot after resume. Atelier
+# has no persistent syslog; a hard reset wipes dmesg unless it is on disk.
+#
+# Always exit 0. A non-zero hook can abort sleep if interrupts are enabled.
+LOG=/var/log/atelier-pm.log
+RUNDIR=/run/atelier-pm
+PIDFILE=$RUNDIR/still-alive.pids
+
+phase=${1:-unknown}
+action=${2:-unknown}
+ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)
+
+_kill_still_alive() {
+	if [ -f "$PIDFILE" ]; then
+		while read -r pid; do
+			[ -n "$pid" ] || continue
+			kill "$pid" 2>/dev/null || true
+		done <"$PIDFILE"
+		rm -f "$PIDFILE"
+	fi
+}
+
+_start_still_alive() {
+	mkdir -p "$RUNDIR" 2>/dev/null || return 0
+	: >"$PIDFILE"
+	# Bracket the 30–60s post-resume reset window reported on the laptop.
+	for sec in 15 30 45 60 90; do
+		(
+			trap '' HUP
+			sleep "$sec" || exit 0
+			{
+				printf '%s still-alive %ss after %s %s\n' \
+					"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" \
+					"$sec" "$phase" "$action"
+			} >>"$LOG" 2>/dev/null
+			sync 2>/dev/null || true
+		) >/dev/null 2>&1 &
+		echo $! >>"$PIDFILE"
+	done
+}
+
+_rotate_log() {
+	[ -f "$LOG" ] || return 0
+	sz=$(wc -c <"$LOG" 2>/dev/null || echo 0)
+	sz=$(printf '%s' "$sz" | tr -d ' ')
+	if [ -n "$sz" ] && [ "$sz" -gt 524288 ] 2>/dev/null; then
+		mv -f "$LOG" "$LOG.old" 2>/dev/null || true
+	fi
+}
+
+_dump() {
+	{
+		printf '\n======== %s %s %s ========\n' "$ts" "$phase" "$action"
+		printf 'argv: %s\n' "$*"
+		printf 'kernel: %s\n' "$(uname -r 2>/dev/null || echo unknown)"
+		printf 'cmdline: %s\n' "$(cat /proc/cmdline 2>/dev/null || echo unknown)"
+		printf 'uptime: %s\n' "$(cut -d' ' -f1 /proc/uptime 2>/dev/null || echo unknown)"
+
+		if [ -r /sys/power/mem_sleep ]; then
+			printf 'mem_sleep: %s\n' "$(cat /sys/power/mem_sleep 2>/dev/null)"
+		fi
+		if [ -r /sys/power/disk ]; then
+			printf 'disk: %s\n' "$(cat /sys/power/disk 2>/dev/null)"
+		fi
+		if [ -r /sys/power/state ]; then
+			printf 'state: %s\n' "$(cat /sys/power/state 2>/dev/null)"
+		fi
+
+		if [ -r /sys/class/rtc/rtc0/wakealarm ]; then
+			printf 'rtc0 wakealarm: %s\n' "$(cat /sys/class/rtc/rtc0/wakealarm 2>/dev/null)"
+		fi
+
+		printf 'watchdog modules:\n'
+		lsmod 2>/dev/null | grep -iE 'wdt|tco|watchdog' || printf '(none)\n'
+		if [ -d /sys/class/watchdog ]; then
+			for w in /sys/class/watchdog/watchdog*; do
+				[ -e "$w" ] || continue
+				printf '  %s identity=%s state=%s timeout=%s\n' \
+					"$(basename "$w")" \
+					"$(cat "$w/identity" 2>/dev/null || echo ?)" \
+					"$(cat "$w/state" 2>/dev/null || echo ?)" \
+					"$(cat "$w/timeout" 2>/dev/null || echo ?)"
+			done
+		fi
+
+		printf 'gpu modules:\n'
+		lsmod 2>/dev/null | grep -iE 'nvidia|amdgpu|i915|nouveau' || printf '(none)\n'
+		if [ -r /proc/driver/nvidia/params ]; then
+			printf 'nvidia params:\n'
+			grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableGpuFirmware|RmWatchdog' \
+				/proc/driver/nvidia/params 2>/dev/null || cat /proc/driver/nvidia/params
+		fi
+
+		printf 'elogind drop-ins:\n'
+		for f in /etc/elogind/sleep.conf.d/*.conf /etc/elogind/logind.conf.d/*.conf; do
+			[ -f "$f" ] || continue
+			printf '--- %s ---\n' "$f"
+			cat "$f"
+		done
+
+		for bat in /sys/class/power_supply/BAT*/uevent; do
+			[ -f "$bat" ] || continue
+			printf 'battery %s:\n' "$(dirname "$bat")"
+			grep -E 'STATUS|CAPACITY|CAPACITY_LEVEL' "$bat" 2>/dev/null || true
+		done
+
+		printf 'dmesg (tail):\n'
+		if dmesg -T >/dev/null 2>&1; then
+			dmesg -T 2>/dev/null | tail -n 80
+		else
+			dmesg 2>/dev/null | tail -n 80
+		fi
+		printf '======== end %s %s ========\n' "$phase" "$action"
+	} >>"$LOG" 2>/dev/null
+}
+
+mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+touch "$LOG" 2>/dev/null || true
+chmod 640 "$LOG" 2>/dev/null || true
+
+case $phase in
+pre)
+	_kill_still_alive
+	_rotate_log
+	_dump "$@"
+	;;
+post)
+	_kill_still_alive
+	_dump "$@"
+	_start_still_alive
+	;;
+*)
+	_dump "$@"
+	;;
+esac
+
+sync 2>/dev/null || true
+exit 0

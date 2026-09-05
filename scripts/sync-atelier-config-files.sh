@@ -71,6 +71,19 @@ install -m 755 "$src/session/atelier-theme"      "$dst/usr/bin/atelier-theme"
 install -m 755 "$src/session/atelier-setup-nvidia" "$dst/usr/bin/atelier-setup-nvidia"
 install -m 755 "$src/session/atelier-setup-swap" "$dst/usr/bin/atelier-setup-swap"
 install -m 755 "$src/session/atelier-setup-keyring" "$dst/usr/bin/atelier-setup-keyring"
+mkdir -p "$dst/etc/elogind/system-sleep" \
+	"$dst/etc/runit/core-services" \
+	"$dst/etc/modprobe.d"
+install -m 755 "$src/elogind/system-sleep/atelier-pm-log" \
+	"$dst/etc/elogind/system-sleep/atelier-pm-log"
+install -m 755 "$src/elogind/system-sleep/atelier-wifi" \
+	"$dst/etc/elogind/system-sleep/atelier-wifi"
+install -m 755 "$src/elogind/system-sleep/atelier-nvidia" \
+	"$dst/etc/elogind/system-sleep/atelier-nvidia"
+install -m 644 "$src/modprobe.d/atelier-wifi.conf" \
+	"$dst/etc/modprobe.d/atelier-wifi.conf"
+install -m 644 "$src/runit/core-services/90-atelier-resume.sh" \
+	"$dst/etc/runit/core-services/90-atelier-resume.sh"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/etc/skel/.config/atelier/keybinds.txt"
 install -m 644 "$src/ghostty/config"             "$dst/etc/skel/.config/ghostty/config"

@@ -8,6 +8,9 @@
 #   sudo atelier-setup-swap              # prompt, then set up
 #   sudo atelier-setup-swap --yes        # no prompt (installer / existing box)
 #   sudo atelier-setup-swap --yes --size 16
+#   sudo atelier-setup-swap --status     # why elogind CanHibernate is yes/no
+#   sudo atelier-setup-swap --apply-resume  # write /sys/power/resume{,_offset}
+#   sudo atelier-setup-swap --clear-image   # wipe a leftover S4 image (GRUB loop)
 #
 # Installer (live medium, target already mounted):
 #   ATELIER_TARGET=/mnt/atelier-target atelier-setup-swap --yes
@@ -24,6 +27,10 @@ SWAP_PATH=/swapfile
 YES=0
 SIZE_GIB=""
 ROOT="${ATELIER_TARGET:-}"
+DO_STATUS=0
+DO_APPLY=0
+DO_CLEAR=0
+RESUME_CONF=/etc/atelier/resume.conf
 
 log() { printf 'atelier-setup-swap: %s\n' "$*"; }
 die() { printf 'atelier-setup-swap: error: %s\n' "$*" >&2; exit 1; }
@@ -32,19 +39,189 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
 	cat <<EOF
-Usage: atelier-setup-swap [--yes] [--size GIB] [--path PATH] [--help]
+Usage: atelier-setup-swap [--yes] [--size GIB] [--path PATH] [--status] [--apply-resume] [--clear-image] [--help]
 
-  --yes        Do not prompt
-  --size GIB   Swapfile size in GiB (default: RAM rounded up)
-  --path PATH  File path on the installed system (default: /swapfile)
+  --yes           Do not prompt
+  --size GIB      Swapfile size in GiB (default: RAM rounded up)
+  --path PATH     File path on the installed system (default: /swapfile)
+  --status        Print resume/swap/elogind state (why hibernate is refused)
+  --apply-resume  Write /sys/power/resume and resume_offset from the swapfile
+  --clear-image   Rewrite the swap header (clears a leftover hibernation image)
 
-Root filesystem must be ext4. Run as root.
+Root filesystem must be ext4. Run as root (except --status).
 EOF
+}
+
+swapfile_offset() {
+	filefrag -v -b"$(getconf PAGESIZE)" "$1" | awk '
+		/^[[:space:]]*0:/ {
+			gsub(/\./, "", $4)
+			print $4
+			exit
+		}
+	'
+}
+
+root_majmin() {
+	src=$(findmnt -no SOURCE "${1:-/}" 2>/dev/null || true)
+	[ -n "$src" ] || return 1
+	lsblk -nrno MAJ:MIN "$src" 2>/dev/null | awk '{ print $1; exit }'
+}
+
+# Kernel/dracut resume= target. LUKS: the mapper (appears at the passphrase),
+# not the inner ext4 UUID — that UUID is invisible until cryptsetup finishes.
+resume_kernel_arg() {
+	rootfs_uuid=$1
+	crypttab=$2
+	if [ -f "$crypttab" ] && grep -qE '^[[:space:]]*cryptroot[[:space:]]' "$crypttab"; then
+		printf '%s\n' "/dev/mapper/cryptroot"
+		return 0
+	fi
+	printf 'UUID=%s\n' "$rootfs_uuid"
+}
+
+print_resume_status() {
+	state=$(cat /sys/power/state 2>/dev/null || echo unreadable)
+	disk=$(cat /sys/power/disk 2>/dev/null || echo unreadable)
+	printf 'cmdline: %s\n' "$(cat /proc/cmdline 2>/dev/null || echo unknown)"
+	printf 'sysfs state: %s\n' "$state"
+	printf 'sysfs disk:  %s\n' "$disk"
+	printf 'sysfs resume: %s\n' "$(cat /sys/power/resume 2>/dev/null || echo unreadable)"
+	printf 'sysfs resume_offset: %s\n' "$(cat /sys/power/resume_offset 2>/dev/null || echo unreadable)"
+	if [ -d /sys/firmware/efi ]; then
+		printf 'firmware: EFI\n'
+	else
+		printf 'firmware: not EFI (elogind requires resume= on cmdline)\n'
+	fi
+	if [ -r /sys/kernel/security/lockdown ]; then
+		printf 'lockdown: %s\n' "$(tr -d '\n' </sys/kernel/security/lockdown)"
+	fi
+	if [ -r /sys/module/secretmem/parameters/enable ]; then
+		printf 'secretmem.enable: %s\n' "$(cat /sys/module/secretmem/parameters/enable)"
+	fi
+	secmaps=$(grep -lE 'secretmem|memfd:secret' /proc/[0-9]*/maps 2>/dev/null || true)
+	if [ -n "$secmaps" ]; then
+		printf 'secretmem maps:\n'
+		for f in $secmaps; do
+			pid=${f#/proc/}
+			pid=${pid%/maps}
+			cmd=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || echo "?")
+			printf '  pid %s %s\n' "$pid" "$cmd"
+		done
+	else
+		printf 'secretmem maps: (none named secretmem in /proc/*/maps)\n'
+	fi
+	# FDs can keep secretmem_users > 0 with no VMA (kernel still disables S4).
+	secfds=$(find /proc -maxdepth 3 -path '/proc/[0-9]*/fd/*' \
+		-exec readlink {} \; 2>/dev/null | grep -ciE 'secretmem|memfd:secret' || true)
+	printf 'secretmem fds: %s\n' "${secfds:-0}"
+	if [ -d /sys/bus/cxl ]; then
+		printf 'cxl: present (kernel disables hibernation while CXL memory is active)\n'
+	else
+		printf 'cxl: no\n'
+	fi
+	printf '/proc/swaps:\n'
+	cat /proc/swaps 2>/dev/null || printf '(unreadable)\n'
+	awk '/Active\(anon\):/ { printf "Active(anon): %s kB\n", $2 }' /proc/meminfo 2>/dev/null || true
+	if [ -f "$SWAP_PATH" ]; then
+		off=$(swapfile_offset "$SWAP_PATH" 2>/dev/null || true)
+		mm=$(root_majmin / 2>/dev/null || true)
+		printf 'swapfile: %s offset=%s root_majmin=%s\n' "$SWAP_PATH" "${off:-?}" "${mm:-?}"
+	else
+		printf 'swapfile: %s missing\n' "$SWAP_PATH"
+	fi
+	if command -v busctl >/dev/null 2>&1; then
+		busctl --system get-property org.freedesktop.login1 \
+			/org/freedesktop/login1 org.freedesktop.login1.Manager \
+			CanHibernate 2>/dev/null || true
+	fi
+
+	printf '\n'
+	case $state in
+	*disk*)
+		printf 'kernel: hibernation advertised (disk in /sys/power/state)\n'
+		;;
+	*)
+		printf 'kernel: hibernation DISABLED (no "disk" in /sys/power/state, disk=%s)\n' "$disk"
+		printf 'elogind will report: Sleep verb "hibernate" not supported\n'
+		printf 'hibernation_available() is false when any of:\n'
+		printf '  1. lockdown != none (Secure Boot) — already printed above\n'
+		printf '  2. secretmem_active() — a process called memfd_secret (often Chromium/Brave)\n'
+		printf '  3. cxl_mem_active() — CXL memory\n'
+		printf '  4. nohibernate on cmdline\n'
+		printf 'A/B: close browsers, then: cat /sys/power/state   (want "disk")\n'
+		printf 'If maps/fds are empty: reboot once with kernel param secretmem.enable=0\n'
+		printf 'apply-resume cannot override a missing disk state.\n'
+		;;
+	esac
+}
+
+apply_resume_sysfs() {
+	# Best-effort: make elogind see a resume device. Writing resume can
+	# invoke software_resume(); with no image that is a no-op.
+	[ -f "$SWAP_PATH" ] || {
+		log "no $SWAP_PATH; nothing to apply"
+		return 0
+	}
+	if ! grep -qF "$SWAP_PATH" /proc/swaps 2>/dev/null; then
+		log "enabling swap $SWAP_PATH"
+		swapon "$SWAP_PATH" || {
+			log "swapon $SWAP_PATH failed"
+			return 1
+		}
+	fi
+	off=$(swapfile_offset "$SWAP_PATH")
+	case $off in
+	''|*[!0-9]*)
+		log "could not read resume_offset from filefrag for $SWAP_PATH"
+		return 1
+		;;
+	esac
+	mm=$(root_majmin /) || mm=
+	[ -n "$mm" ] || {
+		log "could not read MAJ:MIN for /"
+		return 1
+	}
+	if [ -w /sys/power/resume_offset ]; then
+		printf '%s\n' "$off" >/sys/power/resume_offset || {
+			log "write /sys/power/resume_offset failed"
+			return 1
+		}
+	fi
+	if [ -w /sys/power/resume ]; then
+		printf '%s\n' "$mm" >/sys/power/resume || {
+			log "write /sys/power/resume failed"
+			return 1
+		}
+	else
+		log "cannot write /sys/power/resume"
+		return 1
+	fi
+	log "applied /sys/power/resume=$mm resume_offset=$off"
+	if command -v loginctl >/dev/null 2>&1; then
+		loginctl show-manager 2>/dev/null | grep -E '^Can(Hibernate|SuspendThenHibernate)=' || true
+	fi
+	return 0
+}
+
+write_resume_conf() {
+	dir=$(dirname "$1")
+	mkdir -p "$dir"
+	{
+		printf '# generated by atelier-setup-swap\n'
+		printf 'SWAP_PATH=%s\n' "$SWAP_PATH"
+		printf 'UUID=%s\n' "$2"
+		printf 'OFFSET=%s\n' "$3"
+		printf 'MAJMIN=%s\n' "$4"
+	} >"$1"
 }
 
 while [ $# -gt 0 ]; do
 	case $1 in
 	--yes|-y) YES=1 ;;
+	--status) DO_STATUS=1 ;;
+	--apply-resume) DO_APPLY=1 ;;
+	--clear-image) DO_CLEAR=1 ;;
 	--size)
 		[ $# -ge 2 ] || die "--size needs a GiB integer"
 		SIZE_GIB=$2
@@ -61,7 +238,29 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+if [ "$DO_STATUS" -eq 1 ]; then
+	print_resume_status
+	exit 0
+fi
+
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo atelier-setup-swap)"
+
+if [ "$DO_APPLY" -eq 1 ]; then
+	apply_resume_sysfs || die "apply-resume failed"
+	exit 0
+fi
+
+if [ "$DO_CLEAR" -eq 1 ]; then
+	[ -f "$SWAP_PATH" ] || die "no $SWAP_PATH"
+	log "clearing hibernation image on $SWAP_PATH"
+	swapoff "$SWAP_PATH" 2>/dev/null || true
+	mkswap "$SWAP_PATH" || die "mkswap $SWAP_PATH failed"
+	chmod 600 "$SWAP_PATH"
+	swapon "$SWAP_PATH" || die "swapon $SWAP_PATH failed"
+	apply_resume_sysfs || log "WARN: could not re-apply /sys/power/resume"
+	log "done (next boot will not try to restore a leftover S4 image)"
+	exit 0
+fi
 
 case $SWAP_PATH in
 /*) ;;
@@ -170,13 +369,7 @@ if [ "$recreate" -eq 1 ]; then
 fi
 chmod 600 "$host_swap"
 
-offset=$(filefrag -v -b"$(getconf PAGESIZE)" "$host_swap" | awk '
-	/^[[:space:]]*0:/ {
-		gsub(/\./, "", $4)
-		print $4
-		exit
-	}
-')
+offset=$(swapfile_offset "$host_swap")
 case $offset in
 ''|*[!0-9]*) die "could not read resume_offset from filefrag for $host_swap" ;;
 esac
@@ -194,23 +387,29 @@ else
 	log "appended $SWAP_PATH to fstab"
 fi
 
+resume_arg=$(resume_kernel_arg "$uuid" "${host_root}/etc/crypttab")
+dracut_mods=" resume "
+case $resume_arg in
+/dev/mapper/*) dracut_mods=" crypt resume " ;;
+esac
+
 mkdir -p "$(dirname "$host_dracut")"
 {
 	printf '# generated by atelier-setup-swap (keep surrounding spaces in += values)\n'
-	printf 'add_dracutmodules+=" resume "\n'
+	printf 'add_dracutmodules+="%s"\n' "$dracut_mods"
 } >"$host_dracut"
 log "wrote $host_dracut"
 
 resume_already=0
-if [ -f "$host_grub" ] && grep -q "resume=UUID=${uuid}" "$host_grub" \
+if [ -f "$host_grub" ] && grep -qF "resume=${resume_arg}" "$host_grub" \
 	&& grep -q "resume_offset=${offset}" "$host_grub"; then
 	resume_already=1
 fi
 
 mkdir -p "$(dirname "$host_grub")"
 if [ ! -f "$host_grub" ]; then
-	printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=UUID=%s resume_offset=%s"\n' \
-		"$uuid" "$offset" >"$host_grub"
+	printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=%s resume_offset=%s"\n' \
+		"$resume_arg" "$offset" >"$host_grub"
 else
 	# Drop previous resume tokens, then append the current pair. Leaves
 	# rd.luks.* and other arguments alone.
@@ -222,14 +421,15 @@ else
 		-e 's/[[:space:]]*resume=[^ "]*//g' \
 		-e 's/[[:space:]]*resume_offset=[^ "]*//g' \
 		"$host_grub"
-	sed -i -e "/^GRUB_CMDLINE_LINUX_DEFAULT=/s/\"[[:space:]]*$/ resume=UUID=${uuid} resume_offset=${offset}\"/" \
+	# Use # as s/// delimiter: resume=/dev/mapper/cryptroot contains slashes.
+	sed -i -e "/^GRUB_CMDLINE_LINUX_DEFAULT=/s#\"[[:space:]]*\$# resume=${resume_arg} resume_offset=${offset}\"#" \
 		"$host_grub"
-	if ! grep -q 'resume=UUID=' "$host_grub"; then
-		printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=UUID=%s resume_offset=%s"\n' \
-			"$uuid" "$offset" >>"$host_grub"
+	if ! grep -q 'resume=' "$host_grub"; then
+		printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 resume=%s resume_offset=%s"\n' \
+			"$resume_arg" "$offset" >>"$host_grub"
 	fi
 fi
-log "GRUB resume=UUID=$uuid resume_offset=$offset"
+log "GRUB resume=${resume_arg} resume_offset=$offset"
 
 need_initramfs=1
 if [ "$recreate" -eq 0 ] && [ "$resume_already" -eq 1 ]; then
@@ -309,7 +509,17 @@ if [ -z "$host_root" ] && [ -e /var/service/elogind ]; then
 	fi
 fi
 
+majmin=$(root_majmin "$mnt" 2>/dev/null || true)
+host_resume_conf=${host_root}${RESUME_CONF}
+write_resume_conf "$host_resume_conf" "$uuid" "$offset" "${majmin:-}"
+log "wrote $host_resume_conf"
+
+if [ -z "$host_root" ]; then
+	apply_resume_sysfs || log "WARN: could not apply /sys/power/resume (elogind may refuse hibernate until reboot)"
+fi
+
 log "done"
 log "hibernation: loginctl hibernate (or Power menu). Reboot once so GRUB resume= is live."
+log "If loginctl says hibernate is not supported: sudo atelier-setup-swap --status"
 log "suspend-then-hibernate: sleep, then hibernate after 30 minutes if still asleep."
-log "docs: resume=UUID=$uuid resume_offset=$offset"
+log "docs: resume=UUID=$uuid resume_offset=$offset majmin=${majmin:-unknown}"

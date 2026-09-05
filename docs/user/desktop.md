@@ -224,6 +224,115 @@ export ATELIER_LOCK_SUSPEND_SEC=120   # seconds after lock before suspend (0=off
 
 Password prompt styles (`XSECURELOCK_PASSWORD_PROMPT`): `cursor` (default here), `asterisks`, `hidden`, … — not `time_hex`.
 
+### Hibernate resume then reboot
+
+MediaTek **mt7921e** (RZ608 / MT7921/MT7922 Wi-Fi, common on ASUS AMD laptops) times out during hibernate resume (`Message 00020007`, `pci_pm_restore` error **-110**). Resume hangs or resets to GRUB; a leftover image then makes the next boot try S4 again (double GRUB, then a LUKS prompt that may hang on the same driver). Atelier unloads `mt7921e` in `/etc/elogind/system-sleep/atelier-wifi` before sleep and reloads it after, and sets `mt7921e.disable_aspm=1` plus `/sys/power/pm_async=0`.
+
+Without a package update:
+
+```bash
+sudo mkdir -p /etc/elogind/system-sleep /etc/modprobe.d
+sudo install -m755 configs/elogind/system-sleep/atelier-wifi \
+	/etc/elogind/system-sleep/atelier-wifi
+sudo install -m644 configs/modprobe.d/atelier-wifi.conf \
+	/etc/modprobe.d/atelier-wifi.conf
+echo 0 | sudo tee /sys/power/pm_async
+```
+
+Then `loginctl hibernate` again. Going black with a blinking cursor for a while **before** power-off is normal (NVIDIA VT switch + Wi-Fi unload). Some ASUS firmware always shows GRUB twice after S4; that is OK if the **second** boot asks for LUKS and restores the lock screen.
+
+Wi-Fi stays **off** after resume on purpose (reloading `mt7921e` at the lock screen hung the kernel). After you unlock:
+
+```bash
+sudo modprobe mt7921e
+```
+
+If that prints `pci_pm_restore -110` or freezes, leave Wi-Fi until a full reboot. Check `/var/log/atelier-pm.log` for `atelier-wifi: pre:` (unload) vs `WARN: mt7921e still loaded`.
+
+If a previous failed resume left a bad image (GRUB twice, LUKS missing on the first try, black screen after the second), **wipe the leftover S4 header** before trying again:
+
+```bash
+sudo install -m755 configs/session/atelier-setup-swap /usr/bin/atelier-setup-swap
+sudo atelier-setup-swap --clear-image
+```
+
+On LUKS installs, resume must wait for `/dev/mapper/cryptroot` (not the inner ext4 UUID). Re-run `sudo atelier-setup-swap --yes` so GRUB gets `resume=/dev/mapper/cryptroot`, then reboot once, then hibernate.
+
+Hybrid NVIDIA (amdgpu panel + dGPU): install the NVIDIA hook and **disable Void’s vendor copy**. That script always calls `nvidia-sleep.sh hibernate`; running it twice deadlocks freeze (`nvidia-sleep.sh blocked on an rw-semaphore`, `Device or resource busy`).
+
+```bash
+sudo install -m755 configs/elogind/system-sleep/atelier-nvidia \
+	/etc/elogind/system-sleep/atelier-nvidia
+sudo chmod a-x /usr/libexec/elogind/system-sleep/nvidia.sh \
+	/usr/lib/elogind/system-sleep/nvidia.sh \
+	/usr/lib64/elogind/system-sleep/nvidia.sh 2>/dev/null || true
+```
+
+Black screen with a blinking cursor after LUKS usually means the session restored but the GPU did not. Switch TTY (`Ctrl+Alt+F2`). If `loginctl reboot` hangs, hold the power button, boot normally, clear the image, then retry with the hooks.
+
+If the session comes back from hibernate and the machine reboots by itself about 30–60 seconds later, Atelier has no persistent syslog, so kernel messages from the dying session are lost. `atelier-config` installs `/etc/elogind/system-sleep/atelier-pm-log`, which appends a pre/post snapshot to **`/var/log/atelier-pm.log`** and writes `still-alive` lines at 15/30/45/60/90 seconds after resume.
+
+Without a package update yet:
+
+```bash
+sudo mkdir -p /etc/elogind/system-sleep
+sudo install -m755 /path/to/atelier/configs/elogind/system-sleep/atelier-pm-log \
+	/etc/elogind/system-sleep/atelier-pm-log
+sudo install -m755 /path/to/atelier/configs/session/atelier-lock /usr/bin/atelier-lock
+```
+
+Then reproduce once and inspect the log **after the surprise reboot**:
+
+```bash
+sudo less /var/log/atelier-pm.log
+lsmod | grep -iE 'sp5100_tco|iTCO|wdt|watchdog'
+cat /proc/cmdline
+```
+
+| What you see | Meaning |
+|--------------|---------|
+| `post hibernate` but no `still-alive` | Reset inside ~15s of resume |
+| `still-alive 15s` / `30s` then silence | Reset in that window (watchdog / GPU timeout) |
+| `NVRM`, `Xid`, `PreserveVideoMemory` in the dmesg tail | NVIDIA dGPU failed after S4 (desktop can still look fine on the iGPU) |
+| `sp5100_tco` / watchdog identity in the snapshot | AMD TCO watchdog; do **not** add `nowatchdog` on the desktop PC |
+| `rtc0 wakealarm` still set on `post hibernate` | Leftover RTC from `suspend-then-hibernate` |
+
+### `Sleep verb "hibernate" not supported`
+
+`loginctl` always lists the verb. elogind still refuses unless the **kernel** advertises hibernation (`disk` in `/sys/power/state`). Swap and `resume=` can be perfect and the verb still fails.
+
+```bash
+sudo install -m755 configs/session/atelier-setup-swap /usr/bin/atelier-setup-swap
+sudo atelier-setup-swap --status
+```
+
+| `--status` | Meaning |
+|------------|---------|
+| `sysfs state: freeze mem` and `sysfs disk: [disabled]` | Kernel `hibernation_available()` is false. Not a swap/`resume=` bug. |
+| lockdown `[none]` | Secure Boot is **not** the cause |
+| lockdown `integrity` / `confidentiality` | Disable Secure Boot in firmware |
+| secretmem maps listed | A process called `memfd_secret` (often Brave/Chromium). Close it and re-check `/sys/power/state` |
+| `resume 0:0` with `resume_offset>0` | `sudo atelier-setup-swap --apply-resume` |
+| empty `/proc/swaps` | `swapon` failed |
+
+If lockdown is `[none]` but `disk` is still missing:
+
+```bash
+cat /sys/power/state
+# close Brave/Chromium, then:
+cat /sys/power/state
+```
+
+If `disk` appears after closing the browser, hibernate is blocked only while `memfd_secret` users exist. Optional kernel param `secretmem.enable=0` disables that syscall so hibernate stays available. `--apply-resume` cannot override a disabled `disk`.
+
+A/B (one cycle each; wait 3 minutes after resume):
+
+1. Power menu **Hibernate** (immediate). If this stays up, the bug is the 30-minute sleep-then-hibernate path, not S4 itself.
+2. `loginctl suspend` (RAM only). If this also reboots after resume, it is watchdog/GPU, not the hibernation image.
+3. Note whether windows from before hibernate are still open (true restore vs a cold boot), GRUB/firmware POST (true reboot vs X dying), and whether the fans spin up just before the reset.
+
+Do not change GRUB or NVIDIA module options until that log points at a cause. Hybrid NVIDIA notes: [nvidia.md](nvidia.md).
+
 ## Sound
 
 Atelier uses **PipeWire** (with PulseAudio compatibility). Daemons start from `~/.xinitrc` after dbus:

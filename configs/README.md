@@ -20,6 +20,11 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-screenshot` | `/usr/bin/atelier-screenshot` | Region/window/full capture (clipboard) |
 | `session/atelier-power-menu` | `/usr/bin/atelier-power-menu` | Rofi lock/logout/suspend/hibernate/reboot/off |
 | `session/atelier-setup-swap` | `/usr/bin/atelier-setup-swap` | Swapfile + hibernation resume (ext4 root) |
+| `elogind/system-sleep/atelier-pm-log` | `/etc/elogind/system-sleep/atelier-pm-log` | Sleep/hibernate pre/post snapshot (`/var/log/atelier-pm.log`) |
+| `elogind/system-sleep/atelier-wifi` | `/etc/elogind/system-sleep/atelier-wifi` | Unload MediaTek mt7921e around sleep (PCI restore -110) |
+| `elogind/system-sleep/atelier-nvidia` | `/etc/elogind/system-sleep/atelier-nvidia` | nvidia-sleep.sh + unload dGPU on hybrid S4 |
+| `modprobe.d/atelier-wifi.conf` | `/etc/modprobe.d/atelier-wifi.conf` | `mt7921e.disable_aspm=1` |
+| `runit/core-services/90-atelier-resume.sh` | `/etc/runit/core-services/90-atelier-resume.sh` | Apply swapfile `resume=` to sysfs so elogind CanHibernate works |
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |

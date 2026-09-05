@@ -74,7 +74,9 @@ On an already-installed system:
 sudo atelier-setup-swap
 ```
 
-Then reboot once so GRUB picks up `resume=`. Hibernate from the power menu (**Super+Ctrl+Escape**).
+Then reboot once so GRUB picks up `resume=`. Hibernate from the power menu (**Super+Ctrl+Escape**). If `loginctl hibernate` says the verb is not supported, run `sudo atelier-setup-swap --status`. Stock kernels disable hibernation under **UEFI Secure Boot** (lockdown); turn Secure Boot off in firmware if you need S4. LUKS installs use `resume=/dev/mapper/cryptroot` so the initramfs unlocks before restoring. See [desktop.md](desktop.md#sleep-verb-hibernate-not-supported).
+
+If resume works for about a minute and then the machine reboots, see [desktop.md](desktop.md#hibernate-resume-then-reboot) (`/var/log/atelier-pm.log`). Do not add kernel parameters until that log points at a cause.
 
 ## What it does not do
 

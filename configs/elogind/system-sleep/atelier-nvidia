@@ -1,0 +1,82 @@
+#!/bin/sh
+# Hybrid NVIDIA (amdgpu + nvidia): do not call nvidia-sleep.sh.
+#
+# Void ships /usr/libexec/elogind/system-sleep/nvidia.sh which always runs
+# nvidia-sleep.sh hibernate. This hook also used to call it. Two callers
+# deadlock on an rw-semaphore; freeze fails ("Device or resource busy")
+# and nvidia-sleep.sh hangs for minutes on a kernel VT.
+#
+# On hybrid the panel is the iGPU. Unload nvidia.ko for S4 instead.
+# Always exit 0.
+STASH=/run/atelier-nvidia.mod
+LOG=/var/log/atelier-pm.log
+
+log() {
+	printf '%s atelier-nvidia: %s\n' \
+		"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" "$*" \
+		>>"$LOG" 2>/dev/null || true
+}
+
+have_mod() {
+	grep -q "^$1 " /proc/modules 2>/dev/null
+}
+
+hybrid() {
+	have_mod amdgpu && have_mod nvidia
+}
+
+# Vendor hook runs from libexec *before* /etc/elogind/system-sleep. Disable
+# it on hybrid so the next cycle cannot double-enter nvidia-sleep.sh.
+disable_vendor_nvidia_hook() {
+	for f in \
+		/usr/libexec/elogind/system-sleep/nvidia.sh \
+		/usr/lib/elogind/system-sleep/nvidia.sh \
+		/usr/lib64/elogind/system-sleep/nvidia.sh
+	do
+		if [ -x "$f" ]; then
+			chmod a-x "$f" 2>/dev/null || true
+			log "disabled vendor hook $f (chmod -x)"
+		fi
+	done
+}
+
+nv_pre() {
+	log "pre: start $*"
+	if hybrid; then
+		disable_vendor_nvidia_hook
+		: >"$STASH"
+		for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
+			have_mod "$mod" || continue
+			printf '%s\n' "$mod" >>"$STASH"
+			modprobe -r "$mod" >/dev/null 2>&1 || true
+			if have_mod "$mod"; then
+				log "WARN: $mod still loaded"
+			else
+				log "pre: unloaded $mod"
+			fi
+		done
+	fi
+	sync >/dev/null 2>&1 || true
+	log "pre: done"
+	sync >/dev/null 2>&1 || true
+}
+
+nv_post() {
+	log "post: start"
+	if [ -f "$STASH" ]; then
+		for mod in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
+			grep -qx "$mod" "$STASH" 2>/dev/null || continue
+			modprobe "$mod" >/dev/null 2>&1 || true
+		done
+		rm -f "$STASH"
+	fi
+	log "post: done"
+	sync >/dev/null 2>&1 || true
+}
+
+case ${1:-} in
+pre) nv_pre "$@" ;;
+post) nv_post ;;
+esac
+
+exit 0

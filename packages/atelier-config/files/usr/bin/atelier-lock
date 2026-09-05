@@ -3,8 +3,9 @@
 #
 # - Loads XSECURELOCK_* from ~/.config/xsecurelock/env.sh
 # - Prefer xss-lock path via "xset s activate" when xss-lock is already running
-# - When run as the xss-lock locker (direct exec), runs xsecurelock and may
-#   schedule suspend after ATELIER_LOCK_SUSPEND_SEC (default 120) while locked
+# - When run as the xss-lock locker, runs xsecurelock (no exec) and may
+#   schedule suspend after ATELIER_LOCK_SUSPEND_SEC (default 120) while locked.
+#   The waiter is killed on unlock; the X screensaver idle timer is reset.
 #
 # Env:
 #   ATELIER_LOCK_SUSPEND_SEC  seconds after lock before suspend (0 = never)
@@ -51,9 +52,60 @@ if [ -n "${ATELIER_SKIP_LOCK_SUSPEND:-}" ]; then
 	_suspend_sec=0
 fi
 
+# Pidfile so a restored/orphaned waiter from a previous lock cannot fire after
+# unlock. Do not exec xsecurelock: dash runs EXIT traps on exec, bash does not.
+# xss-lock -l passes XSS_SLEEP_LOCK_FD; only xsecurelock may hold it. The
+# waiter and this parent must close their copies or lid-sleep waits on them.
+_uid=$(id -u)
+_pidfile="${XDG_RUNTIME_DIR:-/tmp}/atelier-lock-suspend.${_uid}.pid"
 _waiter=""
+
+_close_sleep_fd() {
+	case ${XSS_SLEEP_LOCK_FD:-} in
+	''|*[!0-9]*) ;;
+	*) eval "exec ${XSS_SLEEP_LOCK_FD}>&-" ;;
+	esac
+}
+
+_stop_waiter() {
+	if [ -n "$_waiter" ]; then
+		kill "$_waiter" 2>/dev/null || true
+		wait "$_waiter" 2>/dev/null || true
+		_waiter=""
+	fi
+	if [ -f "$_pidfile" ]; then
+		_old=$(cat "$_pidfile" 2>/dev/null || true)
+		if [ -n "$_old" ] && [ "$_old" != "$$" ]; then
+			kill "$_old" 2>/dev/null || true
+		fi
+		rm -f "$_pidfile"
+	fi
+}
+
+_reset_idle() {
+	if command -v xset >/dev/null 2>&1; then
+		xset s reset 2>/dev/null || true
+	fi
+}
+
+_cleanup() {
+	_stop_waiter
+	_reset_idle
+}
+trap '_cleanup' EXIT INT TERM HUP
+
+# Drop a waiter left over from a previous lock (hibernate restore, exec trap).
+if [ -f "$_pidfile" ]; then
+	_old=$(cat "$_pidfile" 2>/dev/null || true)
+	if [ -n "$_old" ]; then
+		kill "$_old" 2>/dev/null || true
+	fi
+	rm -f "$_pidfile"
+fi
+
 if [ "$_suspend_sec" -gt 0 ] 2>/dev/null; then
 	(
+		_close_sleep_fd
 		sleep "$_suspend_sec"
 		# Only suspend if still locked by us
 		if pgrep -u "$(id -u)" -x xsecurelock >/dev/null 2>&1; then
@@ -73,9 +125,13 @@ if [ "$_suspend_sec" -gt 0 ] 2>/dev/null; then
 		fi
 	) &
 	_waiter=$!
-	# shellcheck disable=SC2064
-	trap ' [ -n "$_waiter" ] && kill "$_waiter" 2>/dev/null || true ' EXIT INT TERM HUP
+	mkdir -p "$(dirname "$_pidfile")" 2>/dev/null || true
+	printf '%s\n' "$_waiter" >"$_pidfile"
 fi
 
-# Run locker in foreground (xss-lock waits for this)
-exec xsecurelock
+# Fork the locker first so it inherits XSS_SLEEP_LOCK_FD, then drop our copy.
+xsecurelock &
+_lockpid=$!
+_close_sleep_fd
+wait "$_lockpid" || true
+

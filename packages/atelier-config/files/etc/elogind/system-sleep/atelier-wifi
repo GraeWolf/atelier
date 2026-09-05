@@ -1,0 +1,121 @@
+#!/bin/sh
+# Unload MediaTek mt7921e/mt7925e around sleep/hibernate.
+#
+# pci_pm_restore -110 (Message 00020007 timeout) hangs the kernel. rmmod
+# often fails (Bluetooth holds the chip), so also unbind + PCI-remove.
+# Do NOT autoload on post: a delayed modprobe/rescan is what killed the
+# session at the lock screen. After resume, load manually if needed:
+#   sudo modprobe mt7921e
+#
+# Called as: atelier-wifi <pre|post> <suspend|hibernate|...>
+# Always exit 0.
+STASH=/run/atelier-wifi.mod
+SVLIST=/run/atelier-wifi.sv
+LOG=/var/log/atelier-pm.log
+
+log() {
+	printf '%s atelier-wifi: %s\n' \
+		"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" "$*" \
+		>>"$LOG" 2>/dev/null || true
+}
+
+have_mod() {
+	grep -q "^$1 " /proc/modules 2>/dev/null
+}
+
+wifi_down() {
+	log "pre: start $*"
+	: >"$STASH"
+	: >"$SVLIST"
+
+	if command -v nmcli >/dev/null 2>&1; then
+		nmcli radio wifi off >/dev/null 2>&1 || true
+	fi
+	if command -v rfkill >/dev/null 2>&1; then
+		rfkill block wifi >/dev/null 2>&1 || true
+		rfkill block bluetooth >/dev/null 2>&1 || true
+	fi
+	for iface in /sys/class/net/*; do
+		[ -e "$iface/device/driver" ] || continue
+		drv=$(basename "$(readlink "$iface/device/driver" 2>/dev/null)" 2>/dev/null) || continue
+		case $drv in
+		mt7921e | mt7925e)
+			ip link set "$(basename "$iface")" down >/dev/null 2>&1 || true
+			;;
+		esac
+	done
+
+	for svc in bluetoothd bluetooth bluez; do
+		if [ -e "/var/service/$svc" ]; then
+			printf '%s\n' "$svc" >>"$SVLIST"
+			sv down "$svc" >/dev/null 2>&1 || true
+		fi
+	done
+	if command -v bluetoothctl >/dev/null 2>&1; then
+		bluetoothctl power off >/dev/null 2>&1 || true
+	fi
+
+	for drv in mt7925e mt7921e; do
+		drvdir=/sys/bus/pci/drivers/$drv
+		[ -d "$drvdir" ] || continue
+		for link in "$drvdir"/0000:*; do
+			[ -e "$link" ] || continue
+			bdf=$(basename "$link")
+			log "pre: unbind+remove $bdf ($drv)"
+			printf '%s\n' "$bdf" >"$drvdir/unbind" 2>/dev/null || true
+			if [ -w "/sys/bus/pci/devices/$bdf/remove" ]; then
+				echo 1 >"/sys/bus/pci/devices/$bdf/remove" 2>/dev/null || true
+			fi
+		done
+	done
+
+	sleep 1
+	# btmtk = MediaTek Bluetooth on the same chip. Do not touch
+	# btintel/btrtl (Intel/Realtek), which are unrelated controllers.
+	for mod in btmtk btusb mt7925e mt7921e; do
+		have_mod "$mod" || continue
+		printf '%s\n' "$mod" >>"$STASH"
+		n=0
+		while have_mod "$mod" && [ "$n" -lt 5 ]; do
+			modprobe -r "$mod" >/dev/null 2>&1 || true
+			n=$((n + 1))
+			[ "$n" -lt 5 ] && sleep 1
+		done
+		if have_mod "$mod"; then
+			log "WARN: $mod still loaded"
+		else
+			log "pre: unloaded $mod"
+		fi
+	done
+	sync >/dev/null 2>&1 || true
+	log "pre: done"
+	sync >/dev/null 2>&1 || true
+}
+
+wifi_up() {
+	log "post: not reloading mt7921e (sudo modprobe mt7921e after unlock)"
+	if [ -f "$SVLIST" ]; then
+		while read -r svc; do
+			[ -n "$svc" ] || continue
+			sv up "$svc" >/dev/null 2>&1 || true
+		done <"$SVLIST"
+		rm -f "$SVLIST"
+	fi
+	rm -f "$STASH"
+	if command -v rfkill >/dev/null 2>&1; then
+		rfkill unblock bluetooth >/dev/null 2>&1 || true
+		# Leave wifi blocked until the user loads mt7921e.
+	fi
+	sync >/dev/null 2>&1 || true
+}
+
+if [ -w /sys/power/pm_async ]; then
+	echo 0 >/sys/power/pm_async 2>/dev/null || true
+fi
+
+case ${1:-} in
+pre) wifi_down "$@" ;;
+post) wifi_up ;;
+esac
+
+exit 0
