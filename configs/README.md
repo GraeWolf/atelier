@@ -24,6 +24,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `elogind/system-sleep/atelier-wifi` | `/etc/elogind/system-sleep/atelier-wifi` | Unload MediaTek mt7921e around sleep (PCI restore -110) |
 | `elogind/system-sleep/atelier-nvidia` | `/etc/elogind/system-sleep/atelier-nvidia` | nvidia-sleep.sh + unload dGPU on hybrid S4 |
 | `modprobe.d/atelier-wifi.conf` | `/etc/modprobe.d/atelier-wifi.conf` | `mt7921e.disable_aspm=1` |
+| `modprobe.d/atelier-hid-asus.conf` | `/etc/modprobe.d/atelier-hid-asus.conf` | Blacklist `hid_asus` so ROG N-KEY stays on hid-generic at TTY login |
 | `runit/core-services/90-atelier-resume.sh` | `/etc/runit/core-services/90-atelier-resume.sh` | Apply swapfile `resume=` to sysfs so elogind CanHibernate works |
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |

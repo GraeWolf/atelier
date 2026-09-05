@@ -11,9 +11,13 @@ back on.
 package installed, `atelier-theme` sets a static colour from the palette
 `accent` (Tokyo Night blue, Nord cyan, Catppuccin blue, …).
 
-This package does **not** fix typing at the LUKS passphrase prompt. Encrypted
-installs omit `hid-asus` from the initramfs so the N-KEY stays on
-`hid-generic` until the real root mounts (see [installer.md](installer.md)).
+This package does **not** fix typing at the LUKS passphrase prompt or the
+TTY login. `hid-asus` rebinds the N-KEY (`0b05:19b6`) and the kernel
+console stops receiving keys until X starts. Encrypted installs omit
+`hid-asus` from the initramfs; `atelier-config` blacklists it on the
+real root so getty keeps `hid-generic`. RGB via hidraw still works.
+Kernel `asus::kbd_backlight` will not appear while the module is
+blacklisted (see [installer.md](installer.md)).
 
 ## Install (opt-in)
 

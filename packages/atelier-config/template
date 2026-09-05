@@ -2,7 +2,7 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.12
+version=0.3.13
 revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
@@ -87,6 +87,8 @@ do_install() {
 	vinstall "${FILESDIR}/etc/elogind/system-sleep/atelier-nvidia" 755 \
 		etc/elogind/system-sleep
 	vinstall "${FILESDIR}/etc/modprobe.d/atelier-wifi.conf" 644 \
+		etc/modprobe.d
+	vinstall "${FILESDIR}/etc/modprobe.d/atelier-hid-asus.conf" 644 \
 		etc/modprobe.d
 	vinstall "${FILESDIR}/etc/runit/core-services/90-atelier-resume.sh" 644 \
 		etc/runit/core-services

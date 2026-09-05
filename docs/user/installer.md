@@ -60,7 +60,7 @@ Default is **unencrypted**. If you choose Yes:
 - `/boot` and the EFI partition stay unencrypted so GRUB can load the kernel.
 - There is **no recovery** if you forget the LUKS passphrase.
 - The LUKS passphrase is separate from your user and root passwords.
-- The initramfs includes USB HID and omits `hid-asus`, so a built-in ASUS ROG N-KEY (Zephyrus) can type the passphrase. After login, `hid-asus` still loads on the real root.
+- The initramfs includes USB HID and omits `hid-asus`, so a built-in ASUS ROG N-KEY (Zephyrus) can type the passphrase. `atelier-config` also blacklists `hid-asus` on the real root so the TTY login keeps `hid-generic` (X still sees the keys).
 
 Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No LVM and no swap *partition*.
 

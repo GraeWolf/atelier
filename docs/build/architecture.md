@@ -63,7 +63,7 @@ This is a **documented exception** to “no foreign package formats”: it does 
 
 ### ASUS ROG keyboard (`atelier-asus`)
 
-Opt-in helper for ASUS ROG laptops where `hid-asus` exposes `asus::kbd_backlight` but leaves brightness at 0 after boot (keys dark). Ships `atelier-kbd` and a udev rule. Keyboard-light Fn keys are bound in `atelier-config` sxhkd (no-op without a kbd LED). LUKS passphrase typing is handled by the installer (omit `hid_asus` from the initramfs), not this package.
+Opt-in helper for ASUS ROG laptops where `hid-asus` exposes `asus::kbd_backlight` but leaves brightness at 0 after boot (keys dark). Ships `atelier-kbd` and a udev rule. Keyboard-light Fn keys are bound in `atelier-config` sxhkd (no-op without a kbd LED). LUKS and TTY typing keep `hid-generic` (installer omits `hid_asus` from the initramfs; `atelier-config` blacklists it on the real root).
 
 **Policy:** not a dependency of `atelier-desktop`; not on live ISO package lists. Details: [../user/asus.md](../user/asus.md).
 

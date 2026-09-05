@@ -82,6 +82,8 @@ install -m 755 "$src/elogind/system-sleep/atelier-nvidia" \
 	"$dst/etc/elogind/system-sleep/atelier-nvidia"
 install -m 644 "$src/modprobe.d/atelier-wifi.conf" \
 	"$dst/etc/modprobe.d/atelier-wifi.conf"
+install -m 644 "$src/modprobe.d/atelier-hid-asus.conf" \
+	"$dst/etc/modprobe.d/atelier-hid-asus.conf"
 install -m 644 "$src/runit/core-services/90-atelier-resume.sh" \
 	"$dst/etc/runit/core-services/90-atelier-resume.sh"
 install -m 644 "$src/keybinds/cheatsheet.txt"    "$dst/usr/share/doc/atelier/keybinds.txt"
