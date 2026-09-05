@@ -3,9 +3,9 @@
 #
 # pci_pm_restore -110 (Message 00020007 timeout) hangs the kernel. rmmod
 # often fails (Bluetooth holds the chip), so also unbind + PCI-remove.
-# Do NOT autoload on post: a delayed modprobe/rescan is what killed the
-# session at the lock screen. After resume, load manually if needed:
-#   sudo modprobe mt7921e
+# Reload after unlock (not during the lock prompt): probing mt7921e in the
+# post hook hung the kernel. Wait for xsecurelock to exit, then PCI-rescan
+# and modprobe.
 #
 # Called as: atelier-wifi <pre|post> <suspend|hibernate|...>
 # Always exit 0.
@@ -93,20 +93,53 @@ wifi_down() {
 }
 
 wifi_up() {
-	log "post: not reloading mt7921e (sudo modprobe mt7921e after unlock)"
-	if [ -f "$SVLIST" ]; then
-		while read -r svc; do
-			[ -n "$svc" ] || continue
-			sv up "$svc" >/dev/null 2>&1 || true
-		done <"$SVLIST"
-		rm -f "$SVLIST"
-	fi
-	rm -f "$STASH"
-	if command -v rfkill >/dev/null 2>&1; then
-		rfkill unblock bluetooth >/dev/null 2>&1 || true
-		# Leave wifi blocked until the user loads mt7921e.
-	fi
-	sync >/dev/null 2>&1 || true
+	log "post: scheduling wifi reload after unlock"
+	(
+		trap '' HUP
+		n=0
+		while command -v pgrep >/dev/null 2>&1 && \
+			pgrep -x xsecurelock >/dev/null 2>&1
+		do
+			n=$((n + 1))
+			[ "$n" -ge 90 ] && break
+			sleep 1
+		done
+		sleep 3
+		log "post: reloading wifi"
+		if [ -w /sys/bus/pci/rescan ]; then
+			echo 1 >/sys/bus/pci/rescan 2>/dev/null || true
+			sleep 2
+		fi
+		if [ -f "$STASH" ]; then
+			if command -v tac >/dev/null 2>&1; then
+				_list=$(tac "$STASH")
+			else
+				_list=$(cat "$STASH")
+			fi
+			printf '%s\n' "$_list" | while read -r mod; do
+				[ -n "$mod" ] || continue
+				modprobe "$mod" >/dev/null 2>&1 || true
+			done
+			rm -f "$STASH"
+		fi
+		modprobe mt7921e >/dev/null 2>&1 || true
+		if [ -f "$SVLIST" ]; then
+			while read -r svc; do
+				[ -n "$svc" ] || continue
+				sv up "$svc" >/dev/null 2>&1 || true
+			done <"$SVLIST"
+			rm -f "$SVLIST"
+		fi
+		if command -v rfkill >/dev/null 2>&1; then
+			rfkill unblock bluetooth >/dev/null 2>&1 || true
+			rfkill unblock wifi >/dev/null 2>&1 || true
+		fi
+		if command -v nmcli >/dev/null 2>&1; then
+			nmcli radio wifi on >/dev/null 2>&1 || true
+		fi
+		log "post: reload finished"
+		sync >/dev/null 2>&1 || true
+	) >/dev/null 2>&1 &
 }
 
 if [ -w /sys/power/pm_async ]; then

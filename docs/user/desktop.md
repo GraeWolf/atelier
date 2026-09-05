@@ -241,13 +241,14 @@ echo 0 | sudo tee /sys/power/pm_async
 
 Then `loginctl hibernate` again. Going black with a blinking cursor for a while **before** power-off is normal (NVIDIA VT switch + Wi-Fi unload). Some ASUS firmware always shows GRUB twice after S4; that is OK if the **second** boot asks for LUKS and restores the lock screen.
 
-Wi-Fi stays **off** after resume on purpose (reloading `mt7921e` at the lock screen hung the kernel). After you unlock:
+Wi-Fi is taken down for sleep/hibernate (MediaTek `mt7921e` PCI restore timeout) and brought back **after you unlock**, not during the lock prompt. If it stays down:
 
 ```bash
 sudo modprobe mt7921e
+nmcli radio wifi on
 ```
 
-If that prints `pci_pm_restore -110` or freezes, leave Wi-Fi until a full reboot. Check `/var/log/atelier-pm.log` for `atelier-wifi: pre:` (unload) vs `WARN: mt7921e still loaded`.
+Check `/var/log/atelier-pm.log` for `atelier-wifi: post: reload finished`.
 
 If a previous failed resume left a bad image (GRUB twice, LUKS missing on the first try, black screen after the second), **wipe the leftover S4 header** before trying again:
 
