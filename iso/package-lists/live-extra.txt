@@ -1,8 +1,10 @@
 # Extra packages for the live ISO (beyond atelier-desktop).
-# Display: X.Org for VM/first-ISO testing. Xlibre integration is later (Step 6+).
+# The live session stays on X.Org so a VM can startx without the external
+# XLibre repo. The installed system gets XLibre from that repo. The public
+# key package is atelier-xlibre-repo in live.txt (not a Void package).
 # See docs/build/package-sources.md
 
-# Display server (temporary until Xlibre wired)
+# Live display server (X.Org). The target install replaces this with XLibre.
 xorg-minimal
 xorg-fonts
 mesa-dri

@@ -6,6 +6,9 @@
 
 atelier-desktop
 atelier-installer
+# Public key + xbps.d for XLibre. The live session stays on xorg-minimal;
+# the installer reads this key before it can sync the XLibre repo.
+atelier-xlibre-repo
 
 # --- live-extra (inlined for a single mklive -p source; keep in sync with live-extra.txt) ---
 xorg-minimal

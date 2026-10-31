@@ -14,7 +14,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.5"
+VERSION="0.5.6"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -1486,6 +1486,8 @@ preflight_nvidia() {
 	fi
 }
 
+# curl and wget are not on the live ISO. timeout(1) is (coreutils in
+# base-system). The TCP fallback is what a stock live image uses.
 preflight_network() {
 	local url host hostport port rc tool rest
 	url="${VOID_REPO%/}/x86_64-repodata"
@@ -1583,55 +1585,49 @@ XLibre is required and there is no X.Org fallback."
 }
 
 # xbps will not sync the XLibre repo until its public key is trusted.
-# The key ships inside atelier-xlibre-repo in the personal repo.
+# The key is one file inside atelier-xlibre-repo. Read it with xbps-query
+# --cat: libxbps unpacks the zstd package. The live ISO has no zstd CLI,
+# and its tar cannot open a .xbps without that CLI. Do not xbps-install
+# into an empty root either: that root has no xbps package, so the
+# transaction dies with "MISSING: xbps>=0".
 ensure_xlibre_key() {
 	local dest="/var/db/xbps/keys/$XLIBRE_KEY_NAME"
-	local pkg="" tmp extracted
+	local tmpkey=""
 	if [ -f "$dest" ]; then
 		log "preflight: XLibre public key already trusted"
 		return 0
 	fi
-	for pkg in "$ATELIER_REPO_LIVE"/atelier-xlibre-repo-*.xbps; do
-		case $pkg in
-		*.sig) continue ;;
-		esac
-		[ -f "$pkg" ] || continue
-		break
-	done
-	if [ ! -f "$pkg" ]; then
-		log "preflight: atelier-xlibre-repo package not found in $ATELIER_REPO_LIVE"
+	if ! xbps-query -i --repository="$ATELIER_REPO_LIVE" -R atelier-xlibre-repo >/dev/null 2>&1; then
+		log "preflight: atelier-xlibre-repo is not in $ATELIER_REPO_LIVE"
 		return 1
 	fi
-	tmp=$(mktemp -d)
-	extracted=0
-	if tar -C "$tmp" -xf "$pkg" >>"$LOG" 2>&1; then
-		extracted=1
-	elif zstd -d -c "$pkg" 2>>"$LOG" | tar -C "$tmp" -xf - >>"$LOG" 2>&1; then
-		extracted=1
+	mkdir -p /var/db/xbps/keys
+	tmpkey=$(mktemp)
+	# --cat expects the absolute path stored in the package.
+	if xbps-query -i --repository="$ATELIER_REPO_LIVE" \
+		--cat "/var/db/xbps/keys/$XLIBRE_KEY_NAME" atelier-xlibre-repo \
+		>"$tmpkey" 2>>"$LOG"; then
+		if [ -s "$tmpkey" ] && grep -q '<plist' "$tmpkey"; then
+			cp -a "$tmpkey" "$dest"
+			chmod 644 "$dest"
+			rm -f "$tmpkey"
+			log "preflight: trusted XLibre public key via xbps-query --cat"
+			return 0
+		fi
+		log "preflight: xbps-query --cat did not return a plist"
+	else
+		log "preflight: xbps-query --cat failed"
 	fi
-	if [ "$extracted" -eq 1 ] && [ -f "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" ]; then
-		mkdir -p /var/db/xbps/keys
-		cp -a "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" "$dest"
-		chmod 644 "$dest"
-		rm -rf "$tmp"
-		log "preflight: trusted XLibre public key from $pkg"
+	rm -f "$tmpkey"
+	# Live root already has xbps, so depends=xbps is satisfied. -i skips
+	# the other configured repos (void mirror, GraeWolf) for this one package.
+	log "preflight: installing atelier-xlibre-repo on the live system"
+	if xbps-install -y -i --repository="$ATELIER_REPO_LIVE" atelier-xlibre-repo >>"$LOG" 2>&1 \
+		&& [ -f "$dest" ]; then
+		log "preflight: trusted XLibre public key via live-system install"
 		return 0
 	fi
-	rm -rf "$tmp"
-	tmp=$(mktemp -d)
-	if xbps-install -y -r "$tmp" \
-		--repository="$ATELIER_REPO_LIVE" \
-		--repository="$VOID_REPO" \
-		atelier-xlibre-repo >>"$LOG" 2>&1 \
-		&& [ -f "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" ]; then
-		mkdir -p /var/db/xbps/keys
-		cp -a "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" "$dest"
-		chmod 644 "$dest"
-		rm -rf "$tmp"
-		log "preflight: trusted XLibre public key via temporary install"
-		return 0
-	fi
-	rm -rf "$tmp"
+	log "preflight: atelier-xlibre-repo did not provide $dest"
 	return 1
 }
 
@@ -1664,8 +1660,8 @@ $VOID_REPO"
 
 preflight_xlibre_repo() {
 	if ! ensure_xlibre_key; then
-		die "Could not install the XLibre repository public key.
-The personal repo must contain atelier-xlibre-repo.
+		die "Could not trust the XLibre repository public key from atelier-xlibre-repo in
+$ATELIER_REPO_LIVE
 There is no X.Org fallback."
 	fi
 	if ! repo_has "$XLIBRE_REPO" xlibre; then

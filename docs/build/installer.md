@@ -68,7 +68,7 @@ After the summary is confirmed, and before `parted` / `wipefs`, the installer ch
 | Network to the chosen mirror's `x86_64-repodata` | Stop. "Network unreachable" vs "mirror index" are separate messages |
 | Personal repo (`atelier-desktop`, `atelier-xlibre-repo`) | Stop |
 | Void main (`base-system`, `linux`) and nonfree (`dropbox`; plus `nvidia` / `linux-headers` when NVIDIA was requested) | Stop |
-| XLibre repo (`xlibre`, `xlibre-xserver`) after trusting the public key from `atelier-xlibre-repo` | Stop. No X.Org fallback |
+| XLibre repo (`xlibre`, `xlibre-xserver`). The public key is read from `atelier-xlibre-repo` with `xbps-query --cat` (libxbps unpacks the package; the live ISO has no `zstd` CLI) | Stop. No X.Org fallback |
 
 ## Failures during install
 
@@ -137,6 +137,7 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Swap + LUKS: `rd.luks.*` kept; `resume=` is the inner ext4 UUID
 - [ ] `atelier-setup-swap --yes` is idempotent (no duplicate fstab/GRUB tokens)
 - [ ] Preflight failure (offline, bad mirror, missing personal repo, missing XLibre repo) stops before the disk is partitioned
+- [ ] With the network up, preflight trusts the XLibre key from `atelier-xlibre-repo` (no `zstd` CLI on the live ISO) and syncs `xlibre` / `xlibre-xserver`
 - [ ] A command failure inside an install function shows the phase and the log tail, then unmounts and closes LUKS
 - [ ] Installed system has `xlibre-xserver` and `/usr/bin/Xorg` (or `/usr/bin/X`); no X.Org-only install
 - [ ] NVIDIA package or `xbps-reconfigure -a` failure is visible on the result screen
