@@ -21,7 +21,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.8"
+VERSION="0.5.9"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -160,8 +160,14 @@ dialog_run() {
 	if [ -z "${TERM:-}" ] || [ "$TERM" = "dumb" ]; then
 		export TERM=linux
 	fi
-	# Drain pending stdin garbage (arrow keys from a previous failed dialog)
-	while read -r -t 0 _junk 2>/dev/null; do :; done || true
+	# Drop a few already-typed keys (arrow garbage from a failed dialog).
+	# Do not loop on `read -t 0`: on a tty that test can stay true forever
+	# after ncurses and the next dialog never opens.
+	local _n=0 _junk
+	while [ "$_n" -lt 8 ]; do
+		_n=$((_n + 1))
+		IFS= read -r -t 0.01 _junk 2>/dev/null || break
+	done
 	# --stdout: selection/text on stdout (capturable). UI uses /dev/tty via ncurses.
 	# Feed keys from the real tty so sudo/pipes do not break arrow navigation.
 	if [ -c /dev/tty ]; then
@@ -1137,6 +1143,94 @@ Install starts the copy. Edit changes one field. Quit leaves the disk alone.
 EOF
 }
 
+# Eight lines. dialog --menu on a 24-row console cannot hold the full
+# summary_text (it exits at once with "Can't make sub-window", the choice
+# is empty, and an error box would loop forever). Every field is still here.
+summary_menu_prompt() {
+	local mode=BIOS ns enc sw bl pkgs pw
+	is_efi && mode=UEFI
+	case $NVIDIA_MODE in
+	auto)
+		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
+			ns="yes (auto, GPU)"
+		else
+			ns="no (auto, no GPU)"
+		fi
+		;;
+	yes) ns="yes" ;;
+	no) ns="no" ;;
+	*) ns=$NVIDIA_MODE ;;
+	esac
+	if [ "$ENCRYPT_DISK" -eq 1 ]; then
+		if [ -n "$LUKSPASS" ]; then
+			enc="yes"
+		else
+			enc="yes, no passphrase"
+		fi
+	else
+		enc="no"
+	fi
+	if [ "$CREATE_SWAP" -eq 1 ]; then
+		sw="yes"
+	else
+		sw="no"
+	fi
+	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then
+		bl="yes"
+	else
+		bl="no"
+	fi
+	if [ ${#PKG_EXTRA[@]} -eq 0 ]; then
+		pkgs="(none)"
+	else
+		pkgs="${PKG_EXTRA[*]}"
+	fi
+	if [ -n "$USERPASS" ]; then
+		pw="set"
+	else
+		pw="not set"
+	fi
+	printf '%s\n' \
+		"Disk: ${DISK:-none} (${mode}, ERASED)  GRUB: $bl" \
+		"Host: $HOSTNAME  User: $USERNAME  Password: $pw" \
+		"Root: locked (sudo via wheel)" \
+		"TZ: $TIMEZONE  Locale: $LOCALE  Key: $KEYMAP" \
+		"NVIDIA: $ns  XLibre: required" \
+		"Encrypt: $enc  Swap: $sw  Packages: $pkgs" \
+		"Mirror: $VOID_REPO" \
+		"Preset: ${PRESET_FILE:-built-in defaults}"
+}
+
+# Summary choices. 0 and the tag on stdout. 1 = Escape/Cancel (not an error).
+dialog_summary_choice() {
+	local pick="" rc=0 lines=24 cols=80 h=20 w=74
+	if [ -c /dev/tty ]; then
+		lines=$(stty size </dev/tty 2>/dev/null | awk '{print $1}') || lines=24
+		cols=$(stty size </dev/tty 2>/dev/null | awk '{print $2}') || cols=80
+	fi
+	if [ "${lines:-0}" -ge 8 ] && [ "$h" -ge "$lines" ]; then
+		h=$((lines - 4))
+	fi
+	if [ "${cols:-0}" -ge 40 ] && [ "$w" -ge "$cols" ]; then
+		w=$((cols - 6))
+	fi
+	[ "$h" -lt 16 ] && h=16
+	[ "$w" -lt 60 ] && w=60
+	pick=$(dialog_run --no-collapse --no-tags \
+		--title "Install summary" \
+		--menu "$(summary_menu_prompt)" "$h" "$w" 3 \
+		install "Start installation" \
+		edit "Edit a field" \
+		quit "Quit") || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		return 1
+	fi
+	if [ -z "$pick" ] || printf '%s' "$pick" | grep -q $'[\x00-\x1f\x7f]'; then
+		return 1
+	fi
+	printf '%s\n' "$pick"
+}
+
 step_welcome() {
 	local preset
 	if [ -n "$PRESET_FILE" ]; then
@@ -1224,17 +1318,25 @@ step_summary() {
 	local choice rc
 	while true; do
 		rc=0
-		choice=$(ui_list_pick "$(summary_text)" \
-			install "Start installation" \
-			edit "Edit a field" \
-			quit "Quit") || rc=$?
+		# dialog cannot put the full summary in the menu prompt on a
+		# 24-row console. Use a short prompt there. Text mode keeps the
+		# full summary in the prompt (pipes and --dry-run).
+		if [ "$UI" = dialog ]; then
+			choice=$(dialog_summary_choice) || rc=$?
+		else
+			choice=$(ui_list_pick "$(summary_text)" \
+				install "Start installation" \
+				edit "Edit a field" \
+				quit "Quit") || rc=$?
+		fi
+		# EOF in text mode. Escape on the dialog menu is rc 1: show it again.
 		if [ "$rc" -ge 2 ]; then
 			return 2
 		fi
 		if [ "$rc" -ne 0 ]; then
-			ui_error "Choose Install, Edit, or Quit. Escape does not start the install."
 			continue
 		fi
+		log "summary choice=$choice"
 		case $choice in
 		install)
 			if [ -z "$DISK" ] || [ ! -b "$DISK" ]; then
@@ -1255,7 +1357,7 @@ step_summary() {
 		edit) edit_menu ;;
 		quit) return 2 ;;
 		*)
-			ui_error "Choose Install, Edit, or Quit."
+			continue
 			;;
 		esac
 	done

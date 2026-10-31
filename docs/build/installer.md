@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.8** |
+| XBPS package | `atelier-installer` **0.5.9** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -33,7 +33,7 @@ Flow (whole-disk only):
 
 welcome → disk (select + confirm) → user password → LUKS passphrase only if encryption is on → summary
 
-The summary is **Install / Edit a field / Quit**. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
+The summary is one dialog menu: **Start installation / Edit a field / Quit**, with the chosen settings in the prompt. The prompt is kept to eight lines so it fits a 24-row console. A longer menu prompt makes dialog exit immediately (`Can't make sub-window`) and the choice is never captured. Escape or Cancel redisplays that menu. It does not start the install and it does not open an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
 
 Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` grants sudo. The summary says so. There is one user password (entered twice to confirm). The LUKS passphrase is separate and is not stored in the preset.
 
@@ -137,7 +137,8 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.5.8 and names the preset file
+- [ ] Welcome screen says v0.5.9 and names the preset file
+- [ ] Summary menu shows Start installation / Edit a field / Quit. Escape returns to that menu. OK on each choice does that action
 - [ ] Root cannot log in; the created user is in `wheel` and sudo works
 - [ ] A username such as `Kevin` is rejected and re-asked (it is not stored as `evin`)
 - [ ] Timezone choices include `America/New_York`, `Pacific/*`, and `US/*` when those names exist in tzdata

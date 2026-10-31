@@ -36,7 +36,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | Disk | Whole disk to erase, then confirm |
 | Password | One login password. Root is locked; this user has sudo |
 | LUKS | Only when encryption is enabled |
-| Summary | **Install**, **Edit** a field, or **Quit** |
+| Summary | **Start installation**, **Edit** a field, or **Quit**. Escape returns to this menu |
 
 Hostname, username, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and extra packages come from the preset. Change them with **Edit** on the summary. Mirror and GRUB are not separate questions.
 
