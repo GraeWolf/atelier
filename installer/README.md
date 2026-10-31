@@ -16,7 +16,7 @@ Atelier whole-disk installer: **TUI by default** (`dialog`), optional GUI (`--gu
 | Dropbox (nonfree, required) + xdg-user-dirs | |
 | gnome-keyring PAM unlock at TTY login | |
 | Personal repo when present on live media | |
-| Optional proprietary NVIDIA / Xlibre | Shipping full nvidia.ko on default live ISO |
+| Optional proprietary NVIDIA; XLibre always (no X.Org fallback) | Shipping full nvidia.ko on default live ISO |
 
 ## Components
 

@@ -80,12 +80,12 @@ NVIDIA proprietary drivers are **not** required for VM smoke tests (and usually 
 ## 6. Hardware (primary NVIDIA desktop)
 
 1. Boot/install from the ISO (or install in VM and transplant — prefer real install).
-2. In the installer, accept NVIDIA and optionally Xlibre; **or** after install:
+2. In the installer, accept NVIDIA if offered. XLibre is always installed (no X.Org fallback). To redo either piece later:
 
    ```bash
    sudo atelier-setup-nvidia
    sudo reboot
-   sudo atelier-setup-xlibre   # optional
+   sudo atelier-setup-xlibre
    ```
 
 3. Follow the checklist in [nvidia.md](nvidia.md).

@@ -44,20 +44,20 @@ documented recovery path exists when NVIDIA was skipped at install.
 |-----------|--------|
 | `nvidia` (and subpackages) | Void **nonfree** (`void-repo-nonfree`) |
 | `xlibre` | External: [xlibre-void](https://github.com/xlibre-void/xlibre) |
-| `xorg-minimal` | Official Void (default live / fallback) |
+| `xorg-minimal` | Official Void (live ISO only; the installer does not fall back to X.Org) |
 
 ## Installer behavior
 
-`atelier-install` asks:
-
-1. Whether to install proprietary NVIDIA (default yes if `lspci` sees NVIDIA)
-2. Whether to install Xlibre from the external repo
+`atelier-install` asks whether to install proprietary NVIDIA (offered when
+`lspci` or sysfs sees an NVIDIA GPU). XLibre is always installed; there is
+no X.Org fallback.
 
 When NVIDIA is selected, the target gets a **separate** xbps transaction
 for `linux-headers`, `nvidia`, and `atelier-nvidia` (if in personal repo).
-Failure of that transaction does not roll back the desktop; it is logged
-to `/var/log/atelier-install.log` and the UI tells the user to run
-`sudo atelier-setup-nvidia` after reboot.
+Failure of that transaction does not roll back the desktop. The result
+screen says so and points at `sudo atelier-setup-nvidia`. A failing
+`xbps-reconfigure -a` is also shown there (it used to be hidden with
+`|| true`). The log is `/var/log/atelier-install.log`.
 
 ## Live ISO strategy
 
@@ -77,7 +77,7 @@ sudo reboot
 sudo atelier-setup-xlibre
 ```
 
-Or select NVIDIA/Xlibre in the graphical installer.
+Or select NVIDIA in the graphical installer. XLibre is installed either way.
 
 ## Building personal packages
 

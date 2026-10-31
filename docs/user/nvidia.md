@@ -26,13 +26,16 @@ nvidia-smi
 
 Installer log on the new system: `/var/log/atelier-install.log`.
 
-## Xlibre (optional but planned default)
+## XLibre
+
+The installer always installs XLibre (no X.Org fallback). On a system that
+was installed before that, or to reinstall the server:
 
 ```bash
 sudo atelier-setup-xlibre
 ```
 
-This enables a community repository and installs the Xlibre X server.
+This enables a community repository and installs the XLibre X server.
 
 Xlibre does not use NVIDIA's proprietary `nvidia_drv.so` (ABI mismatch).
 Atelier points `nvidia-drm` at the **modesetting** DDX. GL/Vulkan still

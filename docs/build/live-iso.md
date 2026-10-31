@@ -78,6 +78,7 @@ If mklive aborts with `MISSING: dropbox`, the nonfree `-r` URL is missing or unr
 | Install | `sudo atelier-install` (dialog TUI); `--gui` optional after `startx` |
 | Desktop (optional) | `startx` → bspwm (packages still on the medium) |
 | Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
+| XLibre repo key | `atelier-xlibre-repo` is on the live image (`live.txt`). Installer preflight trusts that key before syncing XLibre |
 | GraeWolf void-repo | `/etc/xbps.d/20-repository-graewolf.conf` + public key (brave-origin, etc.) |
 
 ## Package lists
@@ -139,8 +140,8 @@ xbps-query --repository=/usr/share/atelier/repo -Rs atelier
 
 Default live images stay on **X.Org + mesa**. Proprietary NVIDIA is handled by:
 
-- Installer prompts (`atelier-install`)
-- Post-install: `sudo atelier-setup-nvidia` and optional `sudo atelier-setup-xlibre`
+- Installer prompts (`atelier-install`): optional NVIDIA; XLibre is always installed
+- Post-install: `sudo atelier-setup-nvidia` and `sudo atelier-setup-xlibre` (reinstall / older systems)
 - Optional package list: `iso/package-lists/nvidia.txt`
 
 See [nvidia.md](nvidia.md).

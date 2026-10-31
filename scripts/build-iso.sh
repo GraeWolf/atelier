@@ -99,7 +99,7 @@ VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-${VOID_REPO%/}/nonfree}"
 check_packages_resolvable() {
 	# Best-effort: ensure atelier packages exist in local repo
 	atelier_info "Checking personal packages in repo/out"
-	for p in atelier-base atelier-config atelier-desktop atelier-void-repo; do
+	for p in atelier-base atelier-config atelier-desktop atelier-installer atelier-xlibre-repo atelier-void-repo; do
 		xbps-query --repository="$ROOT/repo/out" -R "$p" >/dev/null 2>&1 || \
 			atelier_die "cannot query $p from repo/out — run ./scripts/build-repo.sh"
 	done
