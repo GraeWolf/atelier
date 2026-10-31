@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Atelier Linux installer (wizard, whole-disk)
 # Default: TUI (dialog). Optional GUI: atelier-install --gui
+# Plain text (pipes and tests): atelier-install --text
 # ASCII-only UI strings for locale safety.
+#
+# Settings come from a preset (/etc/atelier/install.conf, or --preset FILE).
+# Preset values are not asked. The wizard asks for the disk, one user
+# password, a LUKS passphrase only when encryption is on, then a summary
+# (Install / Edit a field / Quit). Root is locked. The user is in wheel
+# and uses sudo.
 #
 # Optional LUKS2 on the root filesystem. /boot and ESP stay unencrypted
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
@@ -14,7 +21,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.7"
+VERSION="0.5.8"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -24,8 +31,10 @@ ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
 XLIBRE_REPO="${XLIBRE_REPO:-https://github.com/xlibre-void/xlibre/releases/latest/download/}"
 XLIBRE_KEY_NAME="00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist"
 
-# State (wizard)
+# State (wizard). Built-in defaults match installer/install.conf.
+# A preset file overrides these. The wizard does not ask them.
 INSTALL_NVIDIA=0
+NVIDIA_MODE=auto
 INSTALL_XLIBRE=1
 NVIDIA_INSTALL_STATUS=skipped
 RECONFIGURE_STATUS=skipped
@@ -40,19 +49,24 @@ INSTALL_FAIL_CMD=""
 INSTALL_MAIN_PID=$BASHPID
 LOG_COPIED=0
 INSTALL_BOOTLOADER=1
-PKG_EXTRA_CLI=0
-PKG_MEDIA=0
+# Extra package names from the preset. dropbox is not in the base list.
+PKG_EXTRA=(dropbox)
 ENCRYPT_DISK=0
 CREATE_SWAP=0
 DISK=""
 HOSTNAME="atelier"
-USERNAME="user"
+USERNAME="atelier"
 USERPASS=""
-ROOTPASS=""
 LUKSPASS=""
-TIMEZONE="UTC"
+TIMEZONE="America/New_York"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
+PRESET_FILE=""
+PRESET_PATH=""
+DRY_RUN=0
+# Tests point this at a fixture tree. Live installs use the system tzdata.
+ZONEINFO_DIR="${ZONEINFO_DIR:-/usr/share/zoneinfo}"
+ASSIGN_PACKAGES_ERR=""
 PART_ESP=""
 PART_BOOT=""
 PART_CRYPT=""
@@ -96,6 +110,19 @@ die() {
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Read one stdin line into the variable named by $1.
+# A final line with no trailing newline still counts.
+# 0 = got a line (it may be empty). 2 = EOF and no characters.
+read_line_to() {
+	local __dest=$1 __line="" __st=0
+	IFS= read -r __line || __st=$?
+	if [ -n "$__line" ] || [ "$__st" -eq 0 ]; then
+		printf -v "$__dest" '%s' "$__line"
+		return 0
+	fi
+	return 2
+}
+
 # UI mode: tui (dialog, default) | gui (yad/zenity) | auto (legacy: prefer dialog)
 UI_MODE=tui
 UI=none
@@ -108,6 +135,9 @@ select_ui() {
 		elif have dialog; then UI=dialog
 		else UI=none
 		fi
+		;;
+	text)
+		UI=text
 		;;
 	tui|*)
 		if have dialog; then UI=dialog
@@ -175,21 +205,49 @@ ui_info() {
 	esac
 }
 
-# Returns: 0=yes/next/ok, 1=no/back, 2=abort (close)
+# Returns: 0=Yes, 1=No, 2=EOF (no answer).
+# Escape is not an answer. A blank line is not No.
+# Callers must not treat a failed return as "No" unless the status is 1.
 ui_confirm() {
-	local msg=$1 rc=0
-	case $UI in
-	yad) yad_run --text="$msg" --width=520 --button="No:1" --button="Yes:0" ;;
-	zenity) zenity --title="$TITLE" --question --text="$msg" --width=520 --ok-label=Yes --cancel-label=No ;;
-	dialog)
-		dialog_run --title "$TITLE" --yes-label "Yes" --no-label "No" --yesno "$msg" 14 70
-		rc=$?
-		# 0=Yes 1=No 255=ESC
-		[ "$rc" -eq 0 ] && return 0
-		return 1
-		;;
-	*) printf '%s [y/N] ' "$msg" >&2; read -r a; case $a in y|Y|yes|YES) return 0;; *) return 1;; esac ;;
-	esac
+	local msg=$1 rc a
+	while true; do
+		rc=0
+		case $UI in
+		yad)
+			yad_run --text="$msg" --width=520 --button="No:1" --button="Yes:0" || rc=$?
+			;;
+		zenity)
+			# zenity uses the same status for No and closing the window.
+			zenity --title="$TITLE" --question --text="$msg" --width=520 \
+				--ok-label=Yes --cancel-label=No || rc=$?
+			;;
+		dialog)
+			# 0=Yes 1=No 255=ESC. ESC must not fall through as No.
+			dialog_run --title "$TITLE" --yes-label "Yes" --no-label "No" \
+				--yesno "$msg" 16 72 || rc=$?
+			;;
+		*)
+			printf '%s\nYes or No [y/n]: ' "$msg" >&2
+			a=""
+			read_line_to a || return 2
+			case $a in
+			y|Y|yes|YES) return 0 ;;
+			n|N|no|NO) return 1 ;;
+			*)
+				printf 'Choose yes or no. A blank answer is not No.\n' >&2
+				continue
+				;;
+			esac
+			;;
+		esac
+		case $rc in
+		0) return 0 ;;
+		1) return 1 ;;
+		*)
+			ui_error "Choose Yes or No. Escape does not select No."
+			;;
+		esac
+	done
 }
 
 # Wizard page: text + Back/Next/Abort. 0=next 1=back 2=abort
@@ -226,7 +284,8 @@ wizard_page() {
 		;;
 	*)
 		printf '%s\n[Enter]=Next [b]=Back [q]=Abort: ' "$msg" >&2
-		read -r a
+		a=""
+		read_line_to a || return 2
 		case $a in b|B) rc=1;; q|Q) rc=2;; *) rc=0;; esac
 		;;
 	esac
@@ -243,7 +302,12 @@ ui_entry() {
 		if [ "$rc" -ne 0 ]; then return 1; fi
 		printf '%s\n' "${val:-$default}"
 		;;
-	*) printf '%s [%s]: ' "$label" "$default" >&2; read -r a; printf '%s\n' "${a:-$default}" ;;
+	*)
+		printf '%s [%s]: ' "$label" "$default" >&2
+		a=""
+		read_line_to a || return 1
+		printf '%s\n' "${a:-$default}"
+		;;
 	esac
 }
 
@@ -257,7 +321,18 @@ ui_password() {
 		if [ "$rc" -ne 0 ]; then return 1; fi
 		printf '%s\n' "$val"
 		;;
-	*) printf '%s: ' "$label" >&2; stty -echo; read -r a; stty echo; printf '\n' >&2; printf '%s\n' "$a" ;;
+	*)
+		printf '%s: ' "$label" >&2
+		a=""
+		# A pipe (tests, --text) has no terminal. Do not call stty there.
+		if [ -t 0 ]; then stty -echo 2>/dev/null || true; fi
+		if ! read_line_to a; then
+			if [ -t 0 ]; then stty echo 2>/dev/null || true; fi
+			return 1
+		fi
+		if [ -t 0 ]; then stty echo 2>/dev/null || true; printf '\n' >&2; fi
+		printf '%s\n' "$a"
+		;;
 	esac
 }
 
@@ -288,7 +363,25 @@ ui_list_pick() {
 		fi
 		printf '%s\n' "$pick"
 		;;
-	*) printf '%s\n' "$text" >&2; printf '%s\n' "$@" >&2; read -r a; printf '%s\n' "$a" ;;
+	*)
+		printf '%s\n' "$text" >&2
+		local id detail
+		while [ $# -ge 2 ]; do
+			id=$1
+			detail=$2
+			shift 2
+			printf '  %s  %s\n' "$id" "$detail" >&2
+		done
+		printf 'Select: ' >&2
+		a=""
+		if ! read_line_to a; then
+			return 2
+		fi
+		if [ -z "$a" ]; then
+			return 1
+		fi
+		printf '%s\n' "$a"
+		;;
 	esac
 }
 
@@ -454,15 +547,64 @@ valid_username() {
 	printf '%s' "$u" | grep -qE '^[a-z_][a-z0-9_-]{0,31}$'
 }
 
-list_timezones() {
-	if have timedatectl; then
-		timedatectl list-timezones 2>/dev/null && return 0
+valid_locale() {
+	local loc=$1
+	case $loc in
+	POSIX|C) return 0 ;;
+	esac
+	printf '%s' "$loc" | grep -qE '^[A-Za-z0-9][A-Za-z0-9_.@+-]*$'
+}
+
+valid_keymap() {
+	local km=$1
+	printf '%s' "$km" | grep -qE '^[A-Za-z0-9][A-Za-z0-9_-]*$'
+}
+
+valid_pkgname() {
+	local p=$1
+	printf '%s' "$p" | grep -qE '^[a-z0-9][a-z0-9+_.-]*$'
+}
+
+# Relative zoneinfo path: America/New_York, US/Eastern, UTC.
+# posix/ and right/ duplicate the tree. Metadata files are not zones.
+# When ZONEINFO_DIR exists, the name must be a file or a symlink to one
+# (US/* compatibility names are symlinks in tzdata).
+valid_timezone() {
+	local tz=$1
+	[ -n "$tz" ] || return 1
+	case $tz in
+	.*|/*|*/..|*/../*) return 1 ;;
+	posix|posix/*|right|right/*) return 1 ;;
+	*.tab|Factory|localtime|leapseconds|leap-seconds.list|tzdata.zi|posixrules) return 1 ;;
+	*[!A-Za-z0-9_+-/]*) return 1 ;;
+	esac
+	if [ -d "$ZONEINFO_DIR" ]; then
+		[ -e "$ZONEINFO_DIR/$tz" ] || return 1
+		# A directory (America) is not a zone. Symlinks to zone files are.
+		[ -d "$ZONEINFO_DIR/$tz" ] && return 1
 	fi
-	find /usr/share/zoneinfo -type f 2>/dev/null \
-		| sed 's|^/usr/share/zoneinfo/||' \
-		| grep -vE '^(posix|right)/' \
-		| grep -vE '\.tab$|Factory|localtime|leapseconds|tzdata|zone\.tab|iso3166' \
-		| sort -u
+	return 0
+}
+
+# Build the zone list from tzdata. Do not call timedatectl (Void has no
+# systemd) and do not truncate: a 400-name cap drops Pacific/* and US/*
+# after an alphabetical sort.
+list_timezones() {
+	local root=$ZONEINFO_DIR f rel
+	[ -d "$root" ] || return 0
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		case $f in
+		"$root"/posix/*|"$root"/right/*) continue ;;
+		esac
+		rel=${f#"$root"/}
+		[ "$rel" != "$f" ] || continue
+		valid_timezone "$rel" || continue
+		printf '%s\n' "$rel"
+	done < <(find "$root" \( -type f -o -type l \) \
+		! -path "$root/posix" ! -path "$root/posix/*" \
+		! -path "$root/right" ! -path "$root/right/*" \
+		-print 2>/dev/null) | sort -u
 }
 
 # --- wizard steps: print nav code via return; mutate globals -----------------
@@ -478,23 +620,550 @@ swap_size_gib() {
 	printf '%s\n' "$gib"
 }
 
+# --- preset and field editors -------------------------------------------------
+# Keep these defaults aligned with installer/install.conf.
+
+set_mirror() {
+	local url=$1
+	url=${url%/}
+	case $url in
+	http://*|https://*) ;;
+	*) return 1 ;;
+	esac
+	VOID_REPO=$url
+	VOID_NONFREE_REPO="${VOID_REPO}/nonfree"
+}
+
+parse_bool() {
+	local v=${1,,}
+	case $v in
+	y|yes|1|true|on) printf 'yes\n' ;;
+	n|no|0|false|off) printf 'no\n' ;;
+	*) return 1 ;;
+	esac
+}
+
+apply_nvidia_policy() {
+	case $NVIDIA_MODE in
+	yes) INSTALL_NVIDIA=1 ;;
+	no) INSTALL_NVIDIA=0 ;;
+	auto)
+		if detect_nvidia_gpu; then
+			INSTALL_NVIDIA=1
+		else
+			INSTALL_NVIDIA=0
+		fi
+		;;
+	*) return 1 ;;
+	esac
+}
+
+# Split a package list on whitespace. Rejects globs and invalid names.
+# On failure, ASSIGN_PACKAGES_ERR holds the bad token and the live list
+# is left unchanged.
+assign_packages() {
+	local raw=$1 p
+	local -a words=()
+	local -a next=()
+	set -f
+	# Intentional word split. set -f blocks globbing.
+	# shellcheck disable=SC2206
+	words=($raw)
+	set +f
+	for p in "${words[@]}"; do
+		[ -n "$p" ] || continue
+		if ! valid_pkgname "$p"; then
+			ASSIGN_PACKAGES_ERR=$p
+			return 1
+		fi
+		next+=("$p")
+	done
+	if [ ${#next[@]} -eq 0 ]; then
+		PKG_EXTRA=()
+	else
+		PKG_EXTRA=("${next[@]}")
+	fi
+	ASSIGN_PACKAGES_ERR=""
+}
+
+load_preset() {
+	local file=$1 line key val bool
+	local lineno=0
+	[ -f "$file" ] || die "Preset not found: $file"
+	[ -r "$file" ] || die "Preset is not readable: $file"
+	log "loading preset $file"
+	while IFS= read -r line || [ -n "$line" ]; do
+		lineno=$((lineno + 1))
+		line=${line%$'\r'}
+		line=${line%%#*}
+		line="${line#"${line%%[![:space:]]*}"}"
+		line="${line%"${line##*[![:space:]]}"}"
+		[ -n "$line" ] || continue
+		case $line in
+		*=*) ;;
+		*) die "Preset $file:$lineno: expected KEY=value" ;;
+		esac
+		key=${line%%=*}
+		val=${line#*=}
+		key="${key#"${key%%[![:space:]]*}"}"
+		key="${key%"${key##*[![:space:]]}"}"
+		val="${val#"${val%%[![:space:]]*}"}"
+		val="${val%"${val##*[![:space:]]}"}"
+		case $val in
+		\"*\") val=${val#\"}; val=${val%\"} ;;
+		\'*\') val=${val#\'}; val=${val%\'} ;;
+		esac
+		key=${key^^}
+		case $key in
+		HOSTNAME)
+			valid_hostname "$val" || die "Preset $file:$lineno: invalid HOSTNAME '$val'"
+			HOSTNAME=$val
+			;;
+		USERNAME)
+			valid_username "$val" || die "Preset $file:$lineno: invalid USERNAME '$val'"
+			USERNAME=$val
+			;;
+		TIMEZONE)
+			valid_timezone "$val" || die "Preset $file:$lineno: invalid TIMEZONE '$val'"
+			TIMEZONE=$val
+			;;
+		LOCALE)
+			valid_locale "$val" || die "Preset $file:$lineno: invalid LOCALE '$val'"
+			LOCALE=$val
+			;;
+		KEYMAP)
+			valid_keymap "$val" || die "Preset $file:$lineno: invalid KEYMAP '$val'"
+			KEYMAP=$val
+			;;
+		MIRROR)
+			set_mirror "$val" || die "Preset $file:$lineno: invalid MIRROR '$val'"
+			;;
+		NVIDIA)
+			val=${val,,}
+			case $val in
+			auto|yes|no) NVIDIA_MODE=$val ;;
+			*) die "Preset $file:$lineno: NVIDIA must be auto, yes, or no" ;;
+			esac
+			;;
+		ENCRYPT)
+			bool=$(parse_bool "$val") || die "Preset $file:$lineno: ENCRYPT must be yes or no"
+			if [ "$bool" = yes ]; then
+				ENCRYPT_DISK=1
+			else
+				ENCRYPT_DISK=0
+				wipe_luks_pass
+			fi
+			;;
+		SWAP)
+			bool=$(parse_bool "$val") || die "Preset $file:$lineno: SWAP must be yes or no"
+			if [ "$bool" = yes ]; then CREATE_SWAP=1; else CREATE_SWAP=0; fi
+			;;
+		GRUB)
+			bool=$(parse_bool "$val") || die "Preset $file:$lineno: GRUB must be yes or no"
+			if [ "$bool" = yes ]; then INSTALL_BOOTLOADER=1; else INSTALL_BOOTLOADER=0; fi
+			;;
+		PACKAGES)
+			if ! assign_packages "$val"; then
+				die "Preset $file:$lineno: invalid package name '${ASSIGN_PACKAGES_ERR:-}'"
+			fi
+			;;
+		*)
+			die "Preset $file:$lineno: unknown key '$key'"
+			;;
+		esac
+	done <"$file"
+	PRESET_FILE=$file
+	apply_nvidia_policy || die "Invalid NVIDIA mode '$NVIDIA_MODE'"
+	log "preset HOSTNAME=$HOSTNAME USERNAME=$USERNAME TIMEZONE=$TIMEZONE LOCALE=$LOCALE KEYMAP=$KEYMAP"
+	log "preset NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA ENCRYPT_DISK=$ENCRYPT_DISK CREATE_SWAP=$CREATE_SWAP INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+	log "preset MIRROR=$VOID_REPO PACKAGES=${PKG_EXTRA[*]:-(none)}"
+}
+
+prompt_hostname() {
+	local h
+	while true; do
+		h=$(ui_entry "Hostname:" "$HOSTNAME") || return 1
+		h=${h// /}
+		if valid_hostname "$h"; then
+			HOSTNAME=$h
+			log "HOSTNAME=$HOSTNAME"
+			return 0
+		fi
+		ui_error "Invalid hostname '$h'. Use letters, digits, and hyphens (not first or last)."
+	done
+}
+
+# Do not strip characters before checking. Deleting invalid characters
+# turned 'Kevin' into 'evin' and accepted it with no error.
+prompt_username() {
+	local u
+	while true; do
+		u=$(ui_entry "Username (lowercase):" "$USERNAME") || return 1
+		if valid_username "$u"; then
+			USERNAME=$u
+			log "USERNAME=$USERNAME"
+			return 0
+		fi
+		ui_error "Invalid username '$u'.
+Use 1-32 of: lowercase letters, digits, underscore, hyphen.
+Start with a letter or underscore. 'root' is not allowed.
+Characters are not removed; type a valid name."
+	done
+}
+
+prompt_user_password() {
+	local p1 p2
+	while true; do
+		p1=$(ui_password "Password for $USERNAME.
+
+Root is locked. This user is in the wheel group
+and can run commands with sudo.
+This is the only login password.") || return 1
+		p2=$(ui_password "Confirm password for $USERNAME:") || return 1
+		if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then
+			USERPASS=$p1
+			log "user password set for $USERNAME"
+			return 0
+		fi
+		ui_error "Passwords empty or do not match. Try again."
+	done
+}
+
+prompt_luks_passphrase() {
+	local p1 p2
+	while true; do
+		p1=$(ui_password "LUKS passphrase (required at every boot):") || return 1
+		p2=$(ui_password "Confirm LUKS passphrase:") || return 1
+		if [ -z "$p1" ]; then
+			ui_error "Passphrase cannot be empty."
+			continue
+		fi
+		if [ "${#p1}" -lt 8 ]; then
+			ui_error "Passphrase must be at least 8 characters."
+			continue
+		fi
+		if [ "$p1" != "$p2" ]; then
+			ui_error "Passphrases do not match. Try again."
+			continue
+		fi
+		LUKSPASS=$p1
+		log "LUKS passphrase set"
+		return 0
+	done
+}
+
+pick_timezone() {
+	local args=() tz pick found=0
+	while IFS= read -r tz; do
+		[ -n "$tz" ] || continue
+		if [ "$tz" = "$TIMEZONE" ]; then
+			args+=("$tz" "current")
+			found=1
+		else
+			args+=("$tz" "$tz")
+		fi
+	done < <(list_timezones)
+	if [ "$found" -eq 0 ] && [ -n "$TIMEZONE" ]; then
+		args=("$TIMEZONE" "current" "${args[@]}")
+	fi
+	if [ ${#args[@]} -eq 0 ]; then
+		ui_error "No timezones found under $ZONEINFO_DIR."
+		return 1
+	fi
+	pick=$(ui_list_pick "Select timezone:" "${args[@]}") || return 1
+	if ! valid_timezone "$pick"; then
+		ui_error "Invalid timezone: $pick"
+		return 1
+	fi
+	TIMEZONE=$pick
+	log "TIMEZONE=$TIMEZONE"
+}
+
+pick_locale() {
+	local pick
+	pick=$(ui_list_pick "Select locale:" \
+		en_US.UTF-8 "English (US)" \
+		en_GB.UTF-8 "English (UK)" \
+		C.UTF-8 "C.UTF-8 (minimal)" \
+		de_DE.UTF-8 "German" \
+		fr_FR.UTF-8 "French" \
+		es_ES.UTF-8 "Spanish" \
+		pt_BR.UTF-8 "Portuguese (Brazil)" \
+		ja_JP.UTF-8 "Japanese" \
+		zh_CN.UTF-8 "Chinese (Simplified)") || return 1
+	if ! valid_locale "$pick"; then
+		ui_error "Invalid locale: $pick"
+		return 1
+	fi
+	LOCALE=$pick
+	log "LOCALE=$LOCALE"
+}
+
+pick_keymap() {
+	local pick
+	pick=$(ui_list_pick "Select console keymap:" \
+		us "US QWERTY" \
+		uk "UK" \
+		de "German" \
+		fr "French" \
+		es "Spanish" \
+		it "Italian" \
+		se "Swedish" \
+		no "Norwegian" \
+		dvorak "Dvorak") || return 1
+	if ! valid_keymap "$pick"; then
+		ui_error "Invalid keymap: $pick"
+		return 1
+	fi
+	KEYMAP=$pick
+	log "KEYMAP=$KEYMAP"
+}
+
+pick_mirror() {
+	local pick
+	pick=$(ui_list_pick "Select Void mirror:" \
+		"https://repo-default.voidlinux.org/current" "Default (repo-default)" \
+		"https://repo-fastly.voidlinux.org/current" "Fastly CDN" \
+		"https://mirrors.servercentral.com/voidlinux/current" "ServerCentral" \
+		"https://mirror.ps.kz/voidlinux/current" "ps.kz" \
+		"https://void.webconverger.org/current" "Webconverger") || return 1
+	if ! set_mirror "$pick"; then
+		ui_error "Invalid mirror: $pick"
+		return 1
+	fi
+	log "VOID_REPO=$VOID_REPO VOID_NONFREE_REPO=$VOID_NONFREE_REPO"
+}
+
+edit_nvidia() {
+	local pick
+	pick=$(ui_list_pick "NVIDIA proprietary drivers:" \
+		auto "Install only when a GPU is detected" \
+		yes "Always install" \
+		no "Do not install") || return 0
+	case $pick in
+	auto|yes|no) NVIDIA_MODE=$pick ;;
+	*)
+		ui_error "Invalid NVIDIA choice."
+		return 0
+		;;
+	esac
+	apply_nvidia_policy
+	log "NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA"
+}
+
+edit_encryption() {
+	local crc=0
+	ui_confirm "Encrypt the root filesystem with LUKS2?
+
+/boot and the EFI partition stay unencrypted.
+A forgotten passphrase means the data is gone.
+
+Yes = encrypt (a passphrase is next)
+No  = do not encrypt" || crc=$?
+	case $crc in
+	0)
+		ENCRYPT_DISK=1
+		if ! prompt_luks_passphrase; then
+			ENCRYPT_DISK=0
+			wipe_luks_pass
+			ui_error "Encryption left off (no passphrase)."
+		fi
+		;;
+	1)
+		ENCRYPT_DISK=0
+		wipe_luks_pass
+		;;
+	*)
+		return 0
+		;;
+	esac
+	log "ENCRYPT_DISK=$ENCRYPT_DISK"
+}
+
+edit_swap() {
+	local gib crc=0
+	gib=$(swap_size_gib)
+	ui_confirm "Create a ${gib} GiB /swapfile for hibernation?
+
+The file is /swapfile on the root filesystem.
+It is encrypted when LUKS is on.
+
+Yes = create the swapfile
+No  = no swap" || crc=$?
+	case $crc in
+	0) CREATE_SWAP=1 ;;
+	1) CREATE_SWAP=0 ;;
+	*) return 0 ;;
+	esac
+	log "CREATE_SWAP=$CREATE_SWAP size=${gib}GiB"
+}
+
+edit_grub() {
+	local msg crc=0
+	msg="Install GRUB?
+
+Yes = install GRUB
+No  = skip GRUB"
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		msg="Install GRUB?
+
+Encrypted disks need GRUB so the kernel can
+unlock LUKS at boot.
+
+Yes = install GRUB
+No  = skip GRUB"
+	fi
+	ui_confirm "$msg" || crc=$?
+	case $crc in
+	0) INSTALL_BOOTLOADER=1 ;;
+	1) INSTALL_BOOTLOADER=0 ;;
+	*) return 0 ;;
+	esac
+	log "INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+}
+
+edit_packages() {
+	local cur="" next
+	if [ ${#PKG_EXTRA[@]} -gt 0 ]; then
+		cur="${PKG_EXTRA[*]}"
+	fi
+	next=$(ui_entry "Extra packages, space-separated.
+Blank keeps the list. A single - clears it." "$cur") || return 0
+	if [ "$next" = "-" ]; then
+		next=""
+	fi
+	if ! assign_packages "$next"; then
+		ui_error "Invalid package name '${ASSIGN_PACKAGES_ERR:-}'."
+		return 0
+	fi
+	log "PACKAGES=${PKG_EXTRA[*]:-(none)}"
+}
+
+edit_menu() {
+	local field pkgs enc sw grub
+	if [ ${#PKG_EXTRA[@]} -eq 0 ]; then pkgs="(none)"; else pkgs="${PKG_EXTRA[*]}"; fi
+	if [ "$ENCRYPT_DISK" -eq 1 ]; then enc=yes; else enc=no; fi
+	if [ "$CREATE_SWAP" -eq 1 ]; then sw=yes; else sw=no; fi
+	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then grub=yes; else grub=no; fi
+	field=$(ui_list_pick "Edit a field. Cancel returns to the summary." \
+		disk "Disk (${DISK:-none})" \
+		hostname "Hostname ($HOSTNAME)" \
+		username "Username ($USERNAME)" \
+		password "User password" \
+		timezone "Timezone ($TIMEZONE)" \
+		locale "Locale ($LOCALE)" \
+		keymap "Keymap ($KEYMAP)" \
+		mirror "Mirror" \
+		nvidia "NVIDIA ($NVIDIA_MODE)" \
+		encryption "Encryption ($enc)" \
+		swap "Swapfile ($sw)" \
+		grub "GRUB ($grub)" \
+		packages "Extra packages ($pkgs)" \
+		back "Back to summary") || return 0
+	case $field in
+	disk) step_disk || true ;;
+	hostname) prompt_hostname || true ;;
+	username) prompt_username || true ;;
+	password) prompt_user_password || true ;;
+	timezone) pick_timezone || true ;;
+	locale) pick_locale || true ;;
+	keymap) pick_keymap || true ;;
+	mirror) pick_mirror || true ;;
+	nvidia) edit_nvidia ;;
+	encryption) edit_encryption ;;
+	swap) edit_swap ;;
+	grub) edit_grub ;;
+	packages) edit_packages ;;
+	back) return 0 ;;
+	*) ui_error "Unknown field: $field" ;;
+	esac
+}
+
+summary_text() {
+	local mode=BIOS ns enc sw bl pkgs pw preset
+	is_efi && mode=UEFI
+	case $NVIDIA_MODE in
+	auto)
+		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
+			ns="yes (auto, GPU detected)"
+		else
+			ns="no (auto, no GPU)"
+		fi
+		;;
+	yes) ns=yes ;;
+	no) ns=no ;;
+	*) ns=$NVIDIA_MODE ;;
+	esac
+	if [ "$ENCRYPT_DISK" -eq 1 ]; then
+		if [ -n "$LUKSPASS" ]; then
+			enc="yes (passphrase set)"
+		else
+			enc="yes (passphrase not set)"
+		fi
+	else
+		enc=no
+	fi
+	if [ "$CREATE_SWAP" -eq 1 ]; then
+		sw="yes ($(swap_size_gib) GiB /swapfile)"
+	else
+		sw=no
+	fi
+	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then bl=yes; else bl=no; fi
+	if [ ${#PKG_EXTRA[@]} -eq 0 ]; then pkgs="(none)"; else pkgs="${PKG_EXTRA[*]}"; fi
+	if [ -n "$USERPASS" ]; then pw="set"; else pw="not set"; fi
+	if [ -n "$PRESET_FILE" ]; then preset=$PRESET_FILE; else preset="built-in defaults"; fi
+	cat <<EOF
+Install summary
+
+Preset:      $preset
+Disk:        ${DISK:-not selected} (ERASED)
+Firmware:    $mode
+Hostname:    $HOSTNAME
+User:        $USERNAME
+Password:    $pw
+Root:        locked (sudo via wheel)
+Encryption:  $enc
+Swapfile:    $sw
+Timezone:    $TIMEZONE
+Locale:      $LOCALE
+Keymap:      $KEYMAP
+NVIDIA:      $ns
+Xlibre:      yes (required, no X.Org fallback)
+Packages:    $pkgs
+Mirror:      $VOID_REPO
+GRUB:        $bl
+
+Install starts the copy. Edit changes one field. Quit leaves the disk alone.
+EOF
+}
+
 step_welcome() {
+	local preset
+	if [ -n "$PRESET_FILE" ]; then
+		preset=$PRESET_FILE
+	else
+		preset="built-in defaults"
+	fi
 	wizard_page "Welcome to Atelier Linux installer v${VERSION}.
 
-WHOLE-DISK install only (erases one selected disk).
-Optional LUKS2 encryption (root only; /boot stays
-unencrypted). Optional swapfile for hibernation.
-No custom partitions.
+WHOLE-DISK install (erases one selected disk).
 XLibre is always installed (no X.Org fallback).
 
-Steps cover disk, encryption, swap, identity, locale,
-graphics, optional software, mirror, and bootloader.
+Most settings come from the preset:
+$preset
+
+You choose the disk and one user password.
+Root is locked. That user has sudo.
+A LUKS passphrase is asked only when
+encryption is enabled. Mirror, GRUB, locale,
+and the package list are changed from the
+summary (Edit), not as their own questions.
 
 Next to continue."
 }
 
 step_disk() {
-	local args=() path size model rc=0 pick
+	local args=() path size model rc=0 pick crc=0
 	while IFS='|' read -r path size model; do
 		[ -n "$path" ] || continue
 		args+=("$path" "$size  $model")
@@ -504,7 +1173,6 @@ step_disk() {
 		return 2
 	fi
 
-	# Show list with cancel=back
 	case $UI in
 	yad)
 		pick=$(yad_run --list --text="Select disk to ERASE and install onto:" \
@@ -513,345 +1181,91 @@ step_disk() {
 		pick=$(printf '%s' "$pick" | awk -F'|' 'NF{print $1; exit}')
 		;;
 	*)
-		pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=1
+		pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=$?
 		;;
 	esac
 	if [ "$rc" -eq 1 ]; then return 1; fi
 	if [ "$rc" -ge 2 ]; then return 2; fi
 	DISK=${pick//|/}
 	DISK=$(printf '%s' "$DISK" | tr -d '\r' | awk 'NF{print $1; exit}')
-	# Must be a real block device path (reject empty / escape garbage from bad TUI)
 	case $DISK in
 	/dev/*) ;;
 	*) ui_error "Invalid disk selection (got: ${DISK:-empty}). Use arrow keys inside the dialog, then Enter."; return 1 ;;
 	esac
 	[ -b "$DISK" ] || { ui_error "Invalid disk: $DISK"; return 1; }
 
-	if ! ui_confirm "ALL DATA on $DISK will be DESTROYED.
+	ui_confirm "ALL DATA on $DISK will be DESTROYED.
 
 Yes = use this disk
-No  = go back"; then
-		return 1
-	fi
+No  = go back" || crc=$?
+	case $crc in
+	0) ;;
+	1) return 1 ;;
+	*) return 2 ;;
+	esac
 	log "DISK=$DISK"
 	return 0
 }
 
-step_encryption() {
-	# ui_confirm No means "do not encrypt", not wizard Back.
-	ENCRYPT_DISK=0
-	wipe_luks_pass
-	if ui_confirm "Encrypt the system disk with LUKS2?
-
-  Yes = LUKS2 on the root filesystem
-        Passphrase required at every boot.
-        /boot and the EFI partition stay unencrypted.
-        A forgotten passphrase means the data is gone.
-
-  No  = no encryption (default)
-
-Yes is optional."; then
-		if ! have cryptsetup; then
-			ui_error "cryptsetup is not installed on this live image.
-Cannot encrypt the disk."
-			return 1
-		fi
-		ENCRYPT_DISK=1
-		local p1 p2
-		while true; do
-			p1=$(ui_password "LUKS passphrase (required at boot):") || return 1
-			p2=$(ui_password "Confirm LUKS passphrase:") || return 1
-			if [ -z "$p1" ]; then
-				ui_error "Passphrase cannot be empty."
-				continue
-			fi
-			if [ "${#p1}" -lt 8 ]; then
-				ui_error "Passphrase must be at least 8 characters."
-				continue
-			fi
-			if [ "$p1" != "$p2" ]; then
-				ui_error "Passphrases do not match. Try again."
-				continue
-			fi
-			LUKSPASS=$p1
-			break
-		done
-	fi
-	log "ENCRYPT_DISK=$ENCRYPT_DISK"
+step_password() {
+	prompt_user_password || return 1
 	return 0
 }
 
-step_swap() {
-	# ui_confirm No means "no swapfile", not wizard Back.
-	CREATE_SWAP=0
-	local gib
-	gib=$(swap_size_gib)
-	if ui_confirm "Create a swap file for hibernation?
-
-  Size: ${gib} GiB (this machine's RAM, rounded up).
-  File: /swapfile on the root filesystem.
-  Encrypted automatically if you chose LUKS.
-
-  Needed to hibernate (suspend-to-disk).
-  Skip on desktops that only suspend to RAM.
-
-  Yes = create swapfile
-  No  = no swap (default)
-
-Yes is optional."; then
-		CREATE_SWAP=1
-	fi
-	log "CREATE_SWAP=$CREATE_SWAP size=${gib}GiB"
-	return 0
-}
-
-step_identity() {
-	local h u p1 p2 r1 r2
-	while true; do
-		h=$(ui_entry "Hostname:" "$HOSTNAME") || return 1
-		h=${h// /}
-		if valid_hostname "$h"; then HOSTNAME=$h; break; fi
-		ui_error "Invalid hostname. Use letters, digits, hyphens (not leading/trailing -)."
-	done
-	while true; do
-		u=$(ui_entry "Username:" "$USERNAME") || return 1
-		u=$(printf '%s' "$u" | tr -cd 'a-z0-9_-' | head -c 32)
-		if valid_username "$u"; then USERNAME=$u; break; fi
-		ui_error "Invalid username (lowercase, start with letter/_, not root)."
-	done
-	while true; do
-		p1=$(ui_password "Password for $USERNAME:") || return 1
-		p2=$(ui_password "Confirm password for $USERNAME:") || return 1
-		if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then USERPASS=$p1; break; fi
-		ui_error "Passwords empty or do not match. Try again."
-	done
-	while true; do
-		r1=$(ui_password "Root password:") || return 1
-		r2=$(ui_password "Confirm root password:") || return 1
-		if [ -n "$r1" ] && [ "$r1" = "$r2" ]; then ROOTPASS=$r1; break; fi
-		ui_error "Root passwords empty or do not match. Try again."
-	done
-	log "HOSTNAME=$HOSTNAME USERNAME=$USERNAME"
-	return 0
-}
-
-step_locale() {
-	local args=() tz loc km rc=0
-	# Timezone list (cap for UI)
-	while read -r tz; do
-		[ -n "$tz" ] || continue
-		args+=("$tz" "$tz")
-	done < <(list_timezones | head -n 400)
-	# Ensure current selection first
-	args=("$TIMEZONE" "$TIMEZONE (current)" "${args[@]}")
-
-	case $UI in
-	yad)
-		tz=$(yad_run --list --text="Select timezone:" --width=500 --height=400 \
-			--column=Id --column=Zone --print-column=1 --hide-column=1 \
-			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
-		tz=$(printf '%s' "$tz" | awk -F'|' 'NF{print $1; exit}')
-		;;
-	*)
-		tz=$(ui_list_pick "Select timezone:" "${args[@]}") || rc=1
-		;;
-	esac
-	[ "$rc" -eq 1 ] && return 1
-	[ "$rc" -ge 2 ] && return 2
-	TIMEZONE=${tz:-$TIMEZONE}
-
-	args=(
-		en_US.UTF-8 "English (US)"
-		en_GB.UTF-8 "English (UK)"
-		C.UTF-8 "C.UTF-8 (minimal)"
-		de_DE.UTF-8 "German"
-		fr_FR.UTF-8 "French"
-		es_ES.UTF-8 "Spanish"
-		pt_BR.UTF-8 "Portuguese (Brazil)"
-		ja_JP.UTF-8 "Japanese"
-		zh_CN.UTF-8 "Chinese (Simplified)"
-	)
-	rc=0
-	case $UI in
-	yad)
-		loc=$(yad_run --list --text="Select locale:" --width=500 --height=320 \
-			--column=Id --column=Name --print-column=1 \
-			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
-		loc=$(printf '%s' "$loc" | awk -F'|' 'NF{print $1; exit}')
-		;;
-	*) loc=$(ui_list_pick "Select locale:" "${args[@]}") || rc=1 ;;
-	esac
-	[ "$rc" -eq 1 ] && return 1
-	[ "$rc" -ge 2 ] && return 2
-	LOCALE=${loc:-$LOCALE}
-
-	args=(
-		us "US QWERTY"
-		uk "UK"
-		de "German"
-		fr "French"
-		es "Spanish"
-		it "Italian"
-		se "Swedish"
-		no "Norwegian"
-		dvorak "Dvorak"
-	)
-	rc=0
-	case $UI in
-	yad)
-		km=$(yad_run --list --text="Select console keymap:" --width=400 --height=320 \
-			--column=Id --column=Name --print-column=1 \
-			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
-		km=$(printf '%s' "$km" | awk -F'|' 'NF{print $1; exit}')
-		;;
-	*) km=$(ui_list_pick "Select keymap:" "${args[@]}") || rc=1 ;;
-	esac
-	[ "$rc" -eq 1 ] && return 1
-	[ "$rc" -ge 2 ] && return 2
-	KEYMAP=${km:-$KEYMAP}
-	log "TIMEZONE=$TIMEZONE LOCALE=$LOCALE KEYMAP=$KEYMAP"
-	return 0
-}
-
-step_graphics() {
-	INSTALL_NVIDIA=0
-	if detect_nvidia_gpu; then
-		if ui_confirm "NVIDIA GPU detected.
-
-Install proprietary NVIDIA drivers?
-  Yes = nonfree nvidia + Atelier config
-  No  = skip (sudo atelier-setup-nvidia later;
-        that command is always on the desktop)"; then
-			INSTALL_NVIDIA=1
-		fi
-	else
-		log "no NVIDIA GPU; INSTALL_NVIDIA=0"
-		ui_info "No NVIDIA GPU detected.
-
-Proprietary NVIDIA drivers will NOT be installed.
-
-On a real NVIDIA PC later:
-  sudo atelier-setup-nvidia"
-	fi
-
-	# Required. xinit (atelier-base) does not depend on an X server, and
-	# the owner does not want an X.Org fallback if XLibre is missing.
-	INSTALL_XLIBRE=1
-	log "INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_XLIBRE=$INSTALL_XLIBRE (required, no X.Org fallback)"
-	return 0
-}
-
-step_software() {
-	PKG_EXTRA_CLI=0
-	PKG_MEDIA=0
-	local sel
-	sel=$(ui_checklist "Optional package groups (desktop is always installed):" \
-		extra_cli "Extra CLI tools (htop, ripgrep, fd, curl, wget)" off \
-		media "Media tools (mpv, ffmpeg)" off) || return 1
-	printf '%s\n' "$sel" | grep -qx extra_cli && PKG_EXTRA_CLI=1
-	printf '%s\n' "$sel" | grep -qx media && PKG_MEDIA=1
-	log "PKG_EXTRA_CLI=$PKG_EXTRA_CLI PKG_MEDIA=$PKG_MEDIA"
-	return 0
-}
-
-step_mirror() {
-	local args pick rc=0
-	args=(
-		"https://repo-default.voidlinux.org/current" "Default (repo-default)"
-		"https://repo-fastly.voidlinux.org/current" "Fastly CDN"
-		"https://mirrors.servercentral.com/voidlinux/current" "ServerCentral"
-		"https://mirror.ps.kz/voidlinux/current" "ps.kz"
-		"https://void.webconverger.org/current" "Webconverger"
-	)
-	case $UI in
-	yad)
-		pick=$(yad_run --list --text="Select Void package mirror:" --width=640 --height=300 \
-			--column=URL --column=Name --print-column=1 \
-			--button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
-		pick=$(printf '%s' "$pick" | awk -F'|' 'NF{print $1; exit}')
-		;;
-	*) pick=$(ui_list_pick "Select Void mirror:" "${args[@]}") || rc=1 ;;
-	esac
-	[ "$rc" -eq 1 ] && return 1
-	[ "$rc" -ge 2 ] && return 2
-	VOID_REPO=${pick:-$VOID_REPO}
-	# nonfree sibling
-	case $VOID_REPO in
-	*/current) VOID_NONFREE_REPO="${VOID_REPO}/nonfree" ;;
-	*/current/) VOID_NONFREE_REPO="${VOID_REPO}nonfree" ;;
-	*) VOID_NONFREE_REPO="${VOID_REPO%/}/nonfree" ;;
-	esac
-	log "VOID_REPO=$VOID_REPO VOID_NONFREE_REPO=$VOID_NONFREE_REPO"
-	return 0
-}
-
-step_bootloader() {
-	INSTALL_BOOTLOADER=1
-	local msg="Install GRUB bootloader?
-
-  Yes = recommended (EFI or BIOS auto-detected)
-  No  = skip (advanced; you must install a bootloader later)
-
-Yes is recommended."
-	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
-		msg="Install GRUB bootloader?
-
-  Encrypted disks NEED GRUB so the kernel can
-  unlock LUKS at boot. Skipping is strongly
-  discouraged.
-
-  Yes = recommended
-  No  = skip (advanced)
-
-Yes is recommended."
-	fi
-	if ui_confirm "$msg"; then
-		INSTALL_BOOTLOADER=1
-	else
-		INSTALL_BOOTLOADER=0
-	fi
-	log "INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+# No screen when encryption is off. The summary Edit screen can turn it on.
+step_luks() {
+	[ "${ENCRYPT_DISK:-0}" -eq 1 ] || return 0
+	[ -n "${LUKSPASS:-}" ] && return 0
+	prompt_luks_passphrase || return 1
 	return 0
 }
 
 step_summary() {
-	local mode=BIOS ns=no xs="yes (required)" bl=yes ec=no md=no enc=no sw=no
-	is_efi && mode=EFI
-	[ "$INSTALL_NVIDIA" -eq 1 ] && ns=yes
-	[ "$INSTALL_BOOTLOADER" -eq 1 ] && bl=yes || bl=no
-	[ "$PKG_EXTRA_CLI" -eq 1 ] && ec=yes
-	[ "$PKG_MEDIA" -eq 1 ] && md=yes
-	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && enc=yes
-	if [ "${CREATE_SWAP:-0}" -eq 1 ]; then
-		sw="yes ($(swap_size_gib) GiB /swapfile)"
-	fi
-	if ui_confirm "Install summary - proceed?
-
-Disk:        $DISK (ERASED)
-Firmware:    $mode
-Encryption:  $enc
-Swapfile:    $sw
-Hostname:    $HOSTNAME
-User:        $USERNAME
-Timezone:    $TIMEZONE
-Locale:      $LOCALE
-Keymap:      $KEYMAP
-NVIDIA:      $ns
-Xlibre:      $xs
-Extra CLI:   $ec
-Media:       $md
-Mirror:      $VOID_REPO
-Bootloader:  $bl
-
-Yes = start install
-No  = go back"; then
-		return 0
-	fi
-	return 1
+	local choice rc
+	while true; do
+		rc=0
+		choice=$(ui_list_pick "$(summary_text)" \
+			install "Start installation" \
+			edit "Edit a field" \
+			quit "Quit") || rc=$?
+		if [ "$rc" -ge 2 ]; then
+			return 2
+		fi
+		if [ "$rc" -ne 0 ]; then
+			ui_error "Choose Install, Edit, or Quit. Escape does not start the install."
+			continue
+		fi
+		case $choice in
+		install)
+			if [ -z "$DISK" ] || [ ! -b "$DISK" ]; then
+				ui_error "Select a disk before installing."
+				continue
+			fi
+			if [ -z "$USERPASS" ]; then
+				ui_error "Set the user password before installing."
+				continue
+			fi
+			if [ "${ENCRYPT_DISK:-0}" -eq 1 ] && [ -z "${LUKSPASS:-}" ]; then
+				ui_error "Encryption is on but there is no LUKS passphrase."
+				prompt_luks_passphrase || true
+				continue
+			fi
+			return 0
+			;;
+		edit) edit_menu ;;
+		quit) return 2 ;;
+		*)
+			ui_error "Choose Install, Edit, or Quit."
+			;;
+		esac
+	done
 }
 
 # --- install backend ----------------------------------------------------------
 partition_disk() {
+	if [ "${DRY_RUN:-0}" -eq 1 ]; then
+		die "Refusing to partition $DISK during a dry run."
+	fi
 	log "Partitioning $DISK encrypt=$ENCRYPT_DISK"
 	umount -R "$TARGETDIR" 2>/dev/null || true
 	lsblk -ln -o NAME,MOUNTPOINT "$DISK" 2>/dev/null | while read -r n m; do
@@ -1167,7 +1581,8 @@ install_packages() {
 		log "WARN: personal repo missing at $ATELIER_REPO_LIVE"
 	fi
 
-	# Primary + nonfree mirrors (Dropbox requires nonfree always)
+	# Primary + nonfree mirrors. void-repo-nonfree is always installed.
+	# dropbox is not in the base list; the preset PACKAGES line adds it.
 	mkdir -p "$TARGETDIR/etc/xbps.d"
 	printf 'repository=%s\n' "$VOID_REPO" >"$TARGETDIR/etc/xbps.d/00-repository-main.conf"
 	printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
@@ -1182,7 +1597,7 @@ install_packages() {
 
 	local pkgs=(
 		base-system linux sudo dbus elogind NetworkManager polkit
-		void-repo-nonfree dropbox
+		void-repo-nonfree
 		xdg-user-dirs xdg-user-dirs-gtk
 	)
 	if [ "${INSTALL_BOOTLOADER:-1}" -eq 1 ]; then
@@ -1214,16 +1629,12 @@ XLibre is required and there is no X.Org fallback."
 	fi
 	pkgs+=(atelier-xlibre-repo)
 
-	# Optional groups (only if present in Void)
-	if [ "${PKG_EXTRA_CLI:-0}" -eq 1 ]; then
-		for p in htop ripgrep fd curl wget; do
-			if xbps-query --repository="$VOID_REPO" -R "$p" >/dev/null 2>&1; then pkgs+=("$p"); fi
-		done
-	fi
-	if [ "${PKG_MEDIA:-0}" -eq 1 ]; then
-		for p in mpv ffmpeg; do
-			if xbps-query --repository="$VOID_REPO" -R "$p" >/dev/null 2>&1; then pkgs+=("$p"); fi
-		done
+	# Preset extra packages (dropbox by default). Preflight already
+	# required each name to exist. They join this transaction so a
+	# removed preset entry is not installed behind the user's back.
+	if [ "${#PKG_EXTRA[@]}" -gt 0 ]; then
+		pkgs+=("${PKG_EXTRA[@]}")
+		log "preset extra packages: ${PKG_EXTRA[*]}"
 	fi
 
 	log "xbps-install ${pkgs[*]}"
@@ -1281,6 +1692,27 @@ enable_sv() {
 	fi
 }
 
+# Uncomment one locale in /etc/default/libc-locales.
+# Match the name as literal text. A '.' in en_US.UTF-8 must not be a
+# regex "any character", or a different locale line can be uncommented.
+enable_libc_locale() {
+	local file=$1 loc=$2 tmp
+	[ -f "$file" ] || return 0
+	[ -n "$loc" ] || return 0
+	tmp=$(mktemp)
+	awk -v loc="$loc" '
+		{
+			if (substr($0, 1, 1) == "#" &&
+				(substr($0, 2) == loc || substr($0, 2, length(loc) + 1) == (loc " "))) {
+				sub(/^#/, "")
+			}
+			print
+		}
+	' "$file" >"$tmp"
+	cat "$tmp" >"$file"
+	rm -f "$tmp"
+}
+
 configure_system() {
 	log "Configuring system"
 	printf '%s\n' "$HOSTNAME" >"$TARGETDIR/etc/hostname"
@@ -1290,7 +1722,7 @@ configure_system() {
 		chroot "$TARGETDIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
 	fi
 	if [ -f "$TARGETDIR/etc/default/libc-locales" ]; then
-		sed -i -e "/${LOCALE}/s/^#//" "$TARGETDIR/etc/default/libc-locales" || true
+		enable_libc_locale "$TARGETDIR/etc/default/libc-locales" "$LOCALE"
 	fi
 	printf 'LANG=%s\n' "$LOCALE" >"$TARGETDIR/etc/locale.conf"
 	chroot "$TARGETDIR" xbps-reconfigure -f glibc-locales >>"$LOG" 2>&1 || true
@@ -1298,14 +1730,19 @@ configure_system() {
 		sed -i -e "s|#\?KEYMAP=.*|KEYMAP=$KEYMAP|g" "$TARGETDIR/etc/rc.conf" || true
 	fi
 	printf 'KEYMAP=%s\n' "$KEYMAP" >"$TARGETDIR/etc/vconsole.conf"
-	printf 'root:%s\n' "$ROOTPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
+	# No root password. The user is in wheel; sudoers.d/wheel is written below.
+	if ! chroot "$TARGETDIR" passwd -l root >>"$LOG" 2>&1; then
+		log "WARN: passwd -l root failed; trying usermod -L"
+		chroot "$TARGETDIR" usermod -L root >>"$LOG" 2>&1 || die "Could not lock the root account."
+	fi
+	log "root account locked; $USERNAME will use sudo via wheel"
 	local groups="wheel,users,audio,video,input,cdrom,optical,storage,network,floppy"
 	chroot "$TARGETDIR" useradd -m -s /bin/bash -G "$groups" "$USERNAME" || true
 	printf '%s:%s\n' "$USERNAME" "$USERPASS" | chroot "$TARGETDIR" chpasswd -c SHA512
-	if [ -d "$TARGETDIR/etc/sudoers.d" ]; then
-		printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
-		chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
-	fi
+	# Root is locked, so this file is the only administration path.
+	mkdir -p "$TARGETDIR/etc/sudoers.d"
+	printf '%%%s ALL=(ALL:ALL) ALL\n' "wheel" >"$TARGETDIR/etc/sudoers.d/wheel"
+	chmod 440 "$TARGETDIR/etc/sudoers.d/wheel"
 
 	# XDG user directories (Desktop, Documents, Downloads, ...) for the new user
 	if [ -x "$TARGETDIR/usr/bin/xdg-user-dirs-update" ]; then
@@ -1572,6 +2009,26 @@ repo_has() {
 	return 0
 }
 
+# True when the package is visible in Void main, nonfree, the personal
+# repo, or the GraeWolf repo when that config is on the live system.
+pkg_visible() {
+	local p=$1
+	if repo_has "$VOID_REPO" "$p"; then
+		return 0
+	fi
+	if repo_has "$VOID_NONFREE_REPO" "$p"; then
+		return 0
+	fi
+	if [ -d "$ATELIER_REPO_LIVE" ] && repo_has "$ATELIER_REPO_LIVE" "$p"; then
+		return 0
+	fi
+	if [ -f /etc/xbps.d/20-repository-graewolf.conf ] && \
+		repo_has "https://github.com/GraeWolf/void-repo/releases/download/x86_64" "$p"; then
+		return 0
+	fi
+	return 1
+}
+
 preflight_personal_repo() {
 	local pkg=""
 	if [ ! -d "$ATELIER_REPO_LIVE" ]; then
@@ -1654,9 +2111,19 @@ $VOID_REPO"
 		die "Could not sync the Void main repository (linux not found):
 $VOID_REPO"
 	fi
-	if ! repo_has "$VOID_NONFREE_REPO" dropbox; then
-		die "Could not sync the Void nonfree repository (dropbox not found):
-$VOID_NONFREE_REPO"
+	# Preset packages are checked before the disk is wiped. The shipped
+	# preset lists dropbox, so a missing nonfree index still stops here.
+	local extra
+	if [ "${#PKG_EXTRA[@]}" -gt 0 ]; then
+		for extra in "${PKG_EXTRA[@]}"; do
+			if ! pkg_visible "$extra"; then
+				die "Could not find preset package '$extra'.
+Main:     $VOID_REPO
+Nonfree:  $VOID_NONFREE_REPO
+Personal: $ATELIER_REPO_LIVE"
+			fi
+			log "preflight: preset package $extra is available"
+		done
 	fi
 	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
 		if ! repo_has "$VOID_NONFREE_REPO" nvidia; then
@@ -1814,10 +2281,16 @@ Atelier installer v${VERSION} (whole-disk, optional LUKS2, optional swapfile)
 
 Usage: atelier-install [options]
 
-  (default)   TUI with dialog (Void-like; works on a live tty)
-  --tui       Force dialog TUI
-  --gui       Force graphical UI (yad/zenity; needs DISPLAY)
-  -h, --help  This help
+  (default)       TUI with dialog (Void-like; works on a live tty)
+  --tui           Force dialog TUI
+  --gui           Force graphical UI (yad/zenity; needs DISPLAY)
+  --text          Plain prompts on stdin/stderr (no dialog)
+  --preset FILE   Read settings from FILE instead of /etc/atelier/install.conf
+  --dry-run       Walk the prompts, then exit before the disk is touched
+  -h, --help      This help
+
+A value set in the preset is not asked. The summary screen can edit it.
+Root is locked. The preset user gets sudo via the wheel group.
 
 Live medium: log in as anon / voidlinux, then:
   sudo atelier-install
@@ -1826,26 +2299,40 @@ EOF
 
 # --- main wizard loop ---------------------------------------------------------
 main() {
+	local orig_args=("$@")
 	: >"$LOG"
 	log "atelier-install $VERSION starting"
 
-	local arg
-	for arg in "$@"; do
-		case $arg in
+	while [ $# -gt 0 ]; do
+		case $1 in
 		--gui) UI_MODE=gui ;;
 		--tui) UI_MODE=tui ;;
+		--text) UI_MODE=text ;;
+		--dry-run) DRY_RUN=1 ;;
+		--preset)
+			shift
+			[ $# -ge 1 ] || die "--preset needs a file path"
+			PRESET_PATH=$1
+			;;
+		--preset=*)
+			PRESET_PATH=${1#--preset=}
+			[ -n "$PRESET_PATH" ] || die "--preset needs a file path"
+			;;
 		-h|--help) usage; exit 0 ;;
-		*) die "Unknown option: $arg (try --help)" ;;
+		*) die "Unknown option: $1 (try --help)" ;;
 		esac
+		shift
 	done
 
 	select_ui
-	log "atelier-install UI_MODE=$UI_MODE UI=$UI"
+	log "atelier-install UI_MODE=$UI_MODE UI=$UI DRY_RUN=$DRY_RUN"
 
-	ensure_root "$@"
-	have parted || die "parted is required"
-	have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
-	have xbps-install || die "xbps-install is required"
+	ensure_root "${orig_args[@]}"
+	if [ "$DRY_RUN" -eq 0 ]; then
+		have parted || die "parted is required"
+		have mkfs.ext4 || die "e2fsprogs (mkfs.ext4) is required"
+		have xbps-install || die "xbps-install is required"
+	fi
 	have lsblk || die "util-linux (lsblk) is required"
 	if [ "$UI" = "dialog" ]; then
 		have dialog || die "dialog is required for TUI mode"
@@ -1854,22 +2341,26 @@ main() {
 		die "No UI backend (install dialog for TUI, or yad for --gui)"
 	fi
 
-	# steps as names; navigate with index
-	local steps=(welcome disk encryption swap identity locale graphics software mirror bootloader summary)
+	if [ -n "$PRESET_PATH" ]; then
+		load_preset "$PRESET_PATH"
+	elif [ -f /etc/atelier/install.conf ]; then
+		load_preset /etc/atelier/install.conf
+	else
+		log "no preset file; using built-in defaults"
+		apply_nvidia_policy || die "Invalid NVIDIA mode '$NVIDIA_MODE'"
+		set_mirror "$VOID_REPO"
+	fi
+
+	# Disk, one user password, LUKS only when encryption is on, then summary.
+	local steps=(welcome disk password luks summary)
 	local i=0 n=${#steps[@]} rc
 	while [ "$i" -ge 0 ] && [ "$i" -lt "$n" ]; do
 		rc=0
 		case ${steps[$i]} in
 		welcome) step_welcome || rc=$? ;;
 		disk) step_disk || rc=$? ;;
-		encryption) step_encryption || rc=$? ;;
-		swap) step_swap || rc=$? ;;
-		identity) step_identity || rc=$? ;;
-		locale) step_locale || rc=$? ;;
-		graphics) step_graphics || rc=$? ;;
-		software) step_software || rc=$? ;;
-		mirror) step_mirror || rc=$? ;;
-		bootloader) step_bootloader || rc=$? ;;
+		password) step_password || rc=$? ;;
+		luks) step_luks || rc=$? ;;
 		summary) step_summary || rc=$? ;;
 		esac
 		log "step ${steps[$i]} rc=$rc"
@@ -1880,7 +2371,16 @@ main() {
 		esac
 	done
 
+	if [ "$DRY_RUN" -eq 1 ]; then
+		log "dry-run: not installing"
+		summary_text
+		printf 'dry-run: disk was not modified\n'
+		exit 0
+	fi
+
 	run_install
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	main "$@"
+fi

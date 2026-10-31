@@ -59,7 +59,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 3. Clones **void-mklive** into `iso/void-mklive/` (gitignored) if missing
 4. Embeds **void-installer** from void-mklive’s `installer.sh` (emergency fallback)
 5. Runs `mklive.sh` with:
-   - official Void **main** + **nonfree** (required for `dropbox` via `atelier-desktop`)
+   - official Void **main** + **nonfree** (the default install preset lists `dropbox`)
    - local `repo/out` (Atelier packages)
    - GraeWolf void-repo URL (optional packages such as brave-origin)
    - packages from `iso/package-lists/live.txt` (includes `atelier-desktop`)
@@ -68,7 +68,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
    - bootloader title: **Atelier Linux**
    - postsetup: `iso/scripts/postsetup.sh`
 
-If mklive aborts with `MISSING: dropbox`, the nonfree `-r` URL is missing or unreachable.
+`build-iso.sh` queries `dropbox` on the nonfree mirror before mklive runs, because the default install preset installs it. A failure there means the nonfree URL is missing or unreachable.
 
 ## Live session (expected)
 

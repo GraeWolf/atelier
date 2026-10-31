@@ -1,10 +1,13 @@
 # Template file for 'atelier-desktop'
 # Metapackage: PLAN desktop stack + applications.
-# brave-origin: GraeWolf void-repo (optional; large). dropbox: Void nonfree (required).
+# brave-origin: GraeWolf void-repo (optional; large).
+# dropbox is not a hard dependency. The installer preset lists it
+# (installer/install.conf PACKAGES). void-repo-nonfree stays so the
+# nonfree repository is configured on the system.
 # Does not hard-depend on: font-jetbrains-mono, xlibre package (external setup helpers).
 pkgname=atelier-desktop
 version=0.3.0
-revision=1
+revision=2
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -19,7 +22,6 @@ depends="
  atelier-config>=0
  atelier-void-repo>=0
  void-repo-nonfree>=0
- dropbox>=0
  xdg-user-dirs>=0
  xdg-user-dirs-gtk>=0
  bspwm>=0

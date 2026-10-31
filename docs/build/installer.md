@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.5** |
+| XBPS package | `atelier-installer` **0.5.8** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -23,16 +23,25 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 | `atelier-install` | **TUI** (`dialog`) — default, for live tty |
 | `atelier-install --tui` | Force dialog |
 | `atelier-install --gui` | yad/zenity when DISPLAY is set |
+| `atelier-install --text` | Plain prompts on stdin/stderr |
+| `atelier-install --preset FILE` | Load settings from FILE |
+| `atelier-install --dry-run` | Stop after the summary; do not partition |
 
-Stateful Back/Next flow (whole-disk only):
+The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: hostname `atelier`, user `atelier`, `America/New_York`, `en_US.UTF-8`, keymap `us`, the default Void mirror, NVIDIA `auto`, encryption off, swapfile off, GRUB on, and extra package `dropbox`. A value set in the preset is not asked. Built-in defaults match the file when it is absent.
 
-welcome → disk → encryption → swap → identity → locale → graphics → software → mirror → bootloader → summary → install
+Flow (whole-disk only):
+
+welcome → disk (select + confirm) → user password → LUKS passphrase only if encryption is on → summary
+
+The summary is **Install / Edit a field / Quit**. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
+
+Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` grants sudo. The summary says so. There is one user password (entered twice to confirm). The LUKS passphrase is separate and is not stored in the preset.
 
 ### UI rules
 
 - **Default dialog (TUI)**; optional GUI with `--gui`
 - **ASCII-only** UI strings
-- Explicit **Yes/No** or **Back/Next/Abort**
+- Explicit **Yes/No** or **Back/Next/Abort**. Escape on a Yes/No screen is not No; the question is shown again
 - dialog: `--stdout` + keys from `/dev/tty` (prevents raw `^[[A`/`^[[B` arrow garbage)
 - Wizard pages: real Next/Back/Abort buttons (`--yesno` + `--extra-button`), not a tag menu
 - `ensure_gui_env` + sudo/pkexec preserve `TERM` (ncurses needs it on a live TTY)
@@ -41,14 +50,14 @@ welcome → disk → encryption → swap → identity → locale → graphics �
 
 | Variable | Effect |
 |----------|--------|
-| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos; **nonfree always** (Dropbox) |
-| `INSTALL_NVIDIA` | separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
+| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos from the preset mirror. Nonfree is still configured. `dropbox` is installed only when listed in preset `PACKAGES` |
+| `INSTALL_NVIDIA` | `NVIDIA=auto` (default) installs proprietary drivers only when a GPU is detected. `yes` / `no` force it. Separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
 | `INSTALL_XLIBRE` | always `1`. `atelier-xlibre-repo` + `xlibre` + `xlibre-xserver`. No X.Org fallback. Missing repo, failed install, or no `/usr/bin/Xorg` aborts the install |
-| `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
-| `INSTALL_BOOTLOADER` | GRUB install or skip |
-| `ENCRYPT_DISK` | LUKS2 on root; unencrypted `/boot`; `cryptsetup` on target |
-| `CREATE_SWAP` | `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
-| (always) | `dropbox`, `xdg-user-dirs`, `xdg-user-dirs-gtk` |
+| `PKG_EXTRA` | preset `PACKAGES` (the shipped file lists `dropbox`) |
+| `INSTALL_BOOTLOADER` | preset `GRUB` (default yes) |
+| `ENCRYPT_DISK` | preset `ENCRYPT` (default no). LUKS2 on root; unencrypted `/boot`; `cryptsetup` on target |
+| `CREATE_SWAP` | preset `SWAP` (default no). `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
+| (always) | `xdg-user-dirs`, `xdg-user-dirs-gtk`, `void-repo-nonfree` |
 
 After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then `atelier-setup-keyring` so TTY login unlocks gnome-keyring.
 
@@ -67,7 +76,7 @@ After the summary is confirmed, and before `parted` / `wipefs`, the installer ch
 | NVIDIA GPU (`lspci` or `/sys/bus/pci`) | Stop if the PCI bus cannot be inspected. No GPU is a successful detection, not an error |
 | Network to the chosen mirror's `x86_64-repodata` | Stop. "Network unreachable" vs "mirror index" are separate messages |
 | Personal repo (`atelier-desktop`, `atelier-xlibre-repo`) | Stop |
-| Void main (`base-system`, `linux`) and nonfree (`dropbox`; plus `nvidia` / `linux-headers` when NVIDIA was requested) | Stop |
+| Void main (`base-system`, `linux`), each preset package (shipped preset: `dropbox` from nonfree), and `nvidia` / `linux-headers` when NVIDIA will be installed | Stop |
 | XLibre repo (`xlibre`, `xlibre-xserver`) via `xbps-query -M` so the GitHub index is actually fetched. A plain `xbps-query -R` only reads a previously synced cache, which the live ISO has for Void but not for XLibre | Stop. No X.Org fallback |
 
 ## Failures during install
@@ -127,7 +136,13 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Non-NVIDIA VM: no NVIDIA packages
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
-- [ ] Optional groups install only when checked
+- [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
+- [ ] Welcome screen says v0.5.8 and names the preset file
+- [ ] Root cannot log in; the created user is in `wheel` and sudo works
+- [ ] A username such as `Kevin` is rejected and re-asked (it is not stored as `evin`)
+- [ ] Timezone choices include `America/New_York`, `Pacific/*`, and `US/*` when those names exist in tzdata
+- [ ] Escape or a blank line on a Yes/No question does not select No
+- [ ] `ENCRYPT=no` does not ask for a LUKS passphrase; `ENCRYPT=yes` does, before the summary
 - [ ] Encryption default No keeps the 2-partition (EFI) / 2-partition (BIOS) layout
 - [ ] Encryption Yes: LUKS2 on p3, ext4 `/boot` on p2, passphrase at dracut, `/boot` not LUKS
 - [ ] Encryption Yes: initramfs includes `usbhid`/`hid-generic` and omits `hid_asus` (ROG N-KEY types at the passphrase prompt)
