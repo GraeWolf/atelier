@@ -7,12 +7,12 @@
 # The do_install block below documents intended payload layout only.
 pkgname=atelier-asus
 version=0.2.2
-revision=1
+revision=2
 create_wrksrc=yes
 short_desc="Atelier ASUS ROG keyboard backlight helper"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # brightnessctl is already pulled by atelier-config; keep a direct depend so
 # this package works if installed alone on an ASUS machine.

@@ -128,7 +128,7 @@ Multi-machine: Git is the source of truth; re-read `PLAN.md` / `docs/build/phase
 ## Success criteria checklist
 
 - [x] Tooling for bootable live ISO (void-mklive wrappers)
-- [x] Graphical installer (`atelier-install`)
+- [x] Dialog installer (`atelier-install`)
 - [x] NVIDIA proprietary path (nonfree + atelier-nvidia + setup)
 - [x] Personal repo integrated (build + embed on ISO)
 - [x] Themed bspwm desktop configs + metapackages

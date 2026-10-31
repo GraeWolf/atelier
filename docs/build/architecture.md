@@ -23,7 +23,7 @@ This document records the technical choices locked for the Phase 1 MVP.
   - NVIDIA/Xlibre: installer options + `atelier-setup-nvidia` / `atelier-setup-xlibre`
   - Docs: `docs/build/live-iso.md`, `docs/build/nvidia.md`
 - **Installer:** `atelier-install` (package `atelier-installer`)
-  - **TUI default** (`dialog`); optional `--gui` (yad/zenity)
+  - **dialog TUI** only (no graphical front end)
   - Whole-disk only; optional LUKS2 on root (unencrypted `/boot`; USB HID in initramfs, `hid_asus` omitted so ROG N-KEY works at the passphrase prompt); optional `/swapfile` for hibernation
   - Live ISO boots to TTY; run `sudo atelier-install`
   - Source: `installer/`; docs: `docs/build/installer.md`, `docs/user/installer.md`

@@ -35,7 +35,7 @@ fi
 mkdir -p "$DST/usr/share/atelier/repo"
 cp -a "$REPO_OUT"/. "$DST/usr/share/atelier/repo/"
 
-# Temporary void-installer (from void-mklive) until custom GUI installer (Step 5)
+# Emergency text fallback from void-mklive. Prefer atelier-install.
 if [ -f "$MKLIVE_DIR/installer.sh" ]; then
 	atelier_info "Embedding void-installer from $MKLIVE_DIR"
 	_ver="atelier"

@@ -3,12 +3,12 @@
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
 version=0.3.13
-revision=1
+revision=2
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # Theming helpers + tools referenced by session configs.
 # Desktop stack packages come from atelier-desktop.

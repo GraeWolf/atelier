@@ -7,12 +7,12 @@
 # Does not hard-depend on: font-jetbrains-mono, xlibre package (external setup helpers).
 pkgname=atelier-desktop
 version=0.3.0
-revision=2
+revision=3
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="Public Domain"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # Depends on atelier-base + Tokyo Night configs + PLAN apps.
 # Gaps and external sources: docs/build/package-sources.md

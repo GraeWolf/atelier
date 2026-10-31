@@ -1,17 +1,19 @@
 # Template file for 'atelier-installer'
-# Simple whole-disk graphical installer for Atelier live images.
+# Dialog (TUI) whole-disk installer for Atelier live images.
 pkgname=atelier-installer
-version=0.5.10
+version=0.5.11
 revision=1
 create_wrksrc=yes
-short_desc="Atelier simple graphical installer (whole-disk, optional LUKS2, optional swapfile)"
+short_desc="Atelier dialog TUI installer (whole-disk, optional LUKS2, optional swapfile)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
+# dialog is the installer UI. polkit provides pkexec so a launch that is
+# not already root can re-exec on the console. sudo is the live-ISO path
+# (sudo atelier-install).
 depends="
  dialog>=0
- yad>=0
  parted>=0
  e2fsprogs>=0
  dosfstools>=0
@@ -25,7 +27,5 @@ depends="
 
 do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-install" 755 usr/bin
-	vinstall "${FILESDIR}/usr/share/applications/atelier-install.desktop" 644 \
-		usr/share/applications
 	vinstall "${FILESDIR}/etc/atelier/install.conf" 644 etc/atelier
 }
