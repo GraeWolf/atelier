@@ -1,13 +1,13 @@
-# Atelier graphical installer (build notes)
+# Atelier dialog installer (build notes)
 
 ## Package
 
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.10** |
+| XBPS package | `atelier-installer` **0.5.11** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
-| Desktop entry | `/usr/share/applications/atelier-install.desktop` |
+| Preset | `/etc/atelier/install.conf` |
 
 ```bash
 ./scripts/build-repo.sh
@@ -22,7 +22,6 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 |---------|-----|
 | `atelier-install` | **TUI** (`dialog`) — default, for live tty |
 | `atelier-install --tui` | Force dialog |
-| `atelier-install --gui` | yad/zenity when DISPLAY is set |
 | `atelier-install --text` | Plain prompts on stdin/stderr |
 | `atelier-install --preset FILE` | Load settings from FILE |
 | `atelier-install --dry-run` | Stop after the summary; do not partition |
@@ -39,12 +38,12 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 
 ### UI rules
 
-- **Default dialog (TUI)**; optional GUI with `--gui`
+- **dialog TUI** only. There is no graphical front end
 - **ASCII-only** UI strings
 - Explicit **Yes/No** or **Back/Next/Abort**. Escape on a Yes/No screen is not No; the question is shown again
 - dialog: `--stdout` + keys from `/dev/tty` (prevents raw `^[[A`/`^[[B` arrow garbage)
 - Wizard pages: real Next/Back/Abort buttons (`--yesno` + `--extra-button`), not a tag menu
-- `ensure_gui_env` + sudo/pkexec preserve `TERM` (ncurses needs it on a live TTY)
+- `ensure_locale` + sudo/pkexec preserve `TERM` (ncurses needs it on a live TTY)
 
 ### Options wired into install phase
 
@@ -128,7 +127,7 @@ elogind drop-ins (`HibernateDelaySec=30min`, lid `suspend-then-hibernate`) are w
 
 ## Runtime dependencies
 
-dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit
+dialog (TUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit (pkexec when the installer is not already root)
 
 ## Testing checklist
 
@@ -137,7 +136,7 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.5.10 and names the preset file
+- [ ] Welcome screen says v0.5.11 and names the preset file
 - [ ] Shipped preset asks for hostname and username (invalid names are re-asked). A private preset that sets them skips those questions. Both stay on Edit
 - [ ] Summary menu shows Start installation / Edit a field / Quit. Escape returns to that menu. OK on each choice does that action
 - [ ] Root cannot log in; the created user is in `wheel` and sudo works

@@ -3,12 +3,12 @@
 # Config files are NOT here (Step 2 config packages).
 pkgname=atelier-base
 version=0.1.0
-revision=1
+revision=2
 metapackage=yes
 short_desc="Atelier base meta-package (fonts and session glue)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="Public Domain"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # Official Void packages only (verified Step 1).
 # JetBrains Mono: personal package TBD — see docs/build/package-sources.md

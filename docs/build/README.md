@@ -17,7 +17,7 @@ Learning how the distro is assembled is a core project goal.
 | [package-sources.md](package-sources.md) | PLAN → XBPS names, gaps, external repos |
 | [personal-repo.md](personal-repo.md) | Build and use `repo/out` |
 | [live-iso.md](live-iso.md) | void-mklive wrappers and live image notes |
-| [installer.md](installer.md) | Graphical installer package notes |
+| [installer.md](installer.md) | Dialog installer package notes |
 | [nvidia.md](nvidia.md) | Proprietary NVIDIA + Xlibre |
 | [windows-vm.md](windows-vm.md) | Optional Windows VM (Docker + FreeRDP; post-MVP) |
 

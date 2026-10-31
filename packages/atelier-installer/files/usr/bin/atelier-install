@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Atelier Linux installer (wizard, whole-disk)
-# Default: TUI (dialog). Optional GUI: atelier-install --gui
+# Console installer: dialog TUI by default.
 # Plain text (pipes and tests): atelier-install --text
 # ASCII-only UI strings for locale safety.
 #
@@ -21,7 +21,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.10"
+VERSION="0.5.11"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -79,8 +79,10 @@ PART_CRYPT=""
 PART_ROOT=""
 CRYPT_NAME="cryptroot"
 
-# --- locale / GUI env ---------------------------------------------------------
-ensure_gui_env() {
+# --- locale -------------------------------------------------------------------
+# dialog and the text prompts need a UTF-8 locale. A writable runtime
+# directory is kept for pkexec when the installer is not already root.
+ensure_locale() {
 	if [ -z "${LANG:-}" ] || [ "$LANG" = "C" ] || [ "$LANG" = "POSIX" ]; then
 		if locale -a 2>/dev/null | grep -qiE 'en_US\.utf-?8'; then
 			export LANG=en_US.UTF-8
@@ -92,15 +94,17 @@ ensure_gui_env() {
 	export LC_CTYPE="${LC_CTYPE:-$LANG}"
 	if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR}" ] || [ ! -w "${XDG_RUNTIME_DIR}" ]; then
 		if [ -d "/run/user/$(id -u)" ] && [ -w "/run/user/$(id -u)" ]; then
-			export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+			XDG_RUNTIME_DIR="/run/user/$(id -u)"
+			export XDG_RUNTIME_DIR
 		else
-			export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+			XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+			export XDG_RUNTIME_DIR
 			mkdir -p "$XDG_RUNTIME_DIR"
 			chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 		fi
 	fi
 }
-ensure_gui_env
+ensure_locale
 
 # --- helpers ------------------------------------------------------------------
 # During run_install the EXIT trap shows the message after cleanup.
@@ -129,34 +133,23 @@ read_line_to() {
 	return 2
 }
 
-# UI mode: tui (dialog, default) | gui (yad/zenity) | auto (legacy: prefer dialog)
+# UI mode: tui (dialog, default) or text (pipes and tests).
 UI_MODE=tui
 UI=none
 
 select_ui() {
 	case $UI_MODE in
-	gui)
-		if have yad; then UI=yad
-		elif have zenity; then UI=zenity
-		elif have dialog; then UI=dialog
-		else UI=none
-		fi
-		;;
 	text)
 		UI=text
 		;;
 	tui|*)
 		if have dialog; then UI=dialog
-		elif have yad; then UI=yad
-		elif have zenity; then UI=zenity
 		else UI=none
 		fi
 		;;
 	esac
 	log "UI_MODE=$UI_MODE UI=$UI"
 }
-
-yad_run() { yad --title="$TITLE" --center --on-top "$@"; }
 
 # dialog --stdout: result on stdout, UI on stderr (terminal). Avoids broken
 # 2>/tmp capture that leaves raw arrow keys (^[[A/^[[B) on the TTY.
@@ -187,8 +180,6 @@ ui_error() {
 	local msg=$1
 	log "ERROR: $msg"
 	case $UI in
-	yad) yad_run --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
-	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
 	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 12 70 || true ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
@@ -200,8 +191,6 @@ ui_error() {
 ui_show_fail() {
 	local msg=$1
 	case $UI in
-	yad) yad_run --error --text="$msg" --width=680 --height=460 --button=OK:0 2>/dev/null || true ;;
-	zenity) zenity --title="$TITLE" --error --text="$msg" --width=680 2>/dev/null || true ;;
 	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 24 78 || true ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
@@ -210,8 +199,6 @@ ui_show_fail() {
 ui_info() {
 	local msg=$1
 	case $UI in
-	yad) yad_run --info --text="$msg" --width=480 --button=OK:0 ;;
-	zenity) zenity --title="$TITLE" --info --text="$msg" --width=480 ;;
 	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 14 70 || true ;;
 	*) printf '%s\n' "$msg" ;;
 	esac
@@ -225,14 +212,6 @@ ui_confirm() {
 	while true; do
 		rc=0
 		case $UI in
-		yad)
-			yad_run --text="$msg" --width=520 --button="No:1" --button="Yes:0" || rc=$?
-			;;
-		zenity)
-			# zenity uses the same status for No and closing the window.
-			zenity --title="$TITLE" --question --text="$msg" --width=520 \
-				--ok-label=Yes --cancel-label=No || rc=$?
-			;;
 		dialog)
 			# 0=Yes 1=No 255=ESC. ESC must not fall through as No.
 			dialog_run --title "$TITLE" --yes-label "Yes" --no-label "No" \
@@ -267,19 +246,6 @@ wizard_page() {
 	local msg=$1
 	local rc=0
 	case $UI in
-	yad)
-		yad_run --text="$msg" --width=560 --height=280 \
-			--button="Abort:2" --button="Back:1" --button="Next:0" || rc=$?
-		;;
-	zenity)
-		# zenity has no native 3-button; Next via question "Continue?"
-		if zenity --title="$TITLE" --question --text="$msg" --width=560 \
-			--ok-label="Next" --cancel-label="Back"; then
-			rc=0
-		else
-			rc=1
-		fi
-		;;
 	dialog)
 		# Real buttons (not a menu of "next/back/abort" tags).
 		# Exit codes: 0=Yes/Next, 1=No/Back, 3=Extra/Abort, 255=ESC
@@ -307,8 +273,6 @@ wizard_page() {
 ui_entry() {
 	local label=$1 default=${2:-} val="" rc=0
 	case $UI in
-	yad) yad_run --entry --text="$label" --entry-text="$default" --width=420 --button=Cancel:1 --button=OK:0 ;;
-	zenity) zenity --title="$TITLE" --entry --text="$label" --entry-text="$default" --width=420 ;;
 	dialog)
 		val=$(dialog_run --title "$TITLE" --inputbox "$label" 10 60 "$default") || rc=$?
 		if [ "$rc" -ne 0 ]; then return 1; fi
@@ -326,8 +290,6 @@ ui_entry() {
 ui_password() {
 	local label=$1 val="" rc=0
 	case $UI in
-	yad) yad_run --entry --hide-text --text="$label" --width=420 --button=Cancel:1 --button=OK:0 ;;
-	zenity) zenity --title="$TITLE" --password --text="$label" --width=420 ;;
 	dialog)
 		val=$(dialog_run --title "$TITLE" --insecure --passwordbox "$label" 10 60) || rc=$?
 		if [ "$rc" -ne 0 ]; then return 1; fi
@@ -354,23 +316,16 @@ ui_list_pick() {
 	local text=$1; shift
 	local pick="" rc=0
 	case $UI in
-	yad)
-		yad_run --list --text="$text" --width=640 --height=400 \
-			--column=Id --column=Details --print-column=1 --hide-column=1 \
-			--button=Cancel:1 --button=OK:0 "$@" 2>/dev/null | awk -F'|' 'NF{print $1; exit}'
-		;;
-	zenity)
-		zenity --title="$TITLE" --list --text="$text" --width=640 --height=400 \
-			--column=Id --column=Details --print-column=1 --hide-column=1 "$@" 2>/dev/null
-		;;
 	dialog)
 		local items=()
 		while [ $# -ge 2 ]; do items+=("$1" "$2"); shift 2; done
 		# shellcheck disable=SC2034
 		pick=$(dialog_run --title "$TITLE" --menu "$text" 20 72 12 "${items[@]}") || rc=$?
 		if [ "$rc" -ne 0 ]; then return 1; fi
-		# Reject empty or control/escape garbage (raw arrow keys, etc.)
-		if [ -z "$pick" ] || printf '%s' "$pick" | grep -q $'[\x00-\x1f\x7f]'; then
+		# Reject empty or control/escape garbage (raw arrow keys, etc.).
+		# A grep range that starts at NUL is truncated and prints
+		# "Invalid regular expression" on every successful menu.
+		if [ -z "$pick" ] || [ "$pick" != "${pick//[[:cntrl:]]/}" ]; then
 			return 1
 		fi
 		printf '%s\n' "$pick"
@@ -401,26 +356,6 @@ ui_list_pick() {
 ui_checklist() {
 	local text=$1; shift
 	case $UI in
-	yad)
-		local args=() t l s
-		while [ $# -ge 3 ]; do
-			t=$1; l=$2; s=$3; shift 3
-			if [ "$s" = on ]; then args+=(TRUE "$t" "$l"); else args+=(FALSE "$t" "$l"); fi
-		done
-		yad_run --list --checklist --text="$text" --width=560 --height=320 \
-			--column=Pick --column=Tag --column=Option --print-column=2 --separator='\n' \
-			--button=Cancel:1 --button=OK:0 "${args[@]}" 2>/dev/null | sed '/^$/d'
-		;;
-	zenity)
-		local args=() t l s
-		while [ $# -ge 3 ]; do
-			t=$1; l=$2; s=$3; shift 3
-			if [ "$s" = on ]; then args+=(TRUE "$t" "$l"); else args+=(FALSE "$t" "$l"); fi
-		done
-		zenity --title="$TITLE" --list --checklist --text="$text" --width=560 --height=320 \
-			--column=Pick --column=Tag --column=Option --print-column=2 --separator='\n' \
-			"${args[@]}" 2>/dev/null | sed '/^$/d'
-		;;
 	dialog)
 		local items=() t l s out rc=0
 		while [ $# -ge 3 ]; do
@@ -442,20 +377,18 @@ ui_checklist() {
 
 ensure_root() {
 	if [ "$(id -u)" -eq 0 ]; then return 0; fi
+	# pkexec (polkit) first, then sudo. Locale and TERM must survive so
+	# dialog still draws on the live TTY. Display-session variables are
+	# not forwarded: this installer has no graphical front end.
 	if have pkexec; then
 		exec pkexec env \
-			DISPLAY="${DISPLAY:-}" XAUTHORITY="${XAUTHORITY:-}" \
-			XAUTHLOCALHOSTNAME="${XAUTHLOCALHOSTNAME:-}" \
-			WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
-			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
-			DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
 			LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-${LANG:-C.UTF-8}}" \
 			TERM="${TERM:-linux}" \
 			"$0" "$@"
 	fi
 	if have sudo; then
 		# TERM is required for dialog/ncurses on a live TTY
-		exec sudo --preserve-env=DISPLAY,XAUTHORITY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS,LANG,LC_ALL,TERM,COLORTERM \
+		exec sudo --preserve-env=LANG,LC_ALL,TERM,COLORTERM \
 			"$0" "$@"
 	fi
 	die "Root privileges required (pkexec or sudo)."
@@ -1242,7 +1175,7 @@ dialog_summary_choice() {
 	if [ "$rc" -ne 0 ]; then
 		return 1
 	fi
-	if [ -z "$pick" ] || printf '%s' "$pick" | grep -q $'[\x00-\x1f\x7f]'; then
+	if [ -z "$pick" ] || [ "$pick" != "${pick//[[:cntrl:]]/}" ]; then
 		return 1
 	fi
 	printf '%s\n' "$pick"
@@ -1283,17 +1216,7 @@ step_disk() {
 		return 2
 	fi
 
-	case $UI in
-	yad)
-		pick=$(yad_run --list --text="Select disk to ERASE and install onto:" \
-			--width=640 --height=360 --column=Device --column=Details \
-			--print-column=1 --button=Back:1 --button=Next:0 "${args[@]}" 2>/dev/null) || rc=$?
-		pick=$(printf '%s' "$pick" | awk -F'|' 'NF{print $1; exit}')
-		;;
-	*)
-		pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=$?
-		;;
-	esac
+	pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=$?
 	if [ "$rc" -eq 1 ]; then return 1; fi
 	if [ "$rc" -ge 2 ]; then return 2; fi
 	DISK=${pick//|/}
@@ -2429,7 +2352,6 @@ Usage: atelier-install [options]
 
   (default)       TUI with dialog (Void-like; works on a live tty)
   --tui           Force dialog TUI
-  --gui           Force graphical UI (yad/zenity; needs DISPLAY)
   --text          Plain prompts on stdin/stderr (no dialog)
   --preset FILE   Read settings from FILE instead of /etc/atelier/install.conf
   --dry-run       Walk the prompts, then exit before the disk is touched
@@ -2451,7 +2373,6 @@ main() {
 
 	while [ $# -gt 0 ]; do
 		case $1 in
-		--gui) UI_MODE=gui ;;
 		--tui) UI_MODE=tui ;;
 		--text) UI_MODE=text ;;
 		--dry-run) DRY_RUN=1 ;;
@@ -2484,7 +2405,7 @@ main() {
 		have dialog || die "dialog is required for TUI mode"
 	fi
 	if [ "$UI" = "none" ]; then
-		die "No UI backend (install dialog for TUI, or yad for --gui)"
+		die "No UI backend (install dialog for TUI mode)"
 	fi
 
 	if [ -n "$PRESET_PATH" ]; then

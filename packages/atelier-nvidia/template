@@ -3,12 +3,12 @@
 # Install only on machines with supported NVIDIA GPUs.
 pkgname=atelier-nvidia
 version=0.2.0
-revision=1
+revision=2
 create_wrksrc=yes
 short_desc="Atelier NVIDIA proprietary driver configuration"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 # void-repo-nonfree enables the nonfree mirror; nvidia is the proprietary stack.
 # Requires x86_64 and Void nonfree repository at install time.

@@ -77,7 +77,7 @@ sudo reboot
 sudo atelier-setup-xlibre
 ```
 
-Or select NVIDIA in the graphical installer. XLibre is installed either way.
+Or select NVIDIA in the dialog installer. XLibre is installed either way.
 
 ## Building personal packages
 

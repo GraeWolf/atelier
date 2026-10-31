@@ -6,7 +6,7 @@ Atelier is a personal, opinionated Linux distribution built on Void Linux. It de
 Primary development environment: Void Linux running under Windows WSL2
 Packaging, configuration, scripting, and repository work will be done in WSL2
 ISO building can be performed in WSL2
-Full testing of the live ISO, graphical installer, NVIDIA drivers, and desktop session will require exporting the ISO and testing on real hardware or a suitable virtual machine
+Full testing of the live ISO, dialog installer, NVIDIA drivers, and desktop session will require exporting the ISO and testing on real hardware or a suitable virtual machine
 
 
 3. Multi-machine Development
@@ -38,7 +38,7 @@ This setup allows flexible work on the WSL2 machine for most development and on 
 MVP (Phase 1) Success Criteria
 
 Bootable live ISO
-Graphical installer
+Dialog (TUI) installer
 NVIDIA proprietary driver support
 Personal extra repository integrated
 Fully themed bspwm desktop with the complete application list
@@ -121,7 +121,7 @@ Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
 9. Installation Experience
 
 Traditional live ISO
-Graphical installer
+Dialog (TUI) installer
 Live environment should ideally show the final themed desktop
 NVIDIA support and personal repository must work in both live and installed systems
 
@@ -135,7 +135,7 @@ User-facing documentation shipped with the distro (quick-start + customization g
 11. Development Phases
 Phase 1 – MVP
 
-Working live ISO + graphical installer
+Working live ISO + dialog (TUI) installer
 NVIDIA proprietary support
 Personal repository integrated
 Fully themed bspwm desktop + complete app list

@@ -24,8 +24,6 @@ polkit
 NetworkManager
 dhcpcd
 dialog
-yad
-zenity
 parted
 e2fsprogs
 dosfstools

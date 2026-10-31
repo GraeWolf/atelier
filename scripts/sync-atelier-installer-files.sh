@@ -23,11 +23,9 @@ if [ -d "$dst" ]; then
 		}
 	fi
 fi
-mkdir -p "$dst/usr/bin" "$dst/usr/share/applications" "$dst/etc/atelier"
+mkdir -p "$dst/usr/bin" "$dst/etc/atelier"
 
 install -m 755 "$src/atelier-install" "$dst/usr/bin/atelier-install"
-install -m 644 "$src/atelier-install.desktop" \
-	"$dst/usr/share/applications/atelier-install.desktop"
 install -m 644 "$src/install.conf" "$dst/etc/atelier/install.conf"
 
 printf 'Synced %s → %s\n' "$src" "$dst"

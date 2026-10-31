@@ -75,7 +75,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 | Item | Value |
 |------|--------|
 | Login | TTY; live user `anon` / `voidlinux` (void-mklive) |
-| Install | `sudo atelier-install` (dialog TUI); `--gui` optional after `startx` |
+| Install | `sudo atelier-install` (dialog TUI) |
 | Desktop (optional) | `startx` → bspwm (packages still on the medium) |
 | Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
 | XLibre repo key | `atelier-xlibre-repo` is on the live image (`live.txt`). Installer preflight trusts that key before syncing XLibre |

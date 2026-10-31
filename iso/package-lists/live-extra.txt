@@ -22,10 +22,8 @@ polkit
 NetworkManager
 dhcpcd
 
-# Atelier GUI installer (atelier-installer package) runtime helpers
+# Atelier dialog installer (atelier-installer package) runtime helpers
 dialog
-yad
-zenity
 parted
 e2fsprogs
 dosfstools

@@ -18,7 +18,7 @@ It is designed to be extremely minimal, simple, and aesthetically consistent —
 What that means in-tree:
 
 - Bootable live ISO build path (void-mklive wrappers)
-- Whole-disk installer (`atelier-install`: TUI default; live boots to TTY)
+- Whole-disk installer (`atelier-install`: dialog TUI; live boots to TTY)
 - Personal XBPS repository build and ISO integration
 - Themed bspwm desktop packages (Tokyo Night default)
 - Proprietary NVIDIA + optional Xlibre setup path
@@ -59,7 +59,7 @@ atelier/
 ├── configs/             # Canonical desktop & theme config sources
 ├── repo/                # Local personal XBPS repo layout + docs
 ├── iso/                 # void-mklive wrappers, package lists, hooks
-├── installer/           # Custom simple GUI installer
+├── installer/           # Dialog (TUI) installer
 ├── docs/
 │   ├── build/           # Detailed build documentation
 │   └── user/            # User-facing documentation
@@ -72,7 +72,7 @@ atelier/
 |------|--------|
 | Base | Void Linux + runit + pure XBPS |
 | ISO | void-mklive |
-| Installer | Custom simple GUI (not Calamares) |
+| Installer | Dialog TUI (not Calamares) |
 | WM | bspwm (single fixed setup) |
 | Display | Xlibre (external) with X.Org live/fallback |
 | GPU | NVIDIA proprietary (Void nonfree) on primary desktop |

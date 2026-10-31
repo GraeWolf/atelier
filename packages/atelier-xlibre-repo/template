@@ -4,12 +4,12 @@
 # before installing/replacing X.Org.
 pkgname=atelier-xlibre-repo
 version=0.1.0
-revision=1
+revision=2
 create_wrksrc=yes
 short_desc="Atelier Xlibre external repository configuration"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
-homepage="https://github.com/kmccuddy/atelier"
+homepage="https://github.com/GraeWolf/atelier"
 
 depends="xbps>=0"
 
