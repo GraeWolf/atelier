@@ -14,7 +14,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.6"
+VERSION="0.5.7"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -1554,8 +1554,22 @@ $url
 
 repo_has() {
 	local repo=$1 pkg=$2
+	local ver="" rc=0
 	log "preflight: query $pkg from $repo"
-	xbps-query --repository="$repo" -R "$pkg" >>"$LOG" 2>&1
+	# xbps-query does not download a remote index unless -M is set
+	# (or xbps-install -S has already cached it). Void mirrors are
+	# cached on the live ISO; the XLibre GitHub repo is not, so a
+	# plain -R query never sees xlibre / xlibre-xserver and -s falls
+	# through to the installed atelier-xlibre-repo package.
+	# -i uses only this repository. -p pkgver avoids logging the
+	# whole package record (that was flooding the failure tail).
+	ver=$(xbps-query -M -i --repository="$repo" -R -p pkgver "$pkg" 2>>"$LOG") || rc=$?
+	if [ "$rc" -ne 0 ] || [ -z "$ver" ]; then
+		log "preflight: $pkg is not in $repo (xbps-query status ${rc})"
+		return 1
+	fi
+	log "preflight: found $ver"
+	return 0
 }
 
 preflight_personal_repo() {
