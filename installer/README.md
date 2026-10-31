@@ -38,7 +38,7 @@ sudo atelier-install          # TUI (dialog)
 sudo atelier-install --gui    # after startx, optional
 ```
 
-3. Confirm the disk, set the user password (root stays locked; that user has sudo), enter a LUKS passphrase only if encryption is on, then Install or Edit the preset values. Wait for package download/install
+3. Confirm the disk, enter a hostname and username (skipped when your own preset sets them), set the user password (root stays locked; that user has sudo), enter a LUKS passphrase only if encryption is on, then Install or Edit. Wait for package download/install
 4. Reboot into the installed system (enter the LUKS passphrase at boot if you encrypted)
 
 Log: `/tmp/atelier-install.log`

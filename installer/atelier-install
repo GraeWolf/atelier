@@ -21,7 +21,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.9"
+VERSION="0.5.10"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -32,7 +32,9 @@ XLIBRE_REPO="${XLIBRE_REPO:-https://github.com/xlibre-void/xlibre/releases/lates
 XLIBRE_KEY_NAME="00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist"
 
 # State (wizard). Built-in defaults match installer/install.conf.
-# A preset file overrides these. The wizard does not ask them.
+# A preset value is not asked. Hostname and username are empty here and
+# in the shipped preset, so the wizard asks. A private --preset file
+# may set them.
 INSTALL_NVIDIA=0
 NVIDIA_MODE=auto
 INSTALL_XLIBRE=1
@@ -54,8 +56,12 @@ PKG_EXTRA=(dropbox)
 ENCRYPT_DISK=0
 CREATE_SWAP=0
 DISK=""
-HOSTNAME="atelier"
-USERNAME="atelier"
+# Empty unless a preset sets them. The shipped preset leaves both empty.
+HOSTNAME=""
+USERNAME=""
+# forward or back. A filled name step is skipped going forward and
+# passed through when moving back, so Back does not bounce.
+NAV=forward
 USERPASS=""
 LUKSPASS=""
 TIMEZONE="America/New_York"
@@ -722,12 +728,23 @@ load_preset() {
 		key=${key^^}
 		case $key in
 		HOSTNAME)
-			valid_hostname "$val" || die "Preset $file:$lineno: invalid HOSTNAME '$val'"
-			HOSTNAME=$val
+			# Empty means "ask". A private preset may set a real name.
+			if [ -z "$val" ]; then
+				HOSTNAME=""
+			elif valid_hostname "$val"; then
+				HOSTNAME=$val
+			else
+				die "Preset $file:$lineno: invalid HOSTNAME '$val'"
+			fi
 			;;
 		USERNAME)
-			valid_username "$val" || die "Preset $file:$lineno: invalid USERNAME '$val'"
-			USERNAME=$val
+			if [ -z "$val" ]; then
+				USERNAME=""
+			elif valid_username "$val"; then
+				USERNAME=$val
+			else
+				die "Preset $file:$lineno: invalid USERNAME '$val'"
+			fi
 			;;
 		TIMEZONE)
 			valid_timezone "$val" || die "Preset $file:$lineno: invalid TIMEZONE '$val'"
@@ -1246,12 +1263,11 @@ XLibre is always installed (no X.Org fallback).
 Most settings come from the preset:
 $preset
 
-You choose the disk and one user password.
-Root is locked. That user has sudo.
-A LUKS passphrase is asked only when
-encryption is enabled. Mirror, GRUB, locale,
-and the package list are changed from the
-summary (Edit), not as their own questions.
+Disk, hostname, and username are asked here.
+Root is locked; the user has sudo.
+Names set in a private preset are not asked.
+LUKS only if encryption is on. Other fields
+are changed from the summary (Edit).
 
 Next to continue."
 }
@@ -1301,6 +1317,24 @@ No  = go back" || crc=$?
 	return 0
 }
 
+# Ask only for a name the preset left empty. Going forward with both
+# names already valid skips this step. Going back passes through it.
+step_names() {
+	if valid_hostname "${HOSTNAME:-}" && valid_username "${USERNAME:-}"; then
+		if [ "$NAV" = back ]; then
+			return 1
+		fi
+		return 0
+	fi
+	if ! valid_hostname "${HOSTNAME:-}"; then
+		prompt_hostname || return 1
+	fi
+	if ! valid_username "${USERNAME:-}"; then
+		prompt_username || return 1
+	fi
+	return 0
+}
+
 step_password() {
 	prompt_user_password || return 1
 	return 0
@@ -1341,6 +1375,16 @@ step_summary() {
 		install)
 			if [ -z "$DISK" ] || [ ! -b "$DISK" ]; then
 				ui_error "Select a disk before installing."
+				continue
+			fi
+			if ! valid_hostname "${HOSTNAME:-}"; then
+				ui_error "Set a hostname before installing."
+				prompt_hostname || true
+				continue
+			fi
+			if ! valid_username "${USERNAME:-}"; then
+				ui_error "Set a username before installing."
+				prompt_username || true
 				continue
 			fi
 			if [ -z "$USERPASS" ]; then
@@ -2453,22 +2497,24 @@ main() {
 		set_mirror "$VOID_REPO"
 	fi
 
-	# Disk, one user password, LUKS only when encryption is on, then summary.
-	local steps=(welcome disk password luks summary)
+	# Disk, hostname and username unless the preset set them, one user
+	# password, LUKS only when encryption is on, then summary.
+	local steps=(welcome disk names password luks summary)
 	local i=0 n=${#steps[@]} rc
 	while [ "$i" -ge 0 ] && [ "$i" -lt "$n" ]; do
 		rc=0
 		case ${steps[$i]} in
 		welcome) step_welcome || rc=$? ;;
 		disk) step_disk || rc=$? ;;
+		names) step_names || rc=$? ;;
 		password) step_password || rc=$? ;;
 		luks) step_luks || rc=$? ;;
 		summary) step_summary || rc=$? ;;
 		esac
 		log "step ${steps[$i]} rc=$rc"
 		case $rc in
-		0) i=$((i + 1)) ;;
-		1) i=$((i - 1)); [ "$i" -lt 0 ] && i=0 ;;
+		0) NAV=forward; i=$((i + 1)) ;;
+		1) NAV=back; i=$((i - 1)); [ "$i" -lt 0 ] && i=0 ;;
 		*) log "abort"; exit 1 ;;
 		esac
 	done

@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.9** |
+| XBPS package | `atelier-installer` **0.5.10** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -27,11 +27,11 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 | `atelier-install --preset FILE` | Load settings from FILE |
 | `atelier-install --dry-run` | Stop after the summary; do not partition |
 
-The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: hostname `atelier`, user `atelier`, `America/New_York`, `en_US.UTF-8`, keymap `us`, the default Void mirror, NVIDIA `auto`, encryption off, swapfile off, GRUB on, and extra package `dropbox`. A value set in the preset is not asked. Built-in defaults match the file when it is absent.
+The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: `America/New_York`, `en_US.UTF-8`, keymap `us`, the default Void mirror, NVIDIA `auto`, encryption off, swapfile off, GRUB on, and extra package `dropbox`. `HOSTNAME` and `USERNAME` are empty in that file, so the wizard asks. A private `--preset` file may set them, and a value set there is not asked. Built-in defaults match the shipped file when it is absent.
 
 Flow (whole-disk only):
 
-welcome → disk (select + confirm) → user password → LUKS passphrase only if encryption is on → summary
+welcome → disk (select + confirm) → hostname and username, unless the preset set them → user password → LUKS passphrase only if encryption is on → summary
 
 The summary is one dialog menu: **Start installation / Edit a field / Quit**, with the chosen settings in the prompt. The prompt is kept to eight lines so it fits a 24-row console. A longer menu prompt makes dialog exit immediately (`Can't make sub-window`) and the choice is never captured. Escape or Cancel redisplays that menu. It does not start the install and it does not open an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
 
@@ -137,7 +137,8 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.5.9 and names the preset file
+- [ ] Welcome screen says v0.5.10 and names the preset file
+- [ ] Shipped preset asks for hostname and username (invalid names are re-asked). A private preset that sets them skips those questions. Both stay on Edit
 - [ ] Summary menu shows Start installation / Edit a field / Quit. Escape returns to that menu. OK on each choice does that action
 - [ ] Root cannot log in; the created user is in `wheel` and sudo works
 - [ ] A username such as `Kevin` is rejected and re-asked (it is not stored as `evin`)

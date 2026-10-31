@@ -18,7 +18,7 @@
    sudo atelier-install --gui
    ```
 
-5. The desktop preset (`/etc/atelier/install.conf`) already sets timezone (`America/New_York`), locale, keymap, mirror, NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, and `dropbox`. You confirm the disk, set one user password, and review a summary. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary.
+5. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, mirror, NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname and username.
 6. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 7. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
@@ -34,11 +34,13 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 |------|-----------------|
 | Welcome | Overview, including which preset file is loaded |
 | Disk | Whole disk to erase, then confirm |
+| Hostname | Asked when the preset left it empty. Invalid names are re-asked |
+| Username | Asked when the preset left it empty. Lowercase; invalid names are re-asked |
 | Password | One login password. Root is locked; this user has sudo |
 | LUKS | Only when encryption is enabled |
 | Summary | **Start installation**, **Edit** a field, or **Quit**. Escape returns to this menu |
 
-Hostname, username, timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and extra packages come from the preset. Change them with **Edit** on the summary. Mirror and GRUB are not separate questions.
+Timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
 
 Another preset file: `sudo atelier-install --preset /path/to/install.conf`
 
