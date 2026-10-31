@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.3+** |
+| XBPS package | `atelier-installer` **0.5.5** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Desktop entry | `/usr/share/applications/atelier-install.desktop` |
 
@@ -42,8 +42,8 @@ welcome → disk → encryption → swap → identity → locale → graphics �
 | Variable | Effect |
 |----------|--------|
 | `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos; **nonfree always** (Dropbox) |
-| `INSTALL_NVIDIA` | separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal) |
-| `INSTALL_XLIBRE` | atelier-xlibre-repo + xlibre |
+| `INSTALL_NVIDIA` | separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
+| `INSTALL_XLIBRE` | always `1`. `atelier-xlibre-repo` + `xlibre` + `xlibre-xserver`. No X.Org fallback. Missing repo, failed install, or no `/usr/bin/Xorg` aborts the install |
 | `PKG_EXTRA_CLI` / `PKG_MEDIA` | optional packages if in Void |
 | `INSTALL_BOOTLOADER` | GRUB install or skip |
 | `ENCRYPT_DISK` | LUKS2 on root; unencrypted `/boot`; `cryptsetup` on target |
@@ -55,6 +55,28 @@ After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then `atelier-setup-
 The live log `/tmp/atelier-install.log` is copied to the target as
 `/var/log/atelier-install.log` before unmount (including failed installs
 when the target is still mounted).
+
+## Preflight (before the disk is wiped)
+
+After the summary is confirmed, and before `parted` / `wipefs`, the installer checks:
+
+| Check | Failure |
+|-------|---------|
+| Tools (`parted`, `mkfs.ext4`, `xbps-install`, `xbps-query`, `lsblk`, `blkid`, `mount`, `umount`, `wipefs`; `mkfs.vfat` on UEFI; `cryptsetup` / `mkswap` when those options are on) | Stop. Disk unchanged |
+| Firmware (`/sys/firmware` → UEFI or BIOS) | Stop if `/sys/firmware` is missing |
+| NVIDIA GPU (`lspci` or `/sys/bus/pci`) | Stop if the PCI bus cannot be inspected. No GPU is a successful detection, not an error |
+| Network to the chosen mirror's `x86_64-repodata` | Stop. "Network unreachable" vs "mirror index" are separate messages |
+| Personal repo (`atelier-desktop`, `atelier-xlibre-repo`) | Stop |
+| Void main (`base-system`, `linux`) and nonfree (`dropbox`; plus `nvidia` / `linux-headers` when NVIDIA was requested) | Stop |
+| XLibre repo (`xlibre`, `xlibre-xserver`) after trusting the public key from `atelier-xlibre-repo` | Stop. No X.Org fallback |
+
+## Failures during install
+
+The script uses `set -eEuo pipefail`. `set -E` is required: without errtrace, an `ERR` trap is not inherited by functions, so a failure inside `partition_disk` or `install_packages` exits 1 with no error screen, no unmount, and no LUKS close.
+
+On failure the installer logs the phase (`preflight`, `partitioning`, `mounting`, `packages`, `configure`, `bootloader`), shows that phase plus the last lines of the log, copies the log onto the target when it is still mounted, unmounts, and closes the LUKS mapper.
+
+XLibre install failure aborts the install. NVIDIA install failure does not roll back the desktop; `xbps-reconfigure -a` is not ignored, and either failure is named on the result screen.
 
 ## Optional LUKS2
 
@@ -114,3 +136,7 @@ dialog (TUI), yad (optional GUI), parted, e2fsprogs, dosfstools, util-linux, cry
 - [ ] Swap Yes: `/swapfile` in fstab, `resume=UUID=<root ext4>` + `resume_offset`, dracut resume module
 - [ ] Swap + LUKS: `rd.luks.*` kept; `resume=` is the inner ext4 UUID
 - [ ] `atelier-setup-swap --yes` is idempotent (no duplicate fstab/GRUB tokens)
+- [ ] Preflight failure (offline, bad mirror, missing personal repo, missing XLibre repo) stops before the disk is partitioned
+- [ ] A command failure inside an install function shows the phase and the log tail, then unmounts and closes LUKS
+- [ ] Installed system has `xlibre-xserver` and `/usr/bin/Xorg` (or `/usr/bin/X`); no X.Org-only install
+- [ ] NVIDIA package or `xbps-reconfigure -a` failure is visible on the result screen

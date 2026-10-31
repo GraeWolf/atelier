@@ -139,8 +139,8 @@ xbps-query --repository=/usr/share/atelier/repo -Rs atelier
 
 Default live images stay on **X.Org + mesa**. Proprietary NVIDIA is handled by:
 
-- Installer prompts (`atelier-install`)
-- Post-install: `sudo atelier-setup-nvidia` and optional `sudo atelier-setup-xlibre`
+- Installer prompts (`atelier-install`): optional NVIDIA; XLibre is always installed
+- Post-install: `sudo atelier-setup-nvidia` and `sudo atelier-setup-xlibre` (reinstall / older systems)
 - Optional package list: `iso/package-lists/nvidia.txt`
 
 See [nvidia.md](nvidia.md).

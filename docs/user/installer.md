@@ -38,7 +38,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | Swapfile | Optional `/swapfile` for hibernation (default: No; size = RAM rounded up) |
 | Identity | Hostname, user, passwords |
 | Locale | Timezone, locale, keymap (lists) |
-| Graphics | NVIDIA (if GPU present), Xlibre |
+| Graphics | NVIDIA (if a GPU is present). XLibre is always installed |
 | Software | Optional package groups |
 | Mirror | Void package mirror |
 | Bootloader | Install GRUB (recommended) or skip |
@@ -87,9 +87,9 @@ If resume works for about a minute and then the machine reboots, see [desktop.md
 
 ## Graphics
 
-- **NVIDIA GPU detected:** Yes/No for proprietary drivers (separate package transaction; a driver failure does not undo the rest of the install)
+- **NVIDIA GPU detected:** Yes/No for proprietary drivers (separate package transaction; a driver failure does not undo the rest of the install). The result screen reports a failed install and a failed `xbps-reconfigure -a`.
 - **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia` (always installed with the desktop)
-- **Xlibre:** Yes/No (usually No in VMs). With NVIDIA, Atelier uses modesetting + `prime-run` on hybrid laptops.
+- **XLibre:** always installed. There is no X.Org fallback. If the XLibre repo or package is missing, the installer stops. With NVIDIA, Atelier uses modesetting + `prime-run` on hybrid laptops.
 
 See [nvidia.md](nvidia.md).
 

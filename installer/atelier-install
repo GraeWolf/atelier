@@ -6,20 +6,39 @@
 # Optional LUKS2 on the root filesystem. /boot and ESP stay unencrypted
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
 # Optional /swapfile for hibernation (default off; no swap partition).
-set -euo pipefail
+# XLibre is always installed. xinit does not pull in an X server, and
+# there is no X.Org fallback.
+#
+# set -E (errtrace): without it, an ERR trap is not inherited by functions.
+# A failure inside partition_disk / install_packages then exits 1 with no
+# error screen, no unmount, and no LUKS close.
+set -eEuo pipefail
 
-VERSION="0.5.4"
+VERSION="0.5.5"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
 VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
 VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-https://repo-default.voidlinux.org/current/nonfree}"
 ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
+XLIBRE_REPO="${XLIBRE_REPO:-https://github.com/xlibre-void/xlibre/releases/latest/download/}"
+XLIBRE_KEY_NAME="00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist"
 
 # State (wizard)
 INSTALL_NVIDIA=0
-INSTALL_XLIBRE=0
+INSTALL_XLIBRE=1
 NVIDIA_INSTALL_STATUS=skipped
+RECONFIGURE_STATUS=skipped
+NVIDIA_GPU_DETECTED=0
+FIRMWARE_MODE=""
+# Failure handling (armed only while run_install is in progress).
+INSTALL_PHASE=""
+INSTALL_TRAPS=0
+INSTALL_CLEANED=0
+INSTALL_FAIL_TEXT=""
+INSTALL_FAIL_CMD=""
+INSTALL_MAIN_PID=$BASHPID
+LOG_COPIED=0
 INSTALL_BOOTLOADER=1
 PKG_EXTRA_CLI=0
 PKG_MEDIA=0
@@ -64,7 +83,16 @@ ensure_gui_env() {
 ensure_gui_env
 
 # --- helpers ------------------------------------------------------------------
-die() { ui_error "$*"; exit 1; }
+# During run_install the EXIT trap shows the message after cleanup.
+# Before that, show it immediately (wizard / early checks).
+die() {
+	if [ "${INSTALL_TRAPS:-0}" -eq 1 ]; then
+		INSTALL_FAIL_TEXT="$*"
+		exit 1
+	fi
+	ui_error "$*"
+	exit 1
+}
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -120,6 +148,19 @@ ui_error() {
 	yad) yad_run --error --text="$msg" --width=480 --button=OK:0 2>/dev/null || true ;;
 	zenity) zenity --title="$TITLE" --error --text="$msg" --width=480 2>/dev/null || true ;;
 	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 12 70 || true ;;
+	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
+	esac
+}
+
+# Taller than ui_error so a phase name plus the log tail fit on a TTY.
+# Logging is separate: the install failure path writes the text before
+# copying the log onto the target.
+ui_show_fail() {
+	local msg=$1
+	case $UI in
+	yad) yad_run --error --text="$msg" --width=680 --height=460 --button=OK:0 2>/dev/null || true ;;
+	zenity) zenity --title="$TITLE" --error --text="$msg" --width=680 2>/dev/null || true ;;
+	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 24 78 || true ;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
 }
@@ -444,6 +485,7 @@ WHOLE-DISK install only (erases one selected disk).
 Optional LUKS2 encryption (root only; /boot stays
 unencrypted). Optional swapfile for hibernation.
 No custom partitions.
+XLibre is always installed (no X.Org fallback).
 
 Steps cover disk, encryption, swap, identity, locale,
 graphics, optional software, mirror, and bootloader.
@@ -692,16 +734,10 @@ On a real NVIDIA PC later:
   sudo atelier-setup-nvidia"
 	fi
 
-	INSTALL_XLIBRE=0
-	if ui_confirm "Install Xlibre display server?
-
-  Yes = external xlibre-void (PLAN default)
-  No  = keep X.Org
-
-Usually No for VMs."; then
-		INSTALL_XLIBRE=1
-	fi
-	log "INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_XLIBRE=$INSTALL_XLIBRE"
+	# Required. xinit (atelier-base) does not depend on an X server, and
+	# the owner does not want an X.Org fallback if XLibre is missing.
+	INSTALL_XLIBRE=1
+	log "INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_XLIBRE=$INSTALL_XLIBRE (required, no X.Org fallback)"
 	return 0
 }
 
@@ -779,10 +815,9 @@ Yes is recommended."
 }
 
 step_summary() {
-	local mode=BIOS ns=no xs=no bl=yes ec=no md=no enc=no sw=no
+	local mode=BIOS ns=no xs="yes (required)" bl=yes ec=no md=no enc=no sw=no
 	is_efi && mode=EFI
 	[ "$INSTALL_NVIDIA" -eq 1 ] && ns=yes
-	[ "$INSTALL_XLIBRE" -eq 1 ] && xs=yes
 	[ "$INSTALL_BOOTLOADER" -eq 1 ] && bl=yes || bl=no
 	[ "$PKG_EXTRA_CLI" -eq 1 ] && ec=yes
 	[ "$PKG_MEDIA" -eq 1 ] && md=yes
@@ -1077,17 +1112,25 @@ setup_swapfile_inline() {
 }
 
 copy_install_log() {
+	LOG_COPIED=0
 	if [ -d "$TARGETDIR" ] && [ -f "$LOG" ]; then
 		mkdir -p "$TARGETDIR/var/log"
-		cp -a "$LOG" "$TARGETDIR/var/log/atelier-install.log" || true
-		log "copied install log to target /var/log/atelier-install.log"
+		if cp -a "$LOG" "$TARGETDIR/var/log/atelier-install.log"; then
+			LOG_COPIED=1
+			log "copied install log to target /var/log/atelier-install.log"
+		else
+			log "WARN: could not copy install log onto the target"
+		fi
 	fi
 }
 
 regenerate_initramfs() {
 	local need_crypt=0 need_nvidia=0 need_resume=0 dracut_bin=""
 	[ "${ENCRYPT_DISK:-0}" -eq 1 ] && need_crypt=1
-	[ "${NVIDIA_INSTALL_STATUS:-}" = ok ] && need_nvidia=1
+	# reconfigure-failed still means the nvidia package is on disk.
+	case ${NVIDIA_INSTALL_STATUS:-} in
+	ok|reconfigure-failed) need_nvidia=1 ;;
+	esac
 	[ "${CREATE_SWAP:-0}" -eq 1 ] && need_resume=1
 	[ "$need_crypt" -eq 1 ] || [ "$need_nvidia" -eq 1 ] || [ "$need_resume" -eq 1 ] || return 0
 	# Must run AFTER crypttab + dracut snippet exist; install_packages
@@ -1162,11 +1205,14 @@ install_packages() {
 		log "WARN: atelier-desktop not in personal repo"
 	fi
 
-	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ]; then
-		if [ -d "$ATELIER_REPO_LIVE" ] && xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-xlibre-repo >/dev/null 2>&1; then
-			pkgs+=(atelier-xlibre-repo)
-		fi
+	# XLibre is required. The repo package drops the xbps.d snippet and
+	# the public key; the xlibre metapackage itself is installed after
+	# that file exists. xinit does not depend on an X server.
+	if ! xbps-query --repository="$ATELIER_REPO_LIVE" -R atelier-xlibre-repo >/dev/null 2>&1; then
+		die "atelier-xlibre-repo is not in the personal repo at $ATELIER_REPO_LIVE.
+XLibre is required and there is no X.Org fallback."
 	fi
+	pkgs+=(atelier-xlibre-repo)
 
 	# Optional groups (only if present in Void)
 	if [ "${PKG_EXTRA_CLI:-0}" -eq 1 ]; then
@@ -1181,10 +1227,13 @@ install_packages() {
 	fi
 
 	log "xbps-install ${pkgs[*]}"
-	xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
+	if ! xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${pkgs[@]}" 2>&1 | tee -a "$LOG"; then
+		die "Base package installation failed."
+	fi
 
 	# NVIDIA is a separate transaction so a DKMS/driver failure cannot
-	# roll back the rest of the system. Failure is logged, not fatal.
+	# roll back the rest of the system. Failure stays non-fatal, but it
+	# is recorded for the result screen (not only the log).
 	NVIDIA_INSTALL_STATUS=skipped
 	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
 		NVIDIA_INSTALL_STATUS=failed
@@ -1196,23 +1245,31 @@ install_packages() {
 			log "WARN: atelier-nvidia not in personal repo"
 		fi
 		log "xbps-install NVIDIA ${npkgs[*]}"
-		if xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${npkgs[@]}" 2>&1 | tee -a "$LOG" \
-			&& xbps-query -r "$TARGETDIR" nvidia >/dev/null 2>&1; then
-			NVIDIA_INSTALL_STATUS=ok
-			log "NVIDIA packages installed"
+		if ! xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" "${npkgs[@]}" 2>&1 | tee -a "$LOG"; then
+			log "ERROR: NVIDIA package install failed; desktop install will continue"
+			log "ERROR: after reboot run: sudo atelier-setup-nvidia"
+		elif ! xbps-query -r "$TARGETDIR" nvidia >/dev/null 2>&1; then
+			log "ERROR: NVIDIA install command succeeded but xbps-query does not see nvidia"
+			log "ERROR: after reboot run: sudo atelier-setup-nvidia"
 		else
-			log "WARN: NVIDIA install failed; desktop is otherwise complete"
-			log "WARN: after reboot run: sudo atelier-setup-nvidia"
+			NVIDIA_INSTALL_STATUS=ok
+			log "NVIDIA packages installed (install command and xbps-query nvidia)"
 		fi
 	fi
 
-	if [ "${INSTALL_XLIBRE:-0}" -eq 1 ] && [ -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
-		xbps-install -r "$TARGETDIR" -SyU "${REPO_ARGS[@]}" xlibre 2>&1 | tee -a "$LOG" || \
-			log "WARN: xlibre install failed"
-	fi
+	install_xlibre "${REPO_ARGS[@]}"
 
 	xbps-reconfigure -r "$TARGETDIR" -f base-files >>"$LOG" 2>&1 || true
-	chroot "$TARGETDIR" xbps-reconfigure -a >>"$LOG" 2>&1 || true
+	log "xbps-reconfigure -a"
+	RECONFIGURE_STATUS=ok
+	if ! chroot "$TARGETDIR" xbps-reconfigure -a >>"$LOG" 2>&1; then
+		RECONFIGURE_STATUS=failed
+		log "ERROR: xbps-reconfigure -a failed"
+		if [ "${INSTALL_NVIDIA:-0}" -eq 1 ] && [ "$NVIDIA_INSTALL_STATUS" = ok ]; then
+			NVIDIA_INSTALL_STATUS=reconfigure-failed
+			log "ERROR: NVIDIA packages are installed but xbps-reconfigure -a failed"
+		fi
+	fi
 }
 
 enable_sv() {
@@ -1293,37 +1350,446 @@ cleanup_mounts() {
 	close_cryptroot
 }
 
+# Copy the log, forget the LUKS passphrase, unmount, close the mapper.
+# Safe to call twice (failure path and the EXIT trap).
+release_target() {
+	if [ "${INSTALL_CLEANED:-0}" -eq 1 ]; then
+		return 0
+	fi
+	INSTALL_CLEANED=1
+	copy_install_log
+	wipe_luks_pass
+	cleanup_mounts
+}
+
+begin_phase() {
+	INSTALL_PHASE=$1
+	log "=== phase: $1 ==="
+}
+
+# why is the human reason. cmd is the failing command, or empty when die()
+# already explained it. Printed with %s so the log tail is never re-expanded.
+format_failure() {
+	local phase=$1 why=$2 cmd=$3
+	local tail="" footer
+	cmd=$(printf '%.160s' "$cmd")
+	if [ -f "$LOG" ]; then
+		tail=$(tail -n 8 "$LOG" 2>/dev/null || true)
+	fi
+	if [ "$phase" = "preflight" ]; then
+		footer="The disk was not modified."
+	else
+		footer="Mounts were unmounted and any LUKS mapping was closed."
+	fi
+	if [ -n "$cmd" ]; then
+		printf 'Installation failed during: %s\n\n%s\n\nCommand: %s\n\nLast lines of the log:\n%s\n\n%s\nLog: %s\n' \
+			"$phase" "$why" "$cmd" "$tail" "$footer" "$LOG"
+	else
+		printf 'Installation failed during: %s\n\n%s\n\nLast lines of the log:\n%s\n\n%s\nLog: %s\n' \
+			"$phase" "$why" "$tail" "$footer" "$LOG"
+	fi
+}
+
+# Inherited by functions because of set -E. A command substitution is a
+# subshell: exit there only, and let the parent trap report the failure.
+on_install_err() {
+	if [ "${BASHPID:-$$}" != "${INSTALL_MAIN_PID:-}" ]; then
+		exit 1
+	fi
+	INSTALL_FAIL_CMD=${BASH_COMMAND:-unknown}
+	exit 1
+}
+
+on_install_exit() {
+	local st=$?
+	local phase cmd why text
+	trap - EXIT ERR
+	set +e
+	INSTALL_TRAPS=0
+	if [ "$st" -eq 0 ]; then
+		exit 0
+	fi
+	phase=${INSTALL_PHASE:-unknown}
+	cmd=${INSTALL_FAIL_CMD:-}
+	why=${INSTALL_FAIL_TEXT:-A command failed.}
+	log "FAILED phase=$phase status=$st cmd=${cmd:-none}"
+	if [ -n "${INSTALL_FAIL_TEXT:-}" ]; then
+		cmd=""
+	fi
+	text=$(format_failure "$phase" "$why" "$cmd")
+	# Log the screen text before release_target copies it.
+	log "ERROR: $text"
+	release_target
+	if [ "${LOG_COPIED:-0}" -eq 1 ]; then
+		text="$text
+Log copied to the new system as /var/log/atelier-install.log"
+	fi
+	ui_show_fail "$text"
+	exit "$st"
+}
+
+install_arm_traps() {
+	INSTALL_TRAPS=1
+	trap on_install_err ERR
+	trap on_install_exit EXIT
+}
+
+preflight_require() {
+	local t=$1
+	if ! have "$t"; then
+		die "Required tool '$t' is not installed on the live system."
+	fi
+	log "preflight: tool $t"
+}
+
+preflight_tools() {
+	local t
+	for t in parted mkfs.ext4 xbps-install xbps-query lsblk blkid mount umount wipefs; do
+		preflight_require "$t"
+	done
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		preflight_require cryptsetup
+	fi
+	if [ "${CREATE_SWAP:-0}" -eq 1 ]; then
+		preflight_require mkswap
+		preflight_require filefrag
+	fi
+}
+
+preflight_firmware() {
+	if [ ! -d /sys/firmware ]; then
+		die "Cannot detect firmware mode: /sys/firmware is not mounted."
+	fi
+	if is_efi; then
+		FIRMWARE_MODE=UEFI
+		preflight_require mkfs.vfat
+	else
+		FIRMWARE_MODE=BIOS
+	fi
+	log "preflight: firmware $FIRMWARE_MODE"
+}
+
+preflight_nvidia() {
+	local sysfs=0
+	if compgen -G '/sys/bus/pci/devices/*/vendor' >/dev/null; then
+		sysfs=1
+	fi
+	if ! have lspci && [ "$sysfs" -ne 1 ]; then
+		die "Cannot detect a GPU: lspci is missing and /sys/bus/pci is unreadable."
+	fi
+	if detect_nvidia_gpu; then
+		NVIDIA_GPU_DETECTED=1
+		log "preflight: NVIDIA GPU detected"
+	else
+		NVIDIA_GPU_DETECTED=0
+		log "preflight: no NVIDIA GPU detected"
+	fi
+}
+
+preflight_network() {
+	local url host hostport port rc tool rest
+	url="${VOID_REPO%/}/x86_64-repodata"
+	rest=${VOID_REPO#*://}
+	hostport=${rest%%/*}
+	case $hostport in
+	*:*)
+		host=${hostport%%:*}
+		port=${hostport##*:}
+		;;
+	*)
+		host=$hostport
+		case $VOID_REPO in
+		http://*) port=80 ;;
+		*) port=443 ;;
+		esac
+		;;
+	esac
+	[ -n "$host" ] || die "Invalid mirror URL: $VOID_REPO"
+	case $host in
+	*[!A-Za-z0-9._-]*) die "Invalid mirror host: $host" ;;
+	esac
+	case $port in
+	''|*[!0-9]*) die "Invalid mirror port in $VOID_REPO" ;;
+	esac
+	log "preflight: network check $url"
+	rc=0
+	if have curl; then
+		tool=curl
+		curl -fsI --max-time 20 -o /dev/null "$url" >>"$LOG" 2>&1 || rc=$?
+	elif have wget; then
+		tool=wget
+		wget -q --spider --timeout=20 "$url" >>"$LOG" 2>&1 || rc=$?
+	elif have timeout; then
+		tool=tcp
+		timeout 20 bash -c "echo >/dev/tcp/${host}/${port}" >>"$LOG" 2>&1 || rc=$?
+	else
+		die "Network check needs curl, wget, or timeout(1)."
+	fi
+	if [ "$rc" -eq 0 ]; then
+		log "preflight: network OK ($host via $tool)"
+		return 0
+	fi
+	case $tool in
+	curl)
+		case $rc in
+		6|7|28) die "Network unreachable (could not contact $host, curl status $rc)." ;;
+		*) die "Could not reach the Void mirror index:
+$url
+(curl status $rc)." ;;
+		esac
+		;;
+	wget)
+		case $rc in
+		4) die "Network unreachable (could not contact $host, wget status $rc)." ;;
+		*) die "Could not reach the Void mirror index:
+$url
+(wget status $rc)." ;;
+		esac
+		;;
+	*) die "Network unreachable (could not open $host:$port)." ;;
+	esac
+}
+
+repo_has() {
+	local repo=$1 pkg=$2
+	log "preflight: query $pkg from $repo"
+	xbps-query --repository="$repo" -R "$pkg" >>"$LOG" 2>&1
+}
+
+preflight_personal_repo() {
+	local pkg=""
+	if [ ! -d "$ATELIER_REPO_LIVE" ]; then
+		die "Personal repository is missing at $ATELIER_REPO_LIVE."
+	fi
+	for pkg in "$ATELIER_REPO_LIVE"/*.xbps; do
+		case $pkg in
+		*.sig) continue ;;
+		esac
+		[ -f "$pkg" ] || continue
+		break
+	done
+	if [ ! -f "$pkg" ]; then
+		die "Personal repository at $ATELIER_REPO_LIVE has no packages."
+	fi
+	if ! repo_has "$ATELIER_REPO_LIVE" atelier-desktop; then
+		die "Personal repository did not sync: atelier-desktop is not visible at
+$ATELIER_REPO_LIVE"
+	fi
+	if ! repo_has "$ATELIER_REPO_LIVE" atelier-xlibre-repo; then
+		die "Personal repository did not sync: atelier-xlibre-repo is not visible.
+XLibre is required and there is no X.Org fallback."
+	fi
+	log "preflight: personal repo OK ($ATELIER_REPO_LIVE)"
+}
+
+# xbps will not sync the XLibre repo until its public key is trusted.
+# The key ships inside atelier-xlibre-repo in the personal repo.
+ensure_xlibre_key() {
+	local dest="/var/db/xbps/keys/$XLIBRE_KEY_NAME"
+	local pkg="" tmp extracted
+	if [ -f "$dest" ]; then
+		log "preflight: XLibre public key already trusted"
+		return 0
+	fi
+	for pkg in "$ATELIER_REPO_LIVE"/atelier-xlibre-repo-*.xbps; do
+		case $pkg in
+		*.sig) continue ;;
+		esac
+		[ -f "$pkg" ] || continue
+		break
+	done
+	if [ ! -f "$pkg" ]; then
+		log "preflight: atelier-xlibre-repo package not found in $ATELIER_REPO_LIVE"
+		return 1
+	fi
+	tmp=$(mktemp -d)
+	extracted=0
+	if tar -C "$tmp" -xf "$pkg" >>"$LOG" 2>&1; then
+		extracted=1
+	elif zstd -d -c "$pkg" 2>>"$LOG" | tar -C "$tmp" -xf - >>"$LOG" 2>&1; then
+		extracted=1
+	fi
+	if [ "$extracted" -eq 1 ] && [ -f "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" ]; then
+		mkdir -p /var/db/xbps/keys
+		cp -a "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" "$dest"
+		chmod 644 "$dest"
+		rm -rf "$tmp"
+		log "preflight: trusted XLibre public key from $pkg"
+		return 0
+	fi
+	rm -rf "$tmp"
+	tmp=$(mktemp -d)
+	if xbps-install -y -r "$tmp" \
+		--repository="$ATELIER_REPO_LIVE" \
+		--repository="$VOID_REPO" \
+		atelier-xlibre-repo >>"$LOG" 2>&1 \
+		&& [ -f "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" ]; then
+		mkdir -p /var/db/xbps/keys
+		cp -a "$tmp/var/db/xbps/keys/$XLIBRE_KEY_NAME" "$dest"
+		chmod 644 "$dest"
+		rm -rf "$tmp"
+		log "preflight: trusted XLibre public key via temporary install"
+		return 0
+	fi
+	rm -rf "$tmp"
+	return 1
+}
+
+preflight_void_repos() {
+	if ! repo_has "$VOID_REPO" base-system; then
+		die "Could not sync the Void main repository (base-system not found):
+$VOID_REPO"
+	fi
+	if ! repo_has "$VOID_REPO" linux; then
+		die "Could not sync the Void main repository (linux not found):
+$VOID_REPO"
+	fi
+	if ! repo_has "$VOID_NONFREE_REPO" dropbox; then
+		die "Could not sync the Void nonfree repository (dropbox not found):
+$VOID_NONFREE_REPO"
+	fi
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+		if ! repo_has "$VOID_NONFREE_REPO" nvidia; then
+			die "NVIDIA drivers were requested, but the nvidia package is not in:
+$VOID_NONFREE_REPO"
+		fi
+		if ! repo_has "$VOID_REPO" linux-headers; then
+			die "NVIDIA drivers were requested, but linux-headers is not in:
+$VOID_REPO"
+		fi
+		log "preflight: nvidia and linux-headers are visible"
+	fi
+	log "preflight: Void main and nonfree repositories synced"
+}
+
+preflight_xlibre_repo() {
+	if ! ensure_xlibre_key; then
+		die "Could not install the XLibre repository public key.
+The personal repo must contain atelier-xlibre-repo.
+There is no X.Org fallback."
+	fi
+	if ! repo_has "$XLIBRE_REPO" xlibre; then
+		die "Could not sync the XLibre repository (package xlibre not found):
+$XLIBRE_REPO
+There is no X.Org fallback."
+	fi
+	if ! repo_has "$XLIBRE_REPO" xlibre-xserver; then
+		die "The XLibre repository has no xlibre-xserver package.
+xinit does not install an X server, and there is no X.Org fallback."
+	fi
+	log "preflight: XLibre repository synced"
+}
+
+preflight_checks() {
+	log "preflight: starting (disk not touched yet)"
+	if [ "${INSTALL_XLIBRE:-0}" -ne 1 ]; then
+		die "XLibre is required and there is no X.Org fallback."
+	fi
+	preflight_tools
+	preflight_firmware
+	preflight_nvidia
+	preflight_network
+	preflight_personal_repo
+	preflight_void_repos
+	preflight_xlibre_repo
+	log "preflight: OK firmware=$FIRMWARE_MODE nvidia_gpu=$NVIDIA_GPU_DETECTED mirror=$VOID_REPO"
+}
+
+# $@ is the xbps --repository arguments for Void, nonfree, and the personal repo.
+install_xlibre() {
+	if [ ! -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
+		die "XLibre repository config is missing on the target (atelier-xlibre-repo).
+There is no X.Org fallback."
+	fi
+	if [ ! -f "$TARGETDIR/var/db/xbps/keys/$XLIBRE_KEY_NAME" ]; then
+		die "XLibre signing key is missing on the target.
+There is no X.Org fallback."
+	fi
+	log "xbps-install xlibre (required)"
+	if ! xbps-install -r "$TARGETDIR" -SyU "$@" \
+		--repository="$XLIBRE_REPO" xlibre 2>&1 | tee -a "$LOG"; then
+		die "XLibre package install failed. There is no X.Org fallback."
+	fi
+	if ! xbps-query -r "$TARGETDIR" xlibre-xserver >/dev/null 2>&1; then
+		die "xlibre-xserver is not installed.
+The xlibre metapackage did not pull in an X server, and xinit does not provide one."
+	fi
+	if [ ! -x "$TARGETDIR/usr/bin/Xorg" ] && [ ! -x "$TARGETDIR/usr/bin/X" ]; then
+		die "No X server binary on the target (/usr/bin/Xorg or /usr/bin/X).
+xinit does not provide an X server, and there is no X.Org fallback."
+	fi
+	log "XLibre X server is installed on the target"
+}
+
 run_install() {
+	INSTALL_MAIN_PID=$BASHPID
+	INSTALL_CLEANED=0
+	INSTALL_FAIL_TEXT=""
+	INSTALL_FAIL_CMD=""
+	LOG_COPIED=0
+	install_arm_traps
+	begin_phase preflight
+
 	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
 		have cryptsetup || die "cryptsetup is required for disk encryption"
 		[ -n "${LUKSPASS:-}" ] || die "LUKS passphrase missing"
 	fi
+
+	preflight_checks
+
 	ui_info "Installing... This may take a long time.
 
 Log: $LOG
 
 Do not power off."
-	trap 'log "FAILED - see $LOG"; copy_install_log; wipe_luks_pass; cleanup_mounts; ui_error "Installation failed. See $LOG"; exit 1' ERR
+
+	begin_phase partitioning
 	partition_disk
+	begin_phase mounting
 	mount_target
+	begin_phase packages
 	install_packages
+	begin_phase configure
 	configure_system
+	begin_phase bootloader
 	install_bootloader
+
 	trap - ERR
-	copy_install_log
-	wipe_luks_pass
-	cleanup_mounts
+	begin_phase finish
+	release_target
+	trap - EXIT
+	INSTALL_TRAPS=0
+
 	local done_msg="Installation complete.
 
 Reboot into Atelier Linux and remove the live medium.
 
-Log: $LOG
+Log: $LOG"
+	if [ "${LOG_COPIED:-0}" -eq 1 ]; then
+		done_msg="$done_msg
 Also copied to the new system as /var/log/atelier-install.log"
+	fi
 	if [ "${NVIDIA_INSTALL_STATUS:-}" = failed ]; then
 		done_msg="$done_msg
 
 NVIDIA drivers failed to install.
-After reboot: sudo atelier-setup-nvidia"
+The desktop install was not rolled back.
+After reboot: sudo atelier-setup-nvidia
+See /var/log/atelier-install.log"
+	elif [ "${NVIDIA_INSTALL_STATUS:-}" = reconfigure-failed ]; then
+		done_msg="$done_msg
+
+NVIDIA packages were installed, but xbps-reconfigure -a failed.
+The kernel module may not be built.
+After reboot: sudo atelier-setup-nvidia
+See /var/log/atelier-install.log"
+	fi
+	if [ "${RECONFIGURE_STATUS:-}" = failed ] && [ "${NVIDIA_INSTALL_STATUS:-}" != reconfigure-failed ]; then
+		done_msg="$done_msg
+
+xbps-reconfigure -a failed.
+Packages may be unpacked but not configured.
+See /var/log/atelier-install.log"
 	fi
 	ui_info "$done_msg"
 	if ui_confirm "Reboot now?"; then
