@@ -18,7 +18,7 @@
    sudo atelier-install --gui
    ```
 
-5. Walk **Back / Next** through disk, optional encryption, optional swapfile, identity, locale, graphics, optional software, mirror, bootloader, and summary.
+5. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, mirror, NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname and username.
 6. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 7. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
@@ -32,34 +32,36 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 
 | Step | What you choose |
 |------|-----------------|
-| Welcome | Overview |
-| Disk | Whole disk to erase |
-| Encryption | Optional LUKS2 on root (default: No) |
-| Swapfile | Optional `/swapfile` for hibernation (default: No; size = RAM rounded up) |
-| Identity | Hostname, user, passwords |
-| Locale | Timezone, locale, keymap (lists) |
-| Graphics | NVIDIA (if a GPU is present). XLibre is always installed |
-| Software | Optional package groups |
-| Mirror | Void package mirror |
-| Bootloader | Install GRUB (recommended) or skip |
-| Summary | Review and start install |
+| Welcome | Overview, including which preset file is loaded |
+| Disk | Whole disk to erase, then confirm |
+| Hostname | Asked when the preset left it empty. Invalid names are re-asked |
+| Username | Asked when the preset left it empty. Lowercase; invalid names are re-asked |
+| Password | One login password. Root is locked; this user has sudo |
+| LUKS | Only when encryption is enabled |
+| Summary | **Start installation**, **Edit** a field, or **Quit**. Escape returns to this menu |
+
+Timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
+
+Another preset file: `sudo atelier-install --preset /path/to/install.conf`
 
 ## What gets installed (always)
 
 - Void base, kernel, NetworkManager, **atelier-desktop** (when personal repo is present)
-- **void-repo-nonfree** + **dropbox** (required)
+- **void-repo-nonfree** (the nonfree repo is configured; **dropbox** is installed because the desktop preset lists it)
 - **xdg-user-dirs** (+ gtk); installer runs `xdg-user-dirs-update` for your user
 - **gnome-keyring** PAM unlock at TTY login (`atelier-setup-keyring`)
 - GraeWolf void-repo config when present on the live medium
 
+Root has no password and cannot log in. Your user is in the `wheel` group. `sudo` is how you administer the system. The summary screen says this before you start the install.
+
 ## Disk encryption (optional)
 
-Default is **unencrypted**. If you choose Yes:
+Default is **unencrypted** (`ENCRYPT=no` in the preset). Turn it on from the summary **Edit** screen, or set `ENCRYPT=yes` in the preset. You are asked for the passphrase only when encryption is on. If you choose Yes:
 
 - The **root filesystem** is LUKS2 (passphrase at boot, before login).
 - `/boot` and the EFI partition stay unencrypted so GRUB can load the kernel.
 - There is **no recovery** if you forget the LUKS passphrase.
-- The LUKS passphrase is separate from your user and root passwords.
+- The LUKS passphrase is separate from your user password. Root is locked.
 - The initramfs includes USB HID and omits `hid-asus`, so a built-in ASUS ROG N-KEY (Zephyrus) can type the passphrase. `atelier-config` also blacklists `hid-asus` on the real root so the TTY login keeps `hid-generic` (X still sees the keys).
 
 Encrypted layout: EFI System Partition (if EFI) + 1GiB `/boot` + LUKS2 root. No LVM and no swap *partition*.
@@ -87,7 +89,7 @@ If resume works for about a minute and then the machine reboots, see [desktop.md
 
 ## Graphics
 
-- **NVIDIA GPU detected:** Yes/No for proprietary drivers (separate package transaction; a driver failure does not undo the rest of the install). The result screen reports a failed install and a failed `xbps-reconfigure -a`.
+- **NVIDIA:** the preset default is `auto`. A detected GPU (the desktop RTX 4060 Ti) gets the proprietary driver. A VM with no NVIDIA GPU does not. Change it from the summary if you need to force yes or no. The driver is a separate package transaction; a driver failure does not undo the rest of the install. The result screen reports a failed install and a failed `xbps-reconfigure -a`.
 - **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia` (always installed with the desktop)
 - **XLibre:** always installed. There is no X.Org fallback. If the XLibre repo or package is missing, the installer stops. With NVIDIA, Atelier uses modesetting + `prime-run` on hybrid laptops.
 

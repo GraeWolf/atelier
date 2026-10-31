@@ -10,10 +10,10 @@ Atelier whole-disk installer: **TUI by default** (`dialog`), optional GUI (`--gu
 | Optional LUKS2 on root (unencrypted `/boot`) | Encrypted `/boot` / GRUB cryptodisk |
 | Optional `/swapfile` for hibernation (default off) | Swap *partition* / LVM |
 | EFI (GPT+ESP) and BIOS (GPT+bios_grub) | Dual-boot / preserve foreign OS |
-| Hostname, user, root password | RAID |
-| Timezone, locale, keymap (pickers) | — |
+| Hostname, user, locked root, sudo via wheel | RAID |
+| Timezone, locale, keymap (preset; editable from the summary) | — |
 | base-system + atelier-desktop + GRUB | Automatic dual-GPU polish |
-| Dropbox (nonfree, required) + xdg-user-dirs | |
+| Preset package list (`dropbox` on the desktop preset) + xdg-user-dirs | |
 | gnome-keyring PAM unlock at TTY login | |
 | Personal repo when present on live media | |
 | Optional proprietary NVIDIA; XLibre always (no X.Org fallback) | Shipping full nvidia.ko on default live ISO |
@@ -38,7 +38,7 @@ sudo atelier-install          # TUI (dialog)
 sudo atelier-install --gui    # after startx, optional
 ```
 
-3. Confirm disk wipe, optionally enable LUKS2 and/or a hibernation swapfile, answer prompts, wait for package download/install
+3. Confirm the disk, enter a hostname and username (skipped when your own preset sets them), set the user password (root stays locked; that user has sudo), enter a LUKS passphrase only if encryption is on, then Install or Edit. Wait for package download/install
 4. Reboot into the installed system (enter the LUKS passphrase at boot if you encrypted)
 
 Log: `/tmp/atelier-install.log`

@@ -103,11 +103,12 @@ check_packages_resolvable() {
 		xbps-query --repository="$ROOT/repo/out" -R "$p" >/dev/null 2>&1 || \
 			atelier_die "cannot query $p from repo/out — run ./scripts/build-repo.sh"
 	done
-	# atelier-desktop requires dropbox from Void nonfree — mklive must see this repo
+	# The desktop install preset lists dropbox (Void nonfree). The live ISO
+	# build does not have to install it, but the mirror must have it.
 	if xbps-query --repository="$VOID_NONFREE_REPO" -R dropbox >/dev/null 2>&1; then
 		atelier_info "Void nonfree OK (dropbox visible at $VOID_NONFREE_REPO)"
 	else
-		atelier_die "cannot query dropbox from nonfree ($VOID_NONFREE_REPO). atelier-desktop depends on it; check network/mirror"
+		atelier_die "cannot query dropbox from nonfree ($VOID_NONFREE_REPO). The default install preset lists it; check network/mirror"
 	fi
 	# Best-effort: GraeWolf remote repo reachable (key/conf live on medium either way)
 	if xbps-query --repository="https://github.com/GraeWolf/void-repo/releases/download/x86_64" \
@@ -134,7 +135,7 @@ run_mklive() {
 
 	# shellcheck disable=SC2086
 	cd "$MKLIVE_DIR"
-	# Official Void (main + nonfree for dropbox) + local Atelier packages +
+	# Official Void (main + nonfree, used by the install preset's dropbox) + local Atelier packages +
 	# GraeWolf personal void-repo (brave-origin, …) so mklive can resolve depends.
 	./mklive.sh \
 		-a "$ARCH" \

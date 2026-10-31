@@ -79,7 +79,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | PLAN | XBPS name | Source | Notes |
 |------|-----------|--------|-------|
 | brave-origin | `brave-origin` | **graewolf** | From [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo). Live/installed systems enable the repo via `atelier-void-repo`. Optional install (large). |
-| dropbox | `dropbox` | **void-nonfree** | Required desktop package; needs `void-repo-nonfree`. Hard depend of `atelier-desktop`; always installed by `atelier-install`. |
+| dropbox | `dropbox` | **void-nonfree** | Not a hard depend of `atelier-desktop`. The desktop install preset lists it (`PACKAGES` in `installer/install.conf`). `void-repo-nonfree` stays a depend so the nonfree repo is configured. |
 | nemo | `nemo` | void | File manager; may pull GTK stack |
 | neovim | `neovim` | void | |
 | thunderbird | `thunderbird` | void | |
