@@ -25,6 +25,15 @@ post)
 		dracut --force --regenerate-all || \
 			printf 'atelier-nvidia: warning: dracut failed; reboot may keep old NVIDIA module options\n' >&2
 	fi
+	# Early boot inserts nvidia.ko before the real modprobe.d is the one
+	# kmod reads. The kernel command line is what that insert honors.
+	if [ -x ./usr/bin/atelier-nvidia-grub ]; then
+		./usr/bin/atelier-nvidia-grub || \
+			printf 'atelier-nvidia: warning: could not add NVIDIA parameters to GRUB\n' >&2
+	elif [ -x /usr/bin/atelier-nvidia-grub ]; then
+		/usr/bin/atelier-nvidia-grub || \
+			printf 'atelier-nvidia: warning: could not add NVIDIA parameters to GRUB\n' >&2
+	fi
 	;;
 esac
 exit 0

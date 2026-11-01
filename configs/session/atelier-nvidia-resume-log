@@ -36,7 +36,25 @@ if command -v xbps-query >/dev/null 2>&1; then
 	xbps-query -p pkgver atelier-config 2>/dev/null || note "atelier-config: not installed"
 fi
 
+section "kernel command line"
+note "The early boot insert honors nvidia.NVreg_* here. modprobe --show-depends"
+note "only shows what a later modprobe would pass; it does not change the"
+note "module that is already resident."
+if [ -r /proc/cmdline ]; then
+	tr ' ' '\n' </proc/cmdline | grep -E 'NVreg_|nvidia-drm' || \
+		note "(no nvidia.NVreg_* or nvidia-drm tokens on /proc/cmdline)"
+else
+	note "(cannot read /proc/cmdline)"
+fi
+if [ -r /etc/default/grub ]; then
+	note "--- GRUB_CMDLINE_LINUX_DEFAULT ---"
+	grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub || note "(none)"
+fi
+
 section "power and driver"
+note "NVreg_* are not in /sys/module/nvidia/parameters/ (module_param permission 0)."
+note "/proc/driver/nvidia/params is the live value. 595.112.07 defaults:"
+note "  PreserveVideoMemoryAllocations=2  TemporaryFilePath empty  UseKernelSuspendNotifiers=0"
 if [ -r /sys/power/mem_sleep ]; then
 	note "mem_sleep: $(cat /sys/power/mem_sleep)"
 else

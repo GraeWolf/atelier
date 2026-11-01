@@ -61,29 +61,40 @@ Waking from idle suspend or `loginctl suspend` used to leave the monitor black u
 - The driver default `PreserveVideoMemoryAllocations: 2` does not save the modesetting framebuffer (XLibre does not use `nvidia_drv.so`).
 - Void’s elogind hook always tells the GPU to **hibernate**, including for suspend-to-RAM, and Atelier’s own hook did not send `suspend` / `resume`.
 
-The packaged fix saves all video memory to `/var/tmp` and makes Atelier the only program that talks to `/proc/driver/nvidia/suspend`. **Reboot once** after the packages are installed. The running driver keeps the old settings until then.
+The packaged fix has two parts. The modprobe file is what a later `modprobe` would pass (`modprobe --show-depends nvidia` prints it). The module that is already running was inserted at about 2 seconds by udev, before that config is the one in effect, so `/proc/driver/nvidia/params` stays at the 595.112.07 defaults: Preserve `2`, empty TemporaryFilePath, UseKernelSuspendNotifiers `0`. Those names are absent under `/sys/module/nvidia/parameters/` because the driver registers them with permission 0. `/proc/driver/nvidia/params` is the live value.
+
+The early insert does honor `nvidia.NVreg_*` on the kernel command line. After the package update (or the commands below), **reboot once**. The driver keeps the old parameters until then.
 
 These two packages are built from the Atelier tree (`./scripts/build-repo.sh` → `repo/out/`). They are not in the public GraeWolf void-repo that supplies `brave-origin`. The desktop does not need a git checkout.
 
-Copy `repo/out` to the desktop (USB or `scp`), then, with that directory mounted at `/mnt/atelier-repo`:
+On a machine that already has `0.2.0_3`, you can add the command line without waiting for another package. Back up GRUB, append the three tokens if they are not already there, regenerate the menu, and reboot:
 
 ```bash
-sudo xbps-install --repository=/mnt/atelier-repo -S atelier-config atelier-nvidia
+sudo cp -a /etc/default/grub /etc/default/grub.bak
+grep -q 'NVreg_PreserveVideoMemoryAllocations=1' /etc/default/grub || \
+  sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/s/"[[:space:]]*$/ nvidia.NVreg_PreserveVideoMemoryAllocations=1 nvidia.NVreg_TemporaryFilePath=\/var\/tmp nvidia.NVreg_UseKernelSuspendNotifiers=0"/' /etc/default/grub
+grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub
+sudo grub-mkconfig -o /boot/grub/grub.cfg
 sudo reboot
 ```
 
-`atelier-config` must be `0.3.13_3` or newer and `atelier-nvidia` `0.2.0_3` or newer (`xbps-query atelier-config atelier-nvidia`). If `/etc/xbps.d/` already points at that same `repo/out`, `sudo xbps-install -Su` is enough.
-
-If xbps asks whether to replace `/etc/modprobe.d/atelier-nvidia.conf` or `/etc/elogind/system-sleep/atelier-nvidia`, take the new package file.
-
-After the reboot, check the new settings, then sleep:
+After reboot the command line must contain the tokens, and the proc file must change:
 
 ```bash
+tr ' ' '\n' </proc/cmdline | grep NVreg
 grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers' /proc/driver/nvidia/params
-loginctl suspend
 ```
 
-Expected parameters: `PreserveVideoMemoryAllocations: 1`, `TemporaryFilePath: /var/tmp`, `UseKernelSuspendNotifiers: 0`. Wake the machine with the power button or a key. The session should come back. A blinking cursor for a few seconds before the machine sleeps is the driver switching virtual terminals.
+Expected: `PreserveVideoMemoryAllocations: 1`, `TemporaryFilePath: "/var/tmp"`, `UseKernelSuspendNotifiers: 0`. Then `loginctl suspend`. Wake with the power button or a key. A blinking cursor for a few seconds before sleep is the driver switching virtual terminals.
+
+The same GRUB edit is what `atelier-nvidia` 0.2.0_4 runs from its install script (`atelier-nvidia-grub`). Copy a rebuilt `repo/out` to the desktop (these packages are not in the public GraeWolf repo) and install it. `atelier-config` 0.3.13_4 matches this round; 0.3.13_3 is enough for the sleep hook.
+
+```bash
+sudo xbps-install --repository=/mnt/atelier-repo -S atelier-nvidia atelier-config
+sudo reboot
+```
+
+If xbps asks whether to replace `/etc/modprobe.d/atelier-nvidia.conf` or `/etc/elogind/system-sleep/atelier-nvidia`, take the new package file. Check the versions with `xbps-query atelier-nvidia atelier-config`.
 
 If the screen is still black, switch to a text console with `Ctrl+Alt+F2`. If that works, the system is up and the display mode was not restored. Either way, reboot if you cannot get a shell, then run:
 

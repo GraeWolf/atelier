@@ -1,0 +1,61 @@
+#!/bin/sh
+# Put NVIDIA suspend parameters on the kernel command line.
+#
+# The running nvidia.ko is inserted during early boot (udev coldplug, often
+# still on the initramfs modprobe config). modprobe --show-depends on the
+# booted system shows NVreg_* options, but that is a hypothetical next
+# insert: the resident module kept the 595.112.07 defaults. kmod does apply
+# nvidia.NVreg_*= from /proc/cmdline at that early insert.
+#
+# Usage: sudo atelier-nvidia-grub
+# Exit 0 if grub was updated or the tokens were already present.
+set -eu
+
+TOKENS="nvidia.NVreg_PreserveVideoMemoryAllocations=1 nvidia.NVreg_TemporaryFilePath=/var/tmp nvidia.NVreg_UseKernelSuspendNotifiers=0"
+
+if [ "$(id -u)" -ne 0 ]; then
+	printf 'atelier-nvidia-grub: run as root\n' >&2
+	exit 1
+fi
+
+grub=/etc/default/grub
+if [ ! -f "$grub" ]; then
+	printf 'atelier-nvidia-grub: %s missing; nothing to do\n' "$grub" >&2
+	exit 0
+fi
+
+changed=0
+if ! grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grub"; then
+	printf 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 %s"\n' "$TOKENS" >>"$grub"
+	changed=1
+else
+	# Tokens are space-separated and contain no glob characters.
+	# shellcheck disable=SC2086
+	for tok in $TOKENS; do
+		if grep '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grub" | grep -q -F "$tok"; then
+			continue
+		fi
+		sed -i "/^GRUB_CMDLINE_LINUX_DEFAULT=/s/\"[[:space:]]*\$/ ${tok}\"/" "$grub"
+		if ! grep '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grub" | grep -q -F "$tok"; then
+			printf 'atelier-nvidia-grub: could not add %s to %s\n' "$tok" "$grub" >&2
+			printf 'atelier-nvidia-grub: edit GRUB_CMDLINE_LINUX_DEFAULT by hand, then grub-mkconfig -o /boot/grub/grub.cfg\n' >&2
+			exit 1
+		fi
+		changed=1
+	done
+fi
+
+if [ "$changed" -eq 0 ]; then
+	printf 'atelier-nvidia-grub: kernel command line already has the NVIDIA parameters\n'
+	exit 0
+fi
+
+printf 'atelier-nvidia-grub: updated %s\n' "$grub"
+if command -v grub-mkconfig >/dev/null 2>&1 && [ -d /boot/grub ]; then
+	grub-mkconfig -o /boot/grub/grub.cfg
+	printf 'atelier-nvidia-grub: wrote /boot/grub/grub.cfg\n'
+	printf 'atelier-nvidia-grub: reboot, then check /proc/cmdline and /proc/driver/nvidia/params\n'
+else
+	printf 'atelier-nvidia-grub: /boot/grub not ready; grub-mkconfig will pick this up later\n'
+fi
+exit 0

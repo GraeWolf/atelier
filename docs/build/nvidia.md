@@ -133,12 +133,14 @@ Atelier’s hook used to call `nvidia-sleep.sh` as well. Two callers deadlock on
 
 ```
 options nvidia-drm modeset=1 fbdev=1
-options nvidia NVreg_PreserveVideoMemoryAllocations=1
-options nvidia NVreg_TemporaryFilePath=/var/tmp
-options nvidia NVreg_UseKernelSuspendNotifiers=0
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
 ```
 
-`=1` is what the 595 README requires for a full save. The procfs interface is required with that setting. `UseKernelSuspendNotifiers=0` keeps `/proc/driver/nvidia/suspend` present. Leaving notifiers at `1` (their default on the open modules) hides that file, and the driver then fails the cycle with “PreserveVideoMemoryAllocations module parameter is set. System Power Management attempted without driver procfs suspend interface.” `/var/tmp` is on the root filesystem; `/tmp` is often a tmpfs too small for 8–16 GiB of VRAM.
+`=1` is what the 595 README requires for a full save. The procfs interface is required with that setting. `UseKernelSuspendNotifiers=0` keeps `/proc/driver/nvidia/suspend` present. On the open modules in the 595.112.07 sources that value is already the default (later branches flipped the default to 1). Seeing `0` in `/proc/driver/nvidia/params` does not mean the option was applied. `/var/tmp` is on the root filesystem; `/tmp` is often a tmpfs too small for 8–16 GiB of VRAM.
+
+`modprobe --show-depends nvidia` prints an `insmod` line that includes those three `NVreg_*` arguments. That is the command a new modprobe would run. The desktop inserts `nvidia.ko` at about 2 seconds (nvidia-drm fbcon follows immediately) via udev, while kmod is still using the initramfs modprobe configuration. The `.ko` is not copied into the initramfs (`lsinitrd` shows no nvidia file); it is loaded from the mounted root. The module then stays resident, so the real `/etc/modprobe.d` never gets a turn. `/proc/driver/nvidia/params` is those parameters (they are registered with permission 0, so `/sys/module/nvidia/parameters/NVreg_*` does not exist). After a reboot onto `0.2.0_3` the proc file was still the 595.112.07 defaults: Preserve `2`, TemporaryFilePath `""`, notifiers `0`.
+
+kmod does read `nvidia.NVreg_*=` from `/proc/cmdline` during that early insert. `atelier-nvidia-grub` (package install script) appends the three tokens to `GRUB_CMDLINE_LINUX_DEFAULT` and runs `grub-mkconfig`. `/etc/dracut.conf.d/atelier-nvidia.conf` also copies the modprobe file into the initramfs. nvidia.ko is still not forced into the image.
 
 `atelier-config`’s hook, when it is the only caller:
 
@@ -156,7 +158,7 @@ The hook always exits 0. It logs to `/var/log/atelier-pm.log`.
 
 Options are read when `nvidia.ko` is loaded. A reboot is required. If the modules are already in the initramfs, that image has its own copy of `modprobe.d`, so the `atelier-nvidia` install script runs `dracut --force --regenerate-all` after the new file is unpacked. The script does not add `force_drivers`: loading nvidia from the initramfs makes 595 fail hibernation restore (`PM_RESTORE_PREPARE` / missing procfs in the fresh initramfs). Dracut still copies `/etc/modprobe.d` when the module is included for another reason.
 
-Package revisions: `atelier-nvidia` 0.2.0_3, `atelier-config` 0.3.13_3. `xbps-install -Su` from the rebuilt personal repo installs them. See [user nvidia.md](../user/nvidia.md#black-screen-after-suspend) for the desktop commands.
+Package revisions: `atelier-nvidia` 0.2.0_4, `atelier-config` 0.3.13_4. See [user nvidia.md](../user/nvidia.md#black-screen-after-suspend) for the desktop commands, including the GRUB edit that applies before the next package build is installed.
 
 ### Logs after a failed resume
 

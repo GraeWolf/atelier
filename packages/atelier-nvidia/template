@@ -3,7 +3,7 @@
 # Install only on machines with supported NVIDIA GPUs.
 pkgname=atelier-nvidia
 version=0.2.0
-revision=3
+revision=4
 create_wrksrc=yes
 short_desc="Atelier NVIDIA proprietary driver configuration"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -26,6 +26,9 @@ do_install() {
 		etc/modules-load.d
 	vinstall "${FILESDIR}/etc/X11/xorg.conf.d/20-nvidia.conf" 644 \
 		etc/X11/xorg.conf.d
+	vinstall "${FILESDIR}/etc/dracut.conf.d/atelier-nvidia.conf" 644 \
+		etc/dracut.conf.d
+	vinstall "${FILESDIR}/usr/bin/atelier-nvidia-grub" 755 usr/bin
 	vinstall "${FILESDIR}/usr/share/doc/atelier/nvidia-README.txt" 644 \
 		usr/share/doc/atelier
 }

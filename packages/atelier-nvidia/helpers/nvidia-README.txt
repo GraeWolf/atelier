@@ -26,11 +26,24 @@ Suspend / resume (discrete GPU, S3)
 -----------------------------------
 Black screen on wake is the modesetting framebuffer not being saved.
 
-/etc/modprobe.d/atelier-nvidia.conf sets:
-  NVreg_PreserveVideoMemoryAllocations=1
-  NVreg_TemporaryFilePath=/var/tmp
-  NVreg_UseKernelSuspendNotifiers=0
-  nvidia-drm modeset=1 fbdev=1
+/etc/modprobe.d/atelier-nvidia.conf sets the same values modprobe
+--show-depends would pass. The module is already loaded by then, at
+about 2s, from udev, and that insert does not use the booted system's
+modprobe.d. /proc/driver/nvidia/params stays at the 595.112.07 defaults
+(Preserve=2, TemporaryFilePath empty, UseKernelSuspendNotifiers=0).
+
+Those parameters are not in /sys/module/nvidia/parameters/ (permission 0).
+/proc/driver/nvidia/params is the live copy.
+
+The early insert does honor the kernel command line. atelier-nvidia-grub
+adds this to GRUB_CMDLINE_LINUX_DEFAULT and runs grub-mkconfig:
+
+  nvidia.NVreg_PreserveVideoMemoryAllocations=1
+  nvidia.NVreg_TemporaryFilePath=/var/tmp
+  nvidia.NVreg_UseKernelSuspendNotifiers=0
+
+Reboot after that. Then PreserveVideoMemoryAllocations should be 1 and
+TemporaryFilePath "/var/tmp".
 
 /etc/elogind/system-sleep/atelier-nvidia (package atelier-config) is the
 only caller of nvidia-sleep.sh. It passes suspend or hibernate, then
