@@ -3,7 +3,7 @@
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
 version=0.3.13
-revision=2
+revision=3
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -78,6 +78,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-theme" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-setup-nvidia" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-nvidia-resume-log" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-setup-swap" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-setup-keyring" 755 usr/bin
 	vinstall "${FILESDIR}/etc/elogind/system-sleep/atelier-pm-log" 755 \
@@ -86,6 +87,8 @@ do_install() {
 		etc/elogind/system-sleep
 	vinstall "${FILESDIR}/etc/elogind/system-sleep/atelier-nvidia" 755 \
 		etc/elogind/system-sleep
+	vinstall "${FILESDIR}/etc/elogind/sleep.conf.d/atelier-nvidia.conf" 644 \
+		etc/elogind/sleep.conf.d
 	vinstall "${FILESDIR}/etc/modprobe.d/atelier-wifi.conf" 644 \
 		etc/modprobe.d
 	vinstall "${FILESDIR}/etc/modprobe.d/atelier-hid-asus.conf" 644 \

@@ -1,15 +1,42 @@
 #!/bin/sh
-# Hybrid NVIDIA (amdgpu + nvidia): do not call nvidia-sleep.sh.
+# NVIDIA suspend/resume for elogind (Void has no systemd units).
 #
-# Void ships /usr/libexec/elogind/system-sleep/nvidia.sh which always runs
-# nvidia-sleep.sh hibernate. This hook also used to call it. Two callers
-# deadlock on an rw-semaphore; freeze fails ("Device or resource busy")
-# and nvidia-sleep.sh hangs for minutes on a kernel VT.
+# Called as: atelier-nvidia <pre|post> <suspend|hibernate|hybrid-sleep|suspend-then-hibernate>
+# elogind runs /usr/libexec/elogind/system-sleep/* before this directory.
 #
-# On hybrid the panel is the iGPU. Unload nvidia.ko for S4 instead.
-# Always exit 0.
+# Void's nvidia package installs nvidia.sh there. That script ignores its
+# arguments and always runs "nvidia-sleep.sh hibernate", including for S3
+# suspend and for the suspend half of suspend-then-hibernate. Preparing the
+# GPU for hibernation during a deep suspend does not restore the modesetting
+# CRTC (XLibre + nvidia-drm). The screen stays black until reboot.
+#
+# A second caller of nvidia-sleep.sh deadlocks on an rw-semaphore inside
+# nvidia.ko ("Device or resource busy") and can sit on VT 63 for minutes.
+# This hook is the only caller. It turns the vendor script off. If the vendor
+# script already ran in this pre phase (it is earlier in the hook order),
+# this hook does not enter the driver again; it still runs resume on post,
+# because it may have cleared the vendor executable bit before post is scanned.
+#
+# Hybrid (amdgpu loaded as well as nvidia): the panel is the iGPU. Unload the
+# dGPU instead of the procfs handshake, same as before. If unload fails, fall
+# through to the procfs path so the dGPU is not left awake with notifiers off.
+#
+# Module options (atelier-nvidia package):
+#   NVreg_PreserveVideoMemoryAllocations=1
+#   NVreg_TemporaryFilePath=/var/tmp
+#   NVreg_UseKernelSuspendNotifiers=0
+# Without =1 the modesetting framebuffer is not saved. Without notifiers=0
+# the proc file this script writes is missing and the driver aborts the cycle.
+#
+# Always exit 0. A failing hook can cancel sleep when AllowSuspendInterrupts
+# is yes, and elogind treats stdout lines that start with ERROR / FAILED /
+# CRITICAL / CANCELLED as that signal. Log to the file, not stdout.
 STASH=/run/atelier-nvidia.mod
+FLAG_OURS=/run/atelier-nvidia.procfs
+FLAG_VENDOR=/run/atelier-nvidia.vendor-pre
 LOG=/var/log/atelier-pm.log
+RUN_DIR=/run/nvidia-sleep
+VT_FILE=$RUN_DIR/Xorg.vt_number
 
 log() {
 	printf '%s atelier-nvidia: %s\n' \
@@ -25,8 +52,21 @@ hybrid() {
 	have_mod amdgpu && have_mod nvidia
 }
 
-# Vendor hook runs from libexec *before* /etc/elogind/system-sleep. Disable
-# it on hybrid so the next cycle cannot double-enter nvidia-sleep.sh.
+vendor_hook_active() {
+	for f in \
+		/usr/libexec/elogind/system-sleep/nvidia.sh \
+		/usr/lib/elogind/system-sleep/nvidia.sh \
+		/usr/lib64/elogind/system-sleep/nvidia.sh
+	do
+		if [ -x "$f" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Vendor hook runs from libexec before this script. Disable it so the next
+# cycle (and this cycle's post scan) cannot enter nvidia-sleep.sh again.
 disable_vendor_nvidia_hook() {
 	for f in \
 		/usr/libexec/elogind/system-sleep/nvidia.sh \
@@ -40,41 +80,204 @@ disable_vendor_nvidia_hook() {
 	done
 }
 
-nv_pre() {
-	log "pre: start $*"
-	if hybrid; then
-		disable_vendor_nvidia_hook
-		: >"$STASH"
-		for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
-			have_mod "$mod" || continue
-			printf '%s\n' "$mod" >>"$STASH"
-			modprobe -r "$mod" >/dev/null 2>&1 || true
-			if have_mod "$mod"; then
-				log "WARN: $mod still loaded"
-			else
-				log "pre: unloaded $mod"
-			fi
+# $1 is elogind's overall operation ($2). SYSTEMD_SLEEP_ACTION is the phase:
+# suspend-then-hibernate passes that string as $2 for both halves, and sets
+# SYSTEMD_SLEEP_ACTION to suspend, then later hibernate.
+nv_verb() {
+	overall=${1:-}
+	spec=${SYSTEMD_SLEEP_ACTION:-}
+	case $spec in
+	suspend)
+		printf '%s\n' suspend
+		return
+		;;
+	hibernate | hybrid-sleep)
+		printf '%s\n' hibernate
+		return
+		;;
+	esac
+	case $overall in
+	hibernate | hybrid-sleep)
+		printf '%s\n' hibernate
+		;;
+	*)
+		printf '%s\n' suspend
+		;;
+	esac
+}
+
+log_pm_context() {
+	if [ -d /var/tmp ]; then
+		avail=$(df -Pk /var/tmp 2>/dev/null | awk 'NR==2 {print $4}')
+		log "var/tmp avail_kb=${avail:-unknown} (VRAM file path)"
+		if [ -n "$avail" ] && [ "$avail" -lt 8388608 ] 2>/dev/null; then
+			log "WARN: /var/tmp has under 8 GiB free; saving VRAM may fail"
+		fi
+	else
+		log "WARN: /var/tmp is missing; NVreg_TemporaryFilePath cannot be used"
+	fi
+	if [ -r /proc/driver/nvidia/params ]; then
+		grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableS0ixPowerManagement' \
+			/proc/driver/nvidia/params 2>/dev/null | while read -r pline; do
+			log "param $pline"
 		done
 	fi
-	sync >/dev/null 2>&1 || true
-	log "pre: done"
+	if [ -e /proc/driver/nvidia/suspend ]; then
+		log "procfs /proc/driver/nvidia/suspend present"
+	else
+		log "WARN: /proc/driver/nvidia/suspend missing (reboot so UseKernelSuspendNotifiers=0 is loaded)"
+	fi
+}
+
+# What nvidia-sleep.sh does, if the Void package did not ship the script.
+# Order: remember VT, chvt 63, then write the verb. On resume: write resume,
+# then chvt back. The 595 README requires that order for the X server; the
+# modesetting DDX needs the same VT round-trip to reprogram the CRTC.
+procfs_fallback() {
+	verb=$1
+	if [ "$verb" = resume ]; then
+		if [ -w /proc/driver/nvidia/suspend ]; then
+			printf '%s\n' resume >/proc/driver/nvidia/suspend 2>/dev/null || \
+				log "WARN: resume write failed"
+		else
+			log "WARN: /proc/driver/nvidia/suspend not writable on resume"
+		fi
+		if [ -f "$VT_FILE" ]; then
+			vt=$(cat "$VT_FILE" 2>/dev/null || true)
+			rm -f "$VT_FILE"
+			if [ -n "$vt" ] && command -v chvt >/dev/null 2>&1; then
+				chvt "$vt" >/dev/null 2>&1 || log "WARN: chvt $vt failed"
+			fi
+		fi
+		return 0
+	fi
+	mkdir -p "$RUN_DIR" 2>/dev/null || true
+	if command -v fgconsole >/dev/null 2>&1; then
+		fgconsole >"$VT_FILE" 2>/dev/null || true
+	fi
+	if command -v chvt >/dev/null 2>&1; then
+		if ! chvt 63 >/dev/null 2>&1; then
+			log "WARN: chvt 63 failed; not writing $verb"
+			return 1
+		fi
+	else
+		log "WARN: chvt missing; writing $verb without a VT switch"
+	fi
+	if [ -w /proc/driver/nvidia/suspend ]; then
+		if printf '%s\n' "$verb" >/proc/driver/nvidia/suspend 2>/dev/null; then
+			return 0
+		fi
+		log "WARN: write $verb failed"
+		return 1
+	fi
+	log "WARN: /proc/driver/nvidia/suspend not writable for $verb"
+	return 1
+}
+
+run_nv() {
+	verb=$1
+	if [ -x /usr/bin/nvidia-sleep.sh ]; then
+		log "nvidia-sleep.sh $verb"
+		/usr/bin/nvidia-sleep.sh "$verb"
+		rc=$?
+		log "nvidia-sleep.sh $verb exit $rc"
+		return "$rc"
+	fi
+	log "WARN: /usr/bin/nvidia-sleep.sh missing; procfs fallback for $verb"
+	procfs_fallback "$verb"
+}
+
+unload_hybrid() {
+	: >"$STASH"
+	for mod in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do
+		have_mod "$mod" || continue
+		printf '%s\n' "$mod" >>"$STASH"
+		modprobe -r "$mod" >/dev/null 2>&1 || true
+		if have_mod "$mod"; then
+			log "WARN: $mod still loaded"
+		else
+			log "pre: unloaded $mod"
+		fi
+	done
+}
+
+reload_hybrid() {
+	[ -f "$STASH" ] || return 0
+	for mod in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
+		grep -qx "$mod" "$STASH" 2>/dev/null || continue
+		modprobe "$mod" >/dev/null 2>&1 || true
+		log "post: modprobe $mod"
+	done
+	rm -f "$STASH"
+}
+
+nv_pre() {
+	log "pre: start overall=${2:-} systemd_action=${SYSTEMD_SLEEP_ACTION:-}"
+	vendor_was=0
+	if vendor_hook_active; then
+		vendor_was=1
+	fi
+	disable_vendor_nvidia_hook
+	if [ "$vendor_was" -eq 1 ]; then
+		: >"$FLAG_VENDOR"
+		log "WARN: vendor hook already ran nvidia-sleep.sh hibernate this cycle; not calling it again. Resume runs on post."
+		sync >/dev/null 2>&1 || true
+		return 0
+	fi
+	if hybrid; then
+		log "pre: hybrid (amdgpu+nvidia); unload dGPU"
+		unload_hybrid
+		if ! have_mod nvidia; then
+			log "pre: hybrid unload done; skip procfs"
+			sync >/dev/null 2>&1 || true
+			return 0
+		fi
+		log "WARN: hybrid unload left nvidia loaded; using procfs"
+	fi
+	if ! have_mod nvidia && [ ! -e /proc/driver/nvidia/suspend ]; then
+		log "pre: nvidia not loaded; nothing to do"
+		sync >/dev/null 2>&1 || true
+		return 0
+	fi
+	log_pm_context
+	verb=$(nv_verb "${2:-}")
+	log "pre: verb $verb"
+	if run_nv "$verb"; then
+		: >"$FLAG_OURS"
+		log "pre: done"
+	else
+		log "WARN: suspend handshake failed; resume will not be sent"
+	fi
 	sync >/dev/null 2>&1 || true
 }
 
 nv_post() {
 	log "post: start"
-	if [ -f "$STASH" ]; then
-		for mod in nvidia nvidia_modeset nvidia_drm nvidia_uvm; do
-			grep -qx "$mod" "$STASH" 2>/dev/null || continue
-			modprobe "$mod" >/dev/null 2>&1 || true
-		done
-		rm -f "$STASH"
+	if [ -f "$FLAG_VENDOR" ] || [ -f "$FLAG_OURS" ]; then
+		run_nv resume
+		rm -f "$FLAG_VENDOR" "$FLAG_OURS"
+	else
+		log "post: no procfs suspend was issued"
 	fi
+	reload_hybrid
 	log "post: done"
 	sync >/dev/null 2>&1 || true
 }
 
-case ${1:-} in
+phase=${1:-}
+action=${2:-}
+
+# Test aid: print the verb and do not touch the driver or vendor hooks.
+if [ "${ATELIER_NVIDIA_PRINT_VERB:-}" = 1 ]; then
+	case $phase in
+	pre) nv_verb "$action" ;;
+	post) printf '%s\n' resume ;;
+	*) printf '%s\n' unknown ;;
+	esac
+	exit 0
+fi
+
+case $phase in
 pre) nv_pre "$@" ;;
 post) nv_post ;;
 esac

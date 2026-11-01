@@ -71,15 +71,25 @@ install -m 755 "$src/session/atelier-theme"      "$dst/usr/bin/atelier-theme"
 install -m 755 "$src/session/atelier-setup-nvidia" "$dst/usr/bin/atelier-setup-nvidia"
 install -m 755 "$src/session/atelier-setup-swap" "$dst/usr/bin/atelier-setup-swap"
 install -m 755 "$src/session/atelier-setup-keyring" "$dst/usr/bin/atelier-setup-keyring"
+install -m 755 "$src/session/atelier-nvidia-resume-log" \
+	"$dst/usr/bin/atelier-nvidia-resume-log"
 mkdir -p "$dst/etc/elogind/system-sleep" \
+	"$dst/etc/elogind/sleep.conf.d" \
 	"$dst/etc/runit/core-services" \
-	"$dst/etc/modprobe.d"
+	"$dst/etc/modprobe.d" \
+	"$dst/usr/share/atelier/bat"
 install -m 755 "$src/elogind/system-sleep/atelier-pm-log" \
 	"$dst/etc/elogind/system-sleep/atelier-pm-log"
 install -m 755 "$src/elogind/system-sleep/atelier-wifi" \
 	"$dst/etc/elogind/system-sleep/atelier-wifi"
 install -m 755 "$src/elogind/system-sleep/atelier-nvidia" \
 	"$dst/etc/elogind/system-sleep/atelier-nvidia"
+install -m 644 "$src/elogind/sleep.conf.d/atelier-nvidia.conf" \
+	"$dst/etc/elogind/sleep.conf.d/atelier-nvidia.conf"
+install -m 644 "$src/bat/tokyonight.tmTheme" \
+	"$dst/usr/share/atelier/bat/tokyonight.tmTheme"
+install -m 644 "$src/bat/LICENSE.tokyonight" \
+	"$dst/usr/share/atelier/bat/LICENSE.tokyonight"
 install -m 644 "$src/modprobe.d/atelier-wifi.conf" \
 	"$dst/etc/modprobe.d/atelier-wifi.conf"
 install -m 644 "$src/modprobe.d/atelier-hid-asus.conf" \

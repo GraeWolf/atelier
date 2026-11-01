@@ -1,0 +1,30 @@
+#!/bin/sh
+# xbps install/upgrade script for atelier-nvidia.
+# Runs with the target root as / (chroot) or as the current directory.
+# Never fail the transaction: a dracut error must not roll back the configs.
+case "${ACTION:-}" in
+post)
+	for f in \
+		usr/libexec/elogind/system-sleep/nvidia.sh \
+		usr/lib/elogind/system-sleep/nvidia.sh \
+		usr/lib64/elogind/system-sleep/nvidia.sh \
+		/usr/libexec/elogind/system-sleep/nvidia.sh \
+		/usr/lib/elogind/system-sleep/nvidia.sh \
+		/usr/lib64/elogind/system-sleep/nvidia.sh
+	do
+		if [ -x "$f" ]; then
+			chmod a-x "$f" 2>/dev/null || true
+		fi
+	done
+	# New modprobe options apply on the next nvidia.ko load. If the modules
+	# are already in the initramfs, that copy of modprobe.d is what the early
+	# load uses. Regenerating here (after this package's files are unpacked)
+	# picks up /etc/modprobe.d/atelier-nvidia.conf. Do not force nvidia into
+	# the image; 595 hibernation restore fails when the driver loads that early.
+	if command -v dracut >/dev/null 2>&1; then
+		dracut --force --regenerate-all || \
+			printf 'atelier-nvidia: warning: dracut failed; reboot may keep old NVIDIA module options\n' >&2
+	fi
+	;;
+esac
+exit 0

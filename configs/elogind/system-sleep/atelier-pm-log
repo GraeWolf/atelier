@@ -91,7 +91,7 @@ _dump() {
 		lsmod 2>/dev/null | grep -iE 'nvidia|amdgpu|i915|nouveau' || printf '(none)\n'
 		if [ -r /proc/driver/nvidia/params ]; then
 			printf 'nvidia params:\n'
-			grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableGpuFirmware|RmWatchdog' \
+			grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableS0ixPowerManagement|EnableGpuFirmware|RmWatchdog' \
 				/proc/driver/nvidia/params 2>/dev/null || cat /proc/driver/nvidia/params
 		fi
 

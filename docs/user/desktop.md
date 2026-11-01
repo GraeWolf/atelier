@@ -259,7 +259,11 @@ sudo atelier-setup-swap --clear-image
 
 On LUKS installs, resume must wait for `/dev/mapper/cryptroot` (not the inner ext4 UUID). Re-run `sudo atelier-setup-swap --yes` so GRUB gets `resume=/dev/mapper/cryptroot`, then reboot once, then hibernate.
 
-Hybrid NVIDIA (amdgpu panel + dGPU): install the NVIDIA hook and **disable Void’s vendor copy**. That script always calls `nvidia-sleep.sh hibernate`; running it twice deadlocks freeze (`nvidia-sleep.sh blocked on an rw-semaphore`, `Device or resource busy`).
+NVIDIA suspend: on a discrete GPU, `/etc/elogind/system-sleep/atelier-nvidia` runs `nvidia-sleep.sh` with **suspend** or **hibernate** (matching the sleep), then **resume**, and switches the VT. Void’s `/usr/libexec/elogind/system-sleep/nvidia.sh` always passes `hibernate`; that leaves the modesetting screen black after wake. Atelier turns that script off (install script and every boot). Do not run `nvidia-sleep.sh` from a second hook: two callers deadlock (`rw-semaphore`, `Device or resource busy`).
+
+A desktop that stays black after `loginctl suspend` needs the module options in `atelier-nvidia` and a reboot. Steps and what to send back: [nvidia.md](nvidia.md#black-screen-after-suspend).
+
+Hybrid (amdgpu panel + NVIDIA): the same hook unloads the dGPU instead of the procfs handshake, and still disables Void’s script. Copying the hook in by hand:
 
 ```bash
 sudo install -m755 configs/elogind/system-sleep/atelier-nvidia \

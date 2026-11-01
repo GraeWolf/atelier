@@ -20,9 +20,11 @@
 | Path | Purpose |
 |------|---------|
 | `/etc/modprobe.d/atelier-blacklist-nouveau.conf` | Blacklist nouveau |
-| `/etc/modprobe.d/atelier-nvidia.conf` | `nvidia-drm modeset=1` |
+| `/etc/modprobe.d/atelier-nvidia.conf` | `nvidia-drm modeset=1 fbdev=1`; `NVreg_PreserveVideoMemoryAllocations=1`; `NVreg_TemporaryFilePath=/var/tmp`; `NVreg_UseKernelSuspendNotifiers=0` |
 | `/etc/modules-load.d/atelier-nvidia.conf` | Load nvidia modules at boot |
 | `/etc/X11/xorg.conf.d/20-nvidia.conf` | OutputClass: **modesetting** DDX (not `nvidia_drv.so`) |
+
+`atelier-config` ships the elogind side: `/etc/elogind/system-sleep/atelier-nvidia`, `/etc/elogind/sleep.conf.d/atelier-nvidia.conf` (`HandleNvidiaSleep=no`), and `/usr/bin/atelier-nvidia-resume-log`. The boot service `90-atelier-resume.sh` clears the executable bit on Void’s hook every boot.
 
 Xlibre video ABI 28 does not match Void's `nvidia_drv.so` (ABI 25). Hybrid
 laptops must not set `PrimaryGPU`; the panel is on the iGPU. Offload with
@@ -102,6 +104,73 @@ xbps-query --repository=$PWD/repo/out -Rs 'atelier-nvidia|atelier-xlibre'
 - [ ] Optional: Xlibre session after `atelier-setup-xlibre`
 - [ ] Picom runs without hard lockup (blur already off in Atelier config)
 - [ ] Note kernel version + nvidia package version in a test log
+- [ ] After reboot: `grep PreserveVideoMemoryAllocations /proc/driver/nvidia/params` is `1`
+- [ ] `loginctl suspend`, wake, session returns (real hardware only)
+
+## Suspend and resume (discrete RTX, S3)
+
+Symptom on the installed desktop: idle suspend or `loginctl suspend` wakes to a black screen. Only a reboot brings the display back. Reported runtime state:
+
+- `PreserveVideoMemoryAllocations: 2` in `/proc/driver/nvidia/params`
+- `/etc/elogind/system-sleep/` contains `atelier-nvidia`, `atelier-pm-log`, `atelier-wifi`
+- `/sys/power/mem_sleep` is `s2idle [deep]` (S3, not s2idle)
+
+### Cause
+
+`2` is the driver default, “auto”. Full video-memory save happens only when kernel suspend notifiers are in use. The modesetting scanout buffer (XLibre’s modesetting DDX on `nvidia-drm`, not `nvidia_drv.so`) is not in the smaller set. Wake has nothing to put back on the monitor.
+
+Void’s `nvidia` package (595.x, open kernel modules plus proprietary userspace) installs `/usr/bin/nvidia-sleep.sh` and `/usr/libexec/elogind/system-sleep/nvidia.sh`. The elogind script **ignores `$2` and always runs `nvidia-sleep.sh hibernate`**, then sleeps 5 seconds. That is the wrong verb for `deep` suspend and for the suspend half of suspend-then-hibernate (the idle lock path). elogind’s arguments are `$1=pre|post` and `$2=suspend|hibernate|hybrid-sleep|suspend-then-hibernate`. The specific phase is `$SYSTEMD_SLEEP_ACTION` (`suspend` then `hibernate` across suspend-then-hibernate).
+
+Atelier’s hook used to call `nvidia-sleep.sh` as well. Two callers deadlock on an rw-semaphore in `nvidia.ko`. The hook was changed to unload `nvidia` only when `amdgpu` is also loaded, and to do nothing on a discrete GPU. Nothing on the desktop wrote `suspend` before S3 or `resume` after it, and nothing pinned `NVreg_PreserveVideoMemoryAllocations=1`.
+
+`NVreg_EnableS0ixPowerManagement` is not part of this failure. S0ix is for `s2idle` when the platform and the GPU both support video-memory self refresh. This machine’s active mem_sleep is `deep`. The option stays at the driver default `0`.
+
+`nvidia-drm` `fbdev=1` is the driver default since 545 and is now set explicitly so the VT switch in `nvidia-sleep.sh` has a framebuffer console to return to.
+
+### What the packages do
+
+`atelier-nvidia` modprobe file:
+
+```
+options nvidia-drm modeset=1 fbdev=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_TemporaryFilePath=/var/tmp
+options nvidia NVreg_UseKernelSuspendNotifiers=0
+```
+
+`=1` is what the 595 README requires for a full save. The procfs interface is required with that setting. `UseKernelSuspendNotifiers=0` keeps `/proc/driver/nvidia/suspend` present. Leaving notifiers at `1` (their default on the open modules) hides that file, and the driver then fails the cycle with “PreserveVideoMemoryAllocations module parameter is set. System Power Management attempted without driver procfs suspend interface.” `/var/tmp` is on the root filesystem; `/tmp` is often a tmpfs too small for 8–16 GiB of VRAM.
+
+`atelier-config`’s hook, when it is the only caller:
+
+1. `pre` + suspend (or the suspend phase of suspend-then-hibernate) → `nvidia-sleep.sh suspend`
+2. `pre` + hibernate → `nvidia-sleep.sh hibernate`
+3. `post` → `nvidia-sleep.sh resume`
+
+`nvidia-sleep.sh` records the VT, `chvt 63`, writes the verb to `/proc/driver/nvidia/suspend`, and on resume writes `resume` and switches back. If `/usr/bin/nvidia-sleep.sh` is absent the hook does those steps itself.
+
+Void’s hook is `chmod a-x` from the package install scripts and from `90-atelier-resume.sh` on every boot (a later `nvidia` package update puts the executable bit back). `HandleNvidiaSleep=no` stops elogind doing a third handshake. Hybrid (`amdgpu` and `nvidia` both loaded) still unloads the dGPU and does not call `nvidia-sleep.sh` unless unload fails.
+
+The hook always exits 0. It logs to `/var/log/atelier-pm.log`.
+
+### Initramfs
+
+Options are read when `nvidia.ko` is loaded. A reboot is required. If the modules are already in the initramfs, that image has its own copy of `modprobe.d`, so the `atelier-nvidia` install script runs `dracut --force --regenerate-all` after the new file is unpacked. The script does not add `force_drivers`: loading nvidia from the initramfs makes 595 fail hibernation restore (`PM_RESTORE_PREPARE` / missing procfs in the fresh initramfs). Dracut still copies `/etc/modprobe.d` when the module is included for another reason.
+
+Package revisions: `atelier-nvidia` 0.2.0_3, `atelier-config` 0.3.13_3. `xbps-install -Su` from the rebuilt personal repo installs them. See [user nvidia.md](../user/nvidia.md#black-screen-after-suspend) for the desktop commands.
+
+### Logs after a failed resume
+
+`atelier-pm-log` appends a pre snapshot (including a dmesg tail and the NVIDIA parameters) before the machine sleeps, and a post snapshot plus `still-alive` lines if userspace runs after wake. `atelier-nvidia` appends the verb, `/var/tmp` free space, and the `nvidia-sleep.sh` exit code to the same file.
+
+```bash
+sudo atelier-nvidia-resume-log
+```
+
+That prints package versions, `/proc/driver/nvidia/params`, whether `/proc/driver/nvidia/suspend` exists, whether Void’s hook is still executable, `dmesg` lines for this boot, the tail of `/var/log/atelier-pm.log`, and `/var/log/socklog/kernel/current` when socklog/svlogd is installed.
+
+Atelier does not install a persistent syslog. After a power-cycle, `dmesg` is only the new boot. The pre block in `/var/log/atelier-pm.log` is the record from before sleep. Kernel messages from the dead cycle survive only if socklog was already writing `/var/log/socklog/kernel/`.
+
+Real suspend was not run in the build environment. Check scripts with `bash -n` and `shellcheck -s sh`. Confirm on the desktop with `loginctl suspend` after a reboot.
 
 ## Risks / notes
 
@@ -109,4 +178,5 @@ xbps-query --repository=$PWD/repo/out -Rs 'atelier-nvidia|atelier-xlibre'
 - DKMS rebuilds against the installed kernel (`linux`); headers must match `uname -r`
 - Xlibre is third-party; keep TTY recovery + ability to reinstall `xorg-server`
 - Xlibre: use modesetting DDX + nvidia kernel module, not proprietary `nvidia_drv.so`
+- Suspend: `NVreg_PreserveVideoMemoryAllocations=1` needs the procfs hook and `UseKernelSuspendNotifiers=0`. Do not call `nvidia-sleep.sh` from a second script. Do not force nvidia into the initramfs.
 - Never commit private signing keys (Xlibre **public** key is shipped on purpose)

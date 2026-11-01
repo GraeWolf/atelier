@@ -68,6 +68,10 @@ elif [ -x /usr/bin/xbps-reconfigure ]; then
 fi
 
 log "done"
+log "suspend: PreserveVideoMemoryAllocations=1, VRAM file in /var/tmp, kernel suspend notifiers off"
+log "elogind hook /etc/elogind/system-sleep/atelier-nvidia drives nvidia-sleep.sh (Void's nvidia.sh is disabled)"
+log "reboot required so nvidia.ko reloads those options, then: loginctl suspend"
+log "if wake stays black: sudo atelier-nvidia-resume-log"
 log "reboot recommended, then confirm: lsmod | grep nvidia && nvidia-smi"
 if xbps-query xlibre-xserver >/dev/null 2>&1 || xbps-query xlibre >/dev/null 2>&1; then
 	log "Xlibre is installed: Atelier uses the modesetting DDX, not nvidia_drv.so"
