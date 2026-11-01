@@ -120,6 +120,12 @@ build_one() {
 	*) stage_empty "$_stage" ;;
 	esac
 
+	# xbps-create treats ./INSTALL in the staged root as the package script
+	# (not as a file installed onto the target).
+	if [ -f "$PACKAGES_DIR/$_name/INSTALL" ]; then
+		install -m 755 "$PACKAGES_DIR/$_name/INSTALL" "$_stage/INSTALL"
+	fi
+
 	atelier_info "Creating $_full (noarch)"
 
 	# xbps-create writes the .xbps into the current directory

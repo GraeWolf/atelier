@@ -1,0 +1,182 @@
+#!/bin/sh
+# Collect logs after a black screen on NVIDIA resume.
+# Usage: sudo atelier-nvidia-resume-log
+#
+# Safe to run as a user; a few files are root-only and are skipped with a note.
+# Does not change driver state.
+set -eu
+
+section() {
+	printf '\n======== %s ========\n' "$1"
+}
+
+note() {
+	printf '%s\n' "$*"
+}
+
+show_file() {
+	path=$1
+	if [ -r "$path" ]; then
+		cat "$path"
+		return 0
+	fi
+	if [ -e "$path" ]; then
+		note "(not readable: $path — run with sudo)"
+		return 0
+	fi
+	note "(missing: $path)"
+}
+
+note "Atelier NVIDIA resume diagnostics"
+note "date: $(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)"
+note "kernel: $(uname -r 2>/dev/null || echo unknown)"
+if command -v xbps-query >/dev/null 2>&1; then
+	note "packages:"
+	xbps-query -p pkgver atelier-nvidia 2>/dev/null || note "atelier-nvidia: not installed"
+	xbps-query -p pkgver atelier-config 2>/dev/null || note "atelier-config: not installed"
+fi
+
+section "inhibitors"
+note "elogind loginctl has no list-inhibitors. ListInhibitors is a(ssssuu):"
+note "what, who, why, mode, uid, pid. A sleep/delay lock postpones hooks until"
+note "it closes or InhibitDelayMaxSec expires. xss-lock 'Lock screen first'"
+note "is the one Atelier owns. Run this WHILE loginctl suspend is still waiting"
+note "if you need the live set; this snapshot is whatever is held right now."
+if command -v busctl >/dev/null 2>&1; then
+	busctl call org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager ListInhibitors 2>/dev/null || \
+		note "(ListInhibitors failed)"
+	note "InhibitDelayMaxUSec (10s = 10000000 after atelier-config 0.3.13_5):"
+	busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager InhibitDelayMaxUSec 2>/dev/null || \
+		note "(InhibitDelayMaxUSec unreadable)"
+else
+	note "busctl not installed"
+fi
+for prep in /tmp/atelier-prepare-sleep.log \
+	"${XDG_RUNTIME_DIR:-}/atelier-prepare-sleep.log"
+do
+	[ -n "$prep" ] || continue
+	if [ -r "$prep" ]; then
+		note "--- $prep (PrepareForSleep, from atelier-pm-watch) ---"
+		tail -n 40 "$prep"
+	else
+		note "(no $prep)"
+	fi
+done
+if [ -r /tmp/atelier-pm-watch.out ]; then
+	note "--- /tmp/atelier-pm-watch.out ---"
+	tail -n 20 /tmp/atelier-pm-watch.out
+fi
+
+section "kernel command line"
+note "The early boot insert honors nvidia.NVreg_* here. modprobe --show-depends"
+note "only shows what a later modprobe would pass; it does not change the"
+note "module that is already resident."
+if [ -r /proc/cmdline ]; then
+	tr ' ' '\n' </proc/cmdline | grep -E 'NVreg_|nvidia-drm' || \
+		note "(no nvidia.NVreg_* or nvidia-drm tokens on /proc/cmdline)"
+else
+	note "(cannot read /proc/cmdline)"
+fi
+if [ -r /etc/default/grub ]; then
+	note "--- GRUB_CMDLINE_LINUX_DEFAULT ---"
+	grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub || note "(none)"
+fi
+
+section "power and driver"
+note "NVreg_* are not in /sys/module/nvidia/parameters/ (module_param permission 0)."
+note "/proc/driver/nvidia/params is the live value. 595.112.07 defaults:"
+note "  PreserveVideoMemoryAllocations=2  TemporaryFilePath empty  UseKernelSuspendNotifiers=0"
+if [ -r /sys/power/mem_sleep ]; then
+	note "mem_sleep: $(cat /sys/power/mem_sleep)"
+else
+	note "mem_sleep: unreadable"
+fi
+if [ -r /proc/driver/nvidia/version ]; then
+	note "nvidia version:"
+	cat /proc/driver/nvidia/version
+else
+	note "nvidia version: /proc/driver/nvidia/version missing"
+fi
+note "params:"
+if [ -r /proc/driver/nvidia/params ]; then
+	grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableS0ixPowerManagement' \
+		/proc/driver/nvidia/params || cat /proc/driver/nvidia/params
+else
+	note "(missing /proc/driver/nvidia/params)"
+fi
+if [ -e /proc/driver/nvidia/suspend ]; then
+	note "procfs: /proc/driver/nvidia/suspend exists"
+else
+	note "procfs: /proc/driver/nvidia/suspend MISSING"
+	note "Expected after reboot with NVreg_UseKernelSuspendNotifiers=0."
+	note "If it is missing, the sleep hook cannot save the modesetting framebuffer."
+fi
+if [ -d /var/tmp ]; then
+	df -hP /var/tmp 2>/dev/null || true
+else
+	note "/var/tmp is missing"
+fi
+
+section "hooks and module config"
+for f in \
+	/etc/modprobe.d/atelier-nvidia.conf \
+	/etc/elogind/sleep.conf.d/atelier-nvidia.conf \
+	/etc/elogind/system-sleep/atelier-nvidia \
+	/etc/elogind/system-sleep/atelier-pm-log \
+	/usr/libexec/elogind/system-sleep/nvidia.sh \
+	/usr/lib/elogind/system-sleep/nvidia.sh \
+	/usr/lib64/elogind/system-sleep/nvidia.sh \
+	/usr/bin/nvidia-sleep.sh
+do
+	if [ -e "$f" ]; then
+		ls -l "$f" 2>/dev/null || note "(cannot stat $f)"
+	else
+		note "absent $f"
+	fi
+done
+note "--- /etc/modprobe.d/atelier-nvidia.conf ---"
+show_file /etc/modprobe.d/atelier-nvidia.conf
+
+section "current boot dmesg (nvidia / PM)"
+if dmesg >/dev/null 2>&1; then
+	dmesg 2>/dev/null | grep -iE 'nvidia|NVRM|Xid|PreserveVideo|PM: suspend|PM: resume|pm_suspend|hibernat' | tail -n 160 || \
+		note "(no matching dmesg lines)"
+else
+	note "dmesg not permitted (sudo atelier-nvidia-resume-log)"
+fi
+
+section "atelier-pm.log (elogind pre/post snapshots)"
+note "Written by /etc/elogind/system-sleep/atelier-pm-log and atelier-nvidia."
+note "The pre block is on disk before power is removed. The post block exists"
+note "when the machine woke far enough to run hook scripts (black screen, system up)."
+if [ -r /var/log/atelier-pm.log ]; then
+	tail -n 220 /var/log/atelier-pm.log
+else
+	show_file /var/log/atelier-pm.log
+fi
+
+section "previous kernel messages (socklog / svlogd)"
+note "dmesg after a reboot is only the new boot. Void's socklog-void package"
+note "keeps kernel messages under /var/log/socklog/kernel/ (svlogd)."
+note "Atelier does not install that package. If the directory is missing,"
+note "the failed cycle's kernel log was not saved; use atelier-pm.log instead."
+if [ -r /var/log/socklog/kernel/current ]; then
+	note "--- /var/log/socklog/kernel/current (tail) ---"
+	tail -n 160 /var/log/socklog/kernel/current
+elif [ -d /var/log/socklog/kernel ]; then
+	note "(kernel log directory exists but current is not readable — use sudo)"
+	ls -l /var/log/socklog/kernel 2>/dev/null || true
+else
+	note "(no /var/log/socklog/kernel)"
+fi
+
+section "what to send if resume is still black"
+note "1. This whole output."
+note "2. Whether the fans spun down and a keypress woke the PC (sleep happened)"
+note "   or the machine never slept."
+note "3. Whether Ctrl+Alt+F2 shows a login prompt."
+note "4. Output of: cat /proc/driver/nvidia/params | grep -E 'Preserve|Temporary|Suspend|S0ix'"
+note "Reboot before the first test after installing this package. The running"
+note "nvidia.ko keeps the old parameters until then."

@@ -23,13 +23,51 @@ have_mod() {
 	grep -q "^$1 " /proc/modules 2>/dev/null
 }
 
+# modprobe -r on btusb/btmtk can block inside the driver for a long time.
+# elogind will not enter S3 until this hook returns. One attempt, killed
+# after 3s. Skip the unload entirely unless a MediaTek PCI wifi function
+# (mt7921e/mt7925e) is bound — that is the chip whose pci_pm_restore -110
+# this hook exists for. A desktop USB dongle is left alone.
+modprobe_r_bounded() {
+	mod=$1
+	have_mod "$mod" || return 0
+	printf '%s\n' "$mod" >>"$STASH"
+	log "pre: modprobe -r $mod (3s cap)"
+	if command -v timeout >/dev/null 2>&1; then
+		timeout -k 1 3 modprobe -r "$mod" >/dev/null 2>&1 || true
+	else
+		modprobe -r "$mod" >/dev/null 2>&1 || true
+	fi
+	if have_mod "$mod"; then
+		log "WARN: $mod still loaded; not retrying"
+	else
+		log "pre: unloaded $mod"
+	fi
+}
+
+mt_pci_bound() {
+	drv=$1
+	drvdir=/sys/bus/pci/drivers/$drv
+	[ -d "$drvdir" ] || return 1
+	for link in "$drvdir"/0000:*; do
+		[ -e "$link" ] || continue
+		return 0
+	done
+	return 1
+}
+
 wifi_down() {
+	_t0=$(date +%s 2>/dev/null || echo 0)
 	log "pre: start $*"
 	: >"$STASH"
 	: >"$SVLIST"
 
 	if command -v nmcli >/dev/null 2>&1; then
-		nmcli radio wifi off >/dev/null 2>&1 || true
+		if command -v timeout >/dev/null 2>&1; then
+			timeout -k 1 2 nmcli radio wifi off >/dev/null 2>&1 || true
+		else
+			nmcli radio wifi off >/dev/null 2>&1 || true
+		fi
 	fi
 	if command -v rfkill >/dev/null 2>&1; then
 		rfkill block wifi >/dev/null 2>&1 || true
@@ -48,11 +86,16 @@ wifi_down() {
 	for svc in bluetoothd bluetooth bluez; do
 		if [ -e "/var/service/$svc" ]; then
 			printf '%s\n' "$svc" >>"$SVLIST"
-			sv down "$svc" >/dev/null 2>&1 || true
+			# -w: do not wait the default 7s forever if the service ignores down.
+			sv -w 2 down "$svc" >/dev/null 2>&1 || true
 		fi
 	done
 	if command -v bluetoothctl >/dev/null 2>&1; then
-		bluetoothctl power off >/dev/null 2>&1 || true
+		if command -v timeout >/dev/null 2>&1; then
+			timeout -k 1 2 bluetoothctl power off >/dev/null 2>&1 || true
+		else
+			bluetoothctl power off >/dev/null 2>&1 || true
+		fi
 	fi
 
 	for drv in mt7925e mt7921e; do
@@ -69,27 +112,17 @@ wifi_down() {
 		done
 	done
 
-	sleep 1
-	# btmtk = MediaTek Bluetooth on the same chip. Do not touch
-	# btintel/btrtl (Intel/Realtek), which are unrelated controllers.
-	for mod in btmtk btusb mt7925e mt7921e; do
-		have_mod "$mod" || continue
-		printf '%s\n' "$mod" >>"$STASH"
-		n=0
-		while have_mod "$mod" && [ "$n" -lt 5 ]; do
-			modprobe -r "$mod" >/dev/null 2>&1 || true
-			n=$((n + 1))
-			[ "$n" -lt 5 ] && sleep 1
+	if mt_pci_bound mt7921e || mt_pci_bound mt7925e; then
+		sleep 1
+		# btmtk is the Bluetooth function of that PCI chip. Do not touch
+		# btintel/btrtl. One bounded rmmod; a busy module is left loaded.
+		for mod in btmtk btusb mt7925e mt7921e; do
+			modprobe_r_bounded "$mod"
 		done
-		if have_mod "$mod"; then
-			log "WARN: $mod still loaded"
-		else
-			log "pre: unloaded $mod"
-		fi
-	done
-	sync >/dev/null 2>&1 || true
-	log "pre: done"
-	sync >/dev/null 2>&1 || true
+	else
+		log "pre: no mt7921e/mt7925e PCI device; skip module unload"
+	fi
+	log "pre: done elapsed=$(( $(date +%s 2>/dev/null || echo 0) - _t0 ))s"
 }
 
 wifi_up() {

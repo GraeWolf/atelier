@@ -1,0 +1,22 @@
+#!/bin/sh
+# xbps install/upgrade script for atelier-config.
+# The NVIDIA sleep hook in this package must be the only caller of
+# nvidia-sleep.sh. Void's copy always passes "hibernate".
+# Never fail the transaction.
+case "${ACTION:-}" in
+post)
+	for f in \
+		usr/libexec/elogind/system-sleep/nvidia.sh \
+		usr/lib/elogind/system-sleep/nvidia.sh \
+		usr/lib64/elogind/system-sleep/nvidia.sh \
+		/usr/libexec/elogind/system-sleep/nvidia.sh \
+		/usr/lib/elogind/system-sleep/nvidia.sh \
+		/usr/lib64/elogind/system-sleep/nvidia.sh
+	do
+		if [ -x "$f" ]; then
+			chmod a-x "$f" 2>/dev/null || true
+		fi
+	done
+	;;
+esac
+exit 0
