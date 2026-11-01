@@ -6,7 +6,7 @@ Atelier is a personal, opinionated Linux distribution built on Void Linux. It de
 Primary development environment: Void Linux running under Windows WSL2
 Packaging, configuration, scripting, and repository work will be done in WSL2
 ISO building can be performed in WSL2
-Full testing of the live ISO, dialog installer, NVIDIA drivers, and desktop session will require exporting the ISO and testing on real hardware or a suitable virtual machine
+Full testing of the live ISO, gum installer, NVIDIA drivers, and desktop session will require exporting the ISO and testing on real hardware or a suitable virtual machine
 
 
 3. Multi-machine Development
@@ -38,7 +38,7 @@ This setup allows flexible work on the WSL2 machine for most development and on 
 MVP (Phase 1) Success Criteria
 
 Bootable live ISO
-Dialog (TUI) installer
+gum (TUI) installer
 NVIDIA proprietary driver support
 Personal extra repository integrated
 Fully themed bspwm desktop with the complete application list
@@ -121,7 +121,10 @@ Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
 9. Installation Experience
 
 Traditional live ISO
-Dialog (TUI) installer
+gum (TUI) installer (`atelier-install` 0.6.0)
+Tokyo Night colors, a step banner, and gum prompts
+Raw Linux console (`TERM=linux`, 80x24) uses ASCII borders; no truecolor required
+No graphical installer
 Live environment should ideally show the final themed desktop
 NVIDIA support and personal repository must work in both live and installed systems
 Optional Steam (`GAMING=yes|no` in the installer preset). The shipped desktop preset is `yes` because this machine is the RTX 4060 Ti desktop. The summary can turn it off. When it is on, the target enables `void-repo-multilib` and `void-repo-multilib-nonfree` and installs Steam plus the 32-bit graphics stack (`installer/gaming.txt`, including `nvidia-libs-32bit` only when proprietary NVIDIA is installed). Steam is not part of `atelier-desktop` and not a live ISO package. A failure to install it is reported on the result screen and does not roll back the desktop. Preflight checks the multilib indexes before the disk is wiped.
@@ -136,7 +139,7 @@ User-facing documentation shipped with the distro (quick-start + customization g
 11. Development Phases
 Phase 1 – MVP
 
-Working live ISO + dialog (TUI) installer
+Working live ISO + gum (TUI) installer
 NVIDIA proprietary support
 Personal repository integrated
 Fully themed bspwm desktop + complete app list

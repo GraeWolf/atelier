@@ -23,7 +23,7 @@ elogind
 polkit
 NetworkManager
 dhcpcd
-dialog
+gum
 parted
 e2fsprogs
 dosfstools
