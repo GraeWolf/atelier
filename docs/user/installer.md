@@ -10,7 +10,7 @@
    sudo atelier-install
    ```
 
-   This runs a **dialog** TUI wizard (similar spirit to Void’s installer). There is no graphical installer.
+   This runs a **gum** TUI wizard. There is no graphical installer. On a raw console the borders are ASCII; in a terminal they are rounded and use Tokyo Night colors. The welcome screen shows the installer version.
 
 4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, the SummitHQ Void mirror (`https://mirrors.summithq.com/voidlinux/current`), NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, Steam, and the mirror (`MIRROR=` in the preset does the same).
 5. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
@@ -32,7 +32,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | Username | Asked when the preset left it empty. Lowercase; invalid names are re-asked |
 | Password | One login password. Root is locked; this user has sudo |
 | LUKS | Only when encryption is enabled |
-| Summary | **Start installation**, **Edit** a field, or **Quit**. Escape returns to this menu |
+| Summary | **Start installation**, **Edit** a field, or **Quit**. The cursor starts on Edit. Escape or Ctrl+C returns to this menu and does not install |
 
 Timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
 

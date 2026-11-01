@@ -1,19 +1,19 @@
 # Template file for 'atelier-installer'
-# Dialog (TUI) whole-disk installer for Atelier live images.
+# gum (TUI) whole-disk installer for Atelier live images.
 pkgname=atelier-installer
-version=0.5.13
+version=0.6.0
 revision=1
 create_wrksrc=yes
-short_desc="Atelier dialog TUI installer (whole-disk, optional LUKS2, swapfile, Steam)"
+short_desc="Atelier gum TUI installer (whole-disk, optional LUKS2, swapfile, Steam)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
 homepage="https://github.com/GraeWolf/atelier"
 
-# dialog is the installer UI. polkit provides pkexec so a launch that is
-# not already root can re-exec on the console. sudo is the live-ISO path
-# (sudo atelier-install).
+# gum is the installer UI (Void package name: gum). polkit provides pkexec
+# so a launch that is not already root can re-exec on the console. sudo is
+# the live-ISO path (sudo atelier-install).
 depends="
- dialog>=0
+ gum>=0
  parted>=0
  e2fsprogs>=0
  dosfstools>=0

@@ -41,7 +41,7 @@ Primary goals: extreme minimalism, simplicity, elegant Tokyo Night theming, and 
 - Init system is runit. Display server is Xlibre. Window manager is bspwm (single fixed setup).
 
 ## Current Focus (MVP)
-- Bootable live ISO with dialog (TUI) installer
+- Bootable live ISO with gum (TUI) installer
 - NVIDIA proprietary driver support
 - Personal repository integrated
 - Fully themed bspwm desktop with the exact application list from PLAN.md
