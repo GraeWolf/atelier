@@ -8,7 +8,11 @@
 #       and /var/log/atelier-pm.log when that file is writable.
 set -eu
 
-command -v dbus-monitor >/dev/null 2>&1 || exit 0
+# elogind's loginctl has no list-inhibitors. busctl is what the desktop has.
+# dbus-monitor is optional and often not installed.
+if ! command -v busctl >/dev/null 2>&1 && ! command -v dbus-monitor >/dev/null 2>&1; then
+	exit 0
+fi
 
 runtime=${XDG_RUNTIME_DIR:-/tmp}
 mkdir -p "$runtime" 2>/dev/null || true
@@ -52,17 +56,37 @@ dump_inhibitors() {
 
 logline "watching PrepareForSleep"
 
-dbus-monitor --system \
-	"type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
-	2>/dev/null |
-	while read -r line; do
-		case $line in
-		*'boolean true'*)
-			logline "PrepareForSleep true"
-			dump_inhibitors
-			;;
-		*'boolean false'*)
-			logline "PrepareForSleep false"
-			;;
-		esac
-	done
+# busctl monitor prints the signal, then a line "BOOLEAN true/false".
+# That signal is when elogind has accepted suspend, before it waits on
+# delay inhibitors and before system-sleep hooks.
+if command -v busctl >/dev/null 2>&1; then
+	busctl monitor --match \
+		"type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+		2>/dev/null |
+		while read -r line; do
+			case $line in
+			*'false'*)
+				logline "PrepareForSleep false ($line)"
+				;;
+			*'true'*)
+				logline "PrepareForSleep true ($line)"
+				dump_inhibitors
+				;;
+			esac
+		done
+else
+	dbus-monitor --system \
+		"type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+		2>/dev/null |
+		while read -r line; do
+			case $line in
+			*'boolean true'*)
+				logline "PrepareForSleep true"
+				dump_inhibitors
+				;;
+			*'boolean false'*)
+				logline "PrepareForSleep false"
+				;;
+			esac
+		done
+fi

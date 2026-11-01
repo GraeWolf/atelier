@@ -54,7 +54,8 @@ _rotate_log() {
 
 _dump() {
 	{
-		printf '\n======== %s %s %s ========\n' "$ts" "$phase" "$action"
+		printf '\n======== %s %s %s epoch=%s ========\n' "$ts" "$phase" "$action" \
+			"$(date +%s 2>/dev/null || echo unknown)"
 		printf 'argv: %s\n' "$*"
 		printf 'kernel: %s\n' "$(uname -r 2>/dev/null || echo unknown)"
 		printf 'cmdline: %s\n' "$(cat /proc/cmdline 2>/dev/null || echo unknown)"
@@ -108,11 +109,17 @@ _dump() {
 			grep -E 'STATUS|CAPACITY|CAPACITY_LEVEL' "$bat" 2>/dev/null || true
 		done
 
-		printf 'dmesg (tail):\n'
+		# Kernel suspend messages are not in a short tail: VRAM save, USB
+		# timeouts, and "PM: suspend entry" land earlier in the buffer.
+		# -T is wall-clock when the kernel was built with printk time.
+		# The post snapshot is the one that contains this cycle's entry
+		# line; pre runs before /sys/power/state is written.
+		printf 'dmesg PM/nvidia (filtered):\n'
 		if dmesg -T >/dev/null 2>&1; then
-			dmesg -T 2>/dev/null | tail -n 80
+			dmesg -T 2>/dev/null | grep -E 'PM:|Freezing|Filesystems sync|suspend entry|suspend exit|Waking up|nvidia|NVRM|timeout|blocked' | tail -n 120
 		else
-			dmesg 2>/dev/null | tail -n 80
+			printf '(dmesg -T unavailable)\n'
+			dmesg 2>/dev/null | grep -E 'PM:|Freezing|Filesystems sync|suspend entry|suspend exit|Waking up|nvidia|NVRM|timeout|blocked' | tail -n 120
 		fi
 		printf '======== end %s %s ========\n' "$phase" "$action"
 	} >>"$LOG" 2>/dev/null

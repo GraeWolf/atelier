@@ -3,7 +3,7 @@
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
 version=0.3.13
-revision=5
+revision=6
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"

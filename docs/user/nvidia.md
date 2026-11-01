@@ -98,6 +98,23 @@ sudo reboot
 
 If xbps asks whether to replace `/etc/modprobe.d/atelier-nvidia.conf` or `/etc/elogind/system-sleep/atelier-nvidia`, take the new package file. Check the versions with `xbps-query atelier-nvidia atelier-config`.
 
+`0.3.13_5` still left about a minute between `loginctl suspend` and the first sleep hook, which is longer than `InhibitDelayMaxSec` (10s). The NVIDIA handshake itself was one second, so that gap is not the VRAM save or `chvt`. `atelier-config` 0.3.13_6 writes the kernel `PM:` / `Freezing` lines (with `dmesg -T`) into the post snapshot, and `atelier-pm-watch` uses `busctl` so it runs without `dbus-monitor`.
+
+Time one cycle. The first timestamp is when you press enter. Compare it with `PrepareForSleep` (elogind accepted the call) and with `atelier-nvidia pre` (hooks started). The piece before `PrepareForSleep` is outside the inhibitor cap (often polkit). The piece from `PrepareForSleep` to `pre` is the delay locks, and should be under 10s. The piece from `pre` to `PM: suspend entry` is the hooks after `atelier-pm-log` (including `atelier-wifi`) and the kernel.
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+loginctl suspend
+```
+
+After wake:
+
+```bash
+sudo dmesg -T | grep -E 'PM:|Freezing|Filesystems sync|nvidia|NVRM|timeout|blocked' | tail -60
+sudo awk '/atelier-pm-watch: PrepareForSleep|atelier-nvidia: pre: start|======== /{print}' /var/log/atelier-pm.log | tail -40
+tail -40 "${XDG_RUNTIME_DIR:-/tmp}/atelier-prepare-sleep.log"
+```
+
 While a suspend is still waiting (from another TTY if the session is frozen on the lock screen):
 
 ```bash
