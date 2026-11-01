@@ -85,9 +85,11 @@ tr ' ' '\n' </proc/cmdline | grep NVreg
 grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers' /proc/driver/nvidia/params
 ```
 
-Expected: `PreserveVideoMemoryAllocations: 1`, `TemporaryFilePath: "/var/tmp"`, `UseKernelSuspendNotifiers: 0`. Then `loginctl suspend`. Wake with the power button or a key. A blinking cursor for a few seconds before sleep is the driver switching virtual terminals.
+Expected after that reboot: `PreserveVideoMemoryAllocations: 1`, `TemporaryFilePath: "/var/tmp"`, `UseKernelSuspendNotifiers: 0`. A test of `0.2.0_3` already resumed to the lock screen and the desktop while Preserve was still `2`, so the GRUB tokens are the documented NVIDIA setting and may not be required on this 4060 Ti.
 
-The same GRUB edit is what `atelier-nvidia` 0.2.0_4 runs from its install script (`atelier-nvidia-grub`). Copy a rebuilt `repo/out` to the desktop (these packages are not in the public GraeWolf repo) and install it. `atelier-config` 0.3.13_4 matches this round; 0.3.13_3 is enough for the sleep hook.
+`loginctl suspend` should reach the sleep hooks in a few seconds. xss-lock holds a sleep/delay inhibitor named `Lock screen first` until the locker closes `XSS_SLEEP_LOCK_FD`. xsecurelock only closed that fd after its saver window mapped, so elogind waited. `atelier-config` 0.3.13_5 closes the fd once xsecurelock is running, and sets `InhibitDelayMaxSec=10` so a stuck fd cannot hold sleep for minutes. elogind reads the cap when it starts (`sudo sv restart elogind`, or reboot). NetworkManager and RealtimeKit also take short sleep/delay locks. Brave's lock is shutdown/delay, not sleep. Idle or manual lock still waits 2 minutes before it suspends on its own; that timer is not used when suspend was already requested.
+
+The GRUB edit is what `atelier-nvidia` 0.2.0_4 runs (`atelier-nvidia-grub`). Copy a rebuilt `repo/out` to the desktop (these packages are not in the public GraeWolf repo). `atelier-config` 0.3.13_5 is this round's sleep-lock fix.
 
 ```bash
 sudo xbps-install --repository=/mnt/atelier-repo -S atelier-nvidia atelier-config
@@ -96,7 +98,16 @@ sudo reboot
 
 If xbps asks whether to replace `/etc/modprobe.d/atelier-nvidia.conf` or `/etc/elogind/system-sleep/atelier-nvidia`, take the new package file. Check the versions with `xbps-query atelier-nvidia atelier-config`.
 
-If the screen is still black, switch to a text console with `Ctrl+Alt+F2`. If that works, the system is up and the display mode was not restored. Either way, reboot if you cannot get a shell, then run:
+While a suspend is still waiting (from another TTY if the session is frozen on the lock screen):
+
+```bash
+busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager ListInhibitors
+busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager InhibitDelayMaxUSec
+```
+
+`ListInhibitors` is `a(ssssuu)`: what, who, why, mode, uid, pid. After 0.3.13_5, `InhibitDelayMaxUSec` should be `10000000` (10s) once elogind has been restarted.
+
+If the screen is still black after wake, switch to a text console with `Ctrl+Alt+F2`. If that works, the system is up and the display mode was not restored. Either way, reboot if you cannot get a shell, then run:
 
 ```bash
 sudo atelier-nvidia-resume-log

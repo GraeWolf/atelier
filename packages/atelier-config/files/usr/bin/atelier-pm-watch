@@ -1,0 +1,68 @@
+#!/bin/sh
+# Record elogind PrepareForSleep, with the inhibitor list at that moment.
+#
+# system-sleep hooks run only after delay inhibitors release, or after
+# InhibitDelayMaxSec. This signal is the start of that wait.
+#
+# Logs: $XDG_RUNTIME_DIR/atelier-prepare-sleep.log
+#       and /var/log/atelier-pm.log when that file is writable.
+set -eu
+
+command -v dbus-monitor >/dev/null 2>&1 || exit 0
+
+runtime=${XDG_RUNTIME_DIR:-/tmp}
+mkdir -p "$runtime" 2>/dev/null || true
+log=$runtime/atelier-prepare-sleep.log
+pidfile=$runtime/atelier-pm-watch.pid
+syslog=/var/log/atelier-pm.log
+
+if [ -f "$pidfile" ]; then
+	old=$(cat "$pidfile" 2>/dev/null || true)
+	if [ -n "$old" ] && kill -0 "$old" 2>/dev/null; then
+		exit 0
+	fi
+fi
+printf '%s\n' "$$" >"$pidfile"
+
+logline() {
+	ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)
+	printf '%s atelier-pm-watch: %s\n' "$ts" "$*" >>"$log" 2>/dev/null || true
+	printf '%s atelier-pm-watch: %s\n' "$ts" "$*" >>"$syslog" 2>/dev/null || true
+}
+
+dump_inhibitors() {
+	if ! command -v busctl >/dev/null 2>&1; then
+		logline "busctl missing; cannot list inhibitors"
+		return 0
+	fi
+	# elogind's loginctl has no list-inhibitors. ListInhibitors is
+	# a(ssssuu): what, who, why, mode, uid, pid.
+	logline "ListInhibitors:"
+	busctl call org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager ListInhibitors 2>/dev/null |
+		while read -r line; do
+			logline "  $line"
+		done
+	busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager InhibitDelayMaxUSec 2>/dev/null |
+		while read -r line; do
+			logline "InhibitDelayMaxUSec $line"
+		done
+}
+
+logline "watching PrepareForSleep"
+
+dbus-monitor --system \
+	"type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+	2>/dev/null |
+	while read -r line; do
+		case $line in
+		*'boolean true'*)
+			logline "PrepareForSleep true"
+			dump_inhibitors
+			;;
+		*'boolean false'*)
+			logline "PrepareForSleep false"
+			;;
+		esac
+	done

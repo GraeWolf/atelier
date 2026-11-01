@@ -36,6 +36,31 @@ if command -v xbps-query >/dev/null 2>&1; then
 	xbps-query -p pkgver atelier-config 2>/dev/null || note "atelier-config: not installed"
 fi
 
+section "inhibitors"
+note "elogind loginctl has no list-inhibitors. ListInhibitors is a(ssssuu):"
+note "what, who, why, mode, uid, pid. A sleep/delay lock postpones hooks until"
+note "it closes or InhibitDelayMaxSec expires. xss-lock 'Lock screen first'"
+note "is the one Atelier owns. Run this WHILE loginctl suspend is still waiting"
+note "if you need the live set; this snapshot is whatever is held right now."
+if command -v busctl >/dev/null 2>&1; then
+	busctl call org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager ListInhibitors 2>/dev/null || \
+		note "(ListInhibitors failed)"
+	note "InhibitDelayMaxUSec (10s = 10000000 after atelier-config 0.3.13_5):"
+	busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+		org.freedesktop.login1.Manager InhibitDelayMaxUSec 2>/dev/null || \
+		note "(InhibitDelayMaxUSec unreadable)"
+else
+	note "busctl not installed"
+fi
+prep=${XDG_RUNTIME_DIR:-/tmp}/atelier-prepare-sleep.log
+if [ -r "$prep" ]; then
+	note "--- $prep (PrepareForSleep, from atelier-pm-watch) ---"
+	tail -n 80 "$prep"
+else
+	note "(no $prep yet; start a new X session so atelier-pm-watch is running)"
+fi
+
 section "kernel command line"
 note "The early boot insert honors nvidia.NVreg_* here. modprobe --show-depends"
 note "only shows what a later modprobe would pass; it does not change the"

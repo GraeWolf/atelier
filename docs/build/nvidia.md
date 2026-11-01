@@ -172,7 +172,9 @@ That prints package versions, `/proc/driver/nvidia/params`, whether `/proc/drive
 
 Atelier does not install a persistent syslog. After a power-cycle, `dmesg` is only the new boot. The pre block in `/var/log/atelier-pm.log` is the record from before sleep. Kernel messages from the dead cycle survive only if socklog was already writing `/var/log/socklog/kernel/`.
 
-Real suspend was not run in the build environment. Check scripts with `bash -n` and `shellcheck -s sh`. Confirm on the desktop with `loginctl suspend` after a reboot.
+A `0.2.0_3` cycle on the desktop (Preserve still `2`) did resume to the lock screen and the desktop after `loginctl suspend`. The GRUB tokens remain the documented way to pin the parameters; they may not be required for resume on this GPU. The multi-minute pause before the hooks was xss-lock's sleep/delay inhibitor, not the driver. See `atelier-lock` and `InhibitDelayMaxSec=10`.
+
+Real suspend was not run in the build environment. Check scripts with `bash -n` and `shellcheck -s sh`.
 
 ## Risks / notes
 

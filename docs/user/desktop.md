@@ -207,7 +207,7 @@ Mail clients that use **libsecret** (for example Melia from the GraeWolf repo) s
 |------|---------|
 | Manual lock | **Super+Shift+l** → `atelier-lock` |
 | Idle lock | After **5 minutes** idle (`xset s`; via xss-lock) |
-| Suspend | **2 minutes after lock** while still locked. With a swapfile this is `suspend-then-hibernate` (sleep, then hibernate after **30 minutes** asleep). |
+| Suspend | **2 minutes after a manual or idle lock** while still locked. `loginctl suspend` itself does not wait those 2 minutes: xss-lock locks first and releases elogind's delay inhibitor once xsecurelock is up (backstop `InhibitDelayMaxSec=10`). With a swapfile, sleep is `suspend-then-hibernate` (hibernate after **30 minutes** asleep). |
 | Hibernate | Power menu (**Super+Ctrl+Escape**); needs a swapfile (`sudo atelier-setup-swap`). Immediate, not the 30-minute delay. |
 | Password feedback | Jumping **cursor** (not hex digits) |
 | Picom flash on unlock | Disabled (`XSECURELOCK_COMPOSITE_OBSCURER=0`) |
