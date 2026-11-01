@@ -59,6 +59,12 @@ screen says so and points at `sudo atelier-setup-nvidia`. A failing
 `xbps-reconfigure -a` is also shown there (it used to be hidden with
 `|| true`). The log is `/var/log/atelier-install.log`.
 
+When the preset `GAMING` is yes and NVIDIA packages were installed, a
+later transaction installs `nvidia-libs-32bit` from multilib/nonfree
+(same driver version as `nvidia`). If the NVIDIA transaction failed,
+that 32-bit package is skipped and the result screen says Steam
+installed without it.
+
 ## Live ISO strategy
 
 | Image | Graphics |

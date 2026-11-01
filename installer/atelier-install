@@ -13,6 +13,10 @@
 # Optional LUKS2 on the root filesystem. /boot and ESP stay unencrypted
 # so GRUB does not need cryptodisk (GRUB cannot unlock LUKS2+argon2id).
 # Optional /swapfile for hibernation (default off; no swap partition).
+# Optional Steam (preset GAMING, default yes on this desktop). Enables
+# Void multilib and installs the 32-bit graphics stack. Edit can turn it
+# off. A Steam failure does not roll back the desktop. Preflight still
+# requires those packages to be reachable before the disk is wiped.
 # XLibre is always installed. xinit does not pull in an X server, and
 # there is no X.Org fallback.
 #
@@ -21,7 +25,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.11"
+VERSION="0.5.12"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -37,8 +41,15 @@ XLIBRE_KEY_NAME="00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist"
 # may set them.
 INSTALL_NVIDIA=0
 NVIDIA_MODE=auto
+# Shipped preset is GAMING=yes. Built-in default matches that file.
+INSTALL_GAMING=1
 INSTALL_XLIBRE=1
 NVIDIA_INSTALL_STATUS=skipped
+GAMING_INSTALL_STATUS=skipped
+GAMING_LIST_FILE=""
+GAMING_REPO_PKGS=()
+GAMING_PKGS=()
+GAMING_NVIDIA_PKGS=()
 RECONFIGURE_STATUS=skipped
 NVIDIA_GPU_DETECTED=0
 FIRMWARE_MODE=""
@@ -200,6 +211,16 @@ ui_info() {
 	local msg=$1
 	case $UI in
 	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 14 70 || true ;;
+	*) printf '%s\n' "$msg" ;;
+	esac
+}
+
+# Completion screen. Tall enough for an NVIDIA failure and a Steam failure
+# together on a 24-row console. ui_info (14 rows) clips the second one.
+ui_result() {
+	local msg=$1
+	case $UI in
+	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 22 78 || true ;;
 	*) printf '%s\n' "$msg" ;;
 	esac
 }
@@ -631,6 +652,84 @@ assign_packages() {
 	ASSIGN_PACKAGES_ERR=""
 }
 
+# installer/gaming.txt when running from the repo. The package copies it
+# to /usr/share/atelier/installer/gaming.txt. GAMING_LIST overrides both.
+gaming_list_path() {
+	local src dir
+	if [ -n "${GAMING_LIST:-}" ]; then
+		if [ -f "$GAMING_LIST" ]; then
+			printf '%s\n' "$GAMING_LIST"
+			return 0
+		fi
+		die "GAMING_LIST is not a file: $GAMING_LIST"
+	fi
+	src=${BASH_SOURCE[0]}
+	dir=$(dirname "$src")
+	if [ -f "$dir/gaming.txt" ]; then
+		printf '%s\n' "$dir/gaming.txt"
+		return 0
+	fi
+	if [ -f /usr/share/atelier/installer/gaming.txt ]; then
+		printf '%s\n' /usr/share/atelier/installer/gaming.txt
+		return 0
+	fi
+	printf '\n'
+}
+
+# repo lines enable repositories. nvidia lines are installed only when
+# the proprietary NVIDIA packages are on the target. Other lines are the
+# Steam and 32-bit stack, installed after a sync.
+load_gaming_list() {
+	local file line kind name lineno=0
+	local -a words=()
+	GAMING_REPO_PKGS=()
+	GAMING_PKGS=()
+	GAMING_NVIDIA_PKGS=()
+	file=$(gaming_list_path)
+	GAMING_LIST_FILE=$file
+	if [ -z "$file" ]; then
+		log "gaming package list not found"
+		return 0
+	fi
+	[ -r "$file" ] || die "Gaming package list is not readable: $file"
+	log "loading gaming package list $file"
+	while IFS= read -r line || [ -n "$line" ]; do
+		lineno=$((lineno + 1))
+		line=${line%$'\r'}
+		line=${line%%#*}
+		line="${line#"${line%%[![:space:]]*}"}"
+		line="${line%"${line##*[![:space:]]}"}"
+		[ -n "$line" ] || continue
+		set -f
+		# Intentional word split. set -f blocks globbing.
+		# shellcheck disable=SC2206
+		words=($line)
+		set +f
+		if [ ${#words[@]} -eq 1 ]; then
+			kind=pkg
+			name=${words[0]}
+		elif [ ${#words[@]} -eq 2 ]; then
+			kind=${words[0]}
+			name=${words[1]}
+			case $kind in
+			repo|pkg|nvidia) ;;
+			*) die "Gaming list $file:$lineno: tag must be repo, pkg, or nvidia" ;;
+			esac
+		else
+			die "Gaming list $file:$lineno: expected one package per line"
+		fi
+		if ! valid_pkgname "$name"; then
+			die "Gaming list $file:$lineno: invalid package name '$name'"
+		fi
+		case $kind in
+		repo) GAMING_REPO_PKGS+=("$name") ;;
+		nvidia) GAMING_NVIDIA_PKGS+=("$name") ;;
+		*) GAMING_PKGS+=("$name") ;;
+		esac
+	done <"$file"
+	log "gaming repos=${GAMING_REPO_PKGS[*]:-(none)} pkgs=${GAMING_PKGS[*]:-(none)} nvidia=${GAMING_NVIDIA_PKGS[*]:-(none)}"
+}
+
 load_preset() {
 	local file=$1 line key val bool
 	local lineno=0
@@ -718,6 +817,10 @@ load_preset() {
 			bool=$(parse_bool "$val") || die "Preset $file:$lineno: GRUB must be yes or no"
 			if [ "$bool" = yes ]; then INSTALL_BOOTLOADER=1; else INSTALL_BOOTLOADER=0; fi
 			;;
+		GAMING)
+			bool=$(parse_bool "$val") || die "Preset $file:$lineno: GAMING must be yes or no"
+			if [ "$bool" = yes ]; then INSTALL_GAMING=1; else INSTALL_GAMING=0; fi
+			;;
 		PACKAGES)
 			if ! assign_packages "$val"; then
 				die "Preset $file:$lineno: invalid package name '${ASSIGN_PACKAGES_ERR:-}'"
@@ -731,7 +834,7 @@ load_preset() {
 	PRESET_FILE=$file
 	apply_nvidia_policy || die "Invalid NVIDIA mode '$NVIDIA_MODE'"
 	log "preset HOSTNAME=$HOSTNAME USERNAME=$USERNAME TIMEZONE=$TIMEZONE LOCALE=$LOCALE KEYMAP=$KEYMAP"
-	log "preset NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA ENCRYPT_DISK=$ENCRYPT_DISK CREATE_SWAP=$CREATE_SWAP INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+	log "preset NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_GAMING=$INSTALL_GAMING ENCRYPT_DISK=$ENCRYPT_DISK CREATE_SWAP=$CREATE_SWAP INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
 	log "preset MIRROR=$VOID_REPO PACKAGES=${PKG_EXTRA[*]:-(none)}"
 }
 
@@ -995,12 +1098,32 @@ Blank keeps the list. A single - clears it." "$cur") || return 0
 	log "PACKAGES=${PKG_EXTRA[*]:-(none)}"
 }
 
+edit_gaming() {
+	local crc=0
+	ui_confirm "Install Steam and 32-bit graphics?
+
+This enables the Void multilib repositories
+and installs Steam, Mesa, Vulkan, and libglvnd
+for 32-bit games. When NVIDIA drivers are
+installed, nvidia-libs-32bit is included.
+
+Yes = install Steam
+No  = do not install Steam" || crc=$?
+	case $crc in
+	0) INSTALL_GAMING=1 ;;
+	1) INSTALL_GAMING=0 ;;
+	*) return 0 ;;
+	esac
+	log "INSTALL_GAMING=$INSTALL_GAMING"
+}
+
 edit_menu() {
-	local field pkgs enc sw grub
+	local field pkgs enc sw grub gs
 	if [ ${#PKG_EXTRA[@]} -eq 0 ]; then pkgs="(none)"; else pkgs="${PKG_EXTRA[*]}"; fi
 	if [ "$ENCRYPT_DISK" -eq 1 ]; then enc=yes; else enc=no; fi
 	if [ "$CREATE_SWAP" -eq 1 ]; then sw=yes; else sw=no; fi
 	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then grub=yes; else grub=no; fi
+	if [ "$INSTALL_GAMING" -eq 1 ]; then gs=yes; else gs=no; fi
 	field=$(ui_list_pick "Edit a field. Cancel returns to the summary." \
 		disk "Disk (${DISK:-none})" \
 		hostname "Hostname ($HOSTNAME)" \
@@ -1011,6 +1134,7 @@ edit_menu() {
 		keymap "Keymap ($KEYMAP)" \
 		mirror "Mirror" \
 		nvidia "NVIDIA ($NVIDIA_MODE)" \
+		gaming "Steam ($gs)" \
 		encryption "Encryption ($enc)" \
 		swap "Swapfile ($sw)" \
 		grub "GRUB ($grub)" \
@@ -1026,6 +1150,7 @@ edit_menu() {
 	keymap) pick_keymap || true ;;
 	mirror) pick_mirror || true ;;
 	nvidia) edit_nvidia ;;
+	gaming) edit_gaming ;;
 	encryption) edit_encryption ;;
 	swap) edit_swap ;;
 	grub) edit_grub ;;
@@ -1035,9 +1160,23 @@ edit_menu() {
 	esac
 }
 
+# Short label for the dialog summary. The full sentence is summary_text.
+gaming_label() {
+	if [ "${INSTALL_GAMING:-0}" -eq 1 ]; then
+		if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+			printf 'yes (Steam + NVIDIA 32-bit)\n'
+		else
+			printf 'yes (Steam)\n'
+		fi
+	else
+		printf 'no\n'
+	fi
+}
+
 summary_text() {
-	local mode=BIOS ns enc sw bl pkgs pw preset
+	local mode=BIOS ns enc sw bl pkgs pw preset gs
 	is_efi && mode=UEFI
+	gs=$(gaming_label)
 	case $NVIDIA_MODE in
 	auto)
 		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
@@ -1085,6 +1224,7 @@ Locale:      $LOCALE
 Keymap:      $KEYMAP
 NVIDIA:      $ns
 Xlibre:      yes (required, no X.Org fallback)
+Gaming:      $gs
 Packages:    $pkgs
 Mirror:      $VOID_REPO
 GRUB:        $bl
@@ -1093,12 +1233,15 @@ Install starts the copy. Edit changes one field. Quit leaves the disk alone.
 EOF
 }
 
-# Eight lines. dialog --menu on a 24-row console cannot hold the full
-# summary_text (it exits at once with "Can't make sub-window", the choice
-# is empty, and an error box would loop forever). Every field is still here.
+# Nine lines. The full summary_text does not fit a 24-row console: dialog
+# exits at once with "Can't make sub-window", the choice is empty, and an
+# error box would loop forever. Twelve lines still draws, but Quit scrolls
+# off the menu. Nine keeps Start / Edit / Quit on screen. Every field is
+# still here. Gaming is its own line.
 summary_menu_prompt() {
-	local mode=BIOS ns enc sw bl pkgs pw
+	local mode=BIOS ns enc sw bl pkgs pw gs
 	is_efi && mode=UEFI
+	gs=$(gaming_label)
 	case $NVIDIA_MODE in
 	auto)
 		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
@@ -1146,6 +1289,7 @@ summary_menu_prompt() {
 		"Root: locked (sudo via wheel)" \
 		"TZ: $TIMEZONE  Locale: $LOCALE  Key: $KEYMAP" \
 		"NVIDIA: $ns  XLibre: required" \
+		"Gaming: $gs" \
 		"Encrypt: $enc  Swap: $sw  Packages: $pkgs" \
 		"Mirror: $VOID_REPO" \
 		"Preset: ${PRESET_FILE:-built-in defaults}"
@@ -1738,6 +1882,7 @@ XLibre is required and there is no X.Org fallback."
 	fi
 
 	install_xlibre "${REPO_ARGS[@]}"
+	install_gaming "${REPO_ARGS[@]}"
 
 	xbps-reconfigure -r "$TARGETDIR" -f base-files >>"$LOG" 2>&1 || true
 	log "xbps-reconfigure -a"
@@ -2208,6 +2353,83 @@ $VOID_REPO"
 	log "preflight: Void main and nonfree repositories synced"
 }
 
+# Mirror-relative multilib URLs. void-repo-multilib itself hardcodes
+# repo-default; the installer also writes these so the chosen mirror is used,
+# the same way main and nonfree are written into /etc/xbps.d.
+multilib_repo() {
+	printf '%s\n' "${VOID_REPO%/}/multilib"
+}
+
+multilib_nonfree_repo() {
+	printf '%s\n' "${VOID_REPO%/}/multilib/nonfree"
+}
+
+# 32-bit packages live in multilib. steam lives in nonfree (pkg_visible).
+preflight_gaming_pkg() {
+	local p=$1 ml=$2 mlnf=$3
+	case $p in
+	*-32bit)
+		repo_has "$ml" "$p" && return 0
+		repo_has "$mlnf" "$p" && return 0
+		return 1
+		;;
+	esac
+	pkg_visible "$p" && return 0
+	repo_has "$ml" "$p" && return 0
+	repo_has "$mlnf" "$p" && return 0
+	return 1
+}
+
+preflight_gaming() {
+	local p ml mlnf
+	if [ "${INSTALL_GAMING:-0}" -ne 1 ]; then
+		log "preflight: gaming off"
+		return 0
+	fi
+	if [ -z "${GAMING_LIST_FILE:-}" ] || [ ! -r "$GAMING_LIST_FILE" ]; then
+		die "Gaming is enabled, but the package list is missing.
+Expected gaming.txt next to atelier-install, or
+/usr/share/atelier/installer/gaming.txt"
+	fi
+	if [ ${#GAMING_REPO_PKGS[@]} -eq 0 ] || [ ${#GAMING_PKGS[@]} -eq 0 ]; then
+		die "Gaming package list is incomplete: $GAMING_LIST_FILE
+It needs repo enablers and packages to install."
+	fi
+	ml=$(multilib_repo)
+	mlnf=$(multilib_nonfree_repo)
+	for p in "${GAMING_REPO_PKGS[@]}"; do
+		if ! repo_has "$VOID_REPO" "$p"; then
+			die "Gaming needs '$p' from the Void main repository:
+$VOID_REPO"
+		fi
+		log "preflight: gaming repo package $p is available"
+	done
+	for p in "${GAMING_PKGS[@]}"; do
+		if ! preflight_gaming_pkg "$p" "$ml" "$mlnf"; then
+			die "Gaming package '$p' was not found.
+Main:             $VOID_REPO
+Nonfree:          $VOID_NONFREE_REPO
+Multilib:         $ml
+Multilib nonfree: $mlnf"
+		fi
+		log "preflight: gaming package $p is available"
+	done
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
+		if [ ${#GAMING_NVIDIA_PKGS[@]} -eq 0 ]; then
+			die "NVIDIA and gaming are both enabled, but $GAMING_LIST_FILE
+lists no nvidia packages (expected nvidia-libs-32bit)."
+		fi
+		for p in "${GAMING_NVIDIA_PKGS[@]}"; do
+			if ! repo_has "$mlnf" "$p"; then
+				die "Gaming needs '$p' from the multilib nonfree repository:
+$mlnf"
+			fi
+			log "preflight: gaming nvidia package $p is available"
+		done
+	fi
+	log "preflight: gaming packages reachable"
+}
+
 preflight_xlibre_repo() {
 	if ! ensure_xlibre_key; then
 		die "Could not trust the XLibre repository public key from atelier-xlibre-repo in
@@ -2237,8 +2459,98 @@ preflight_checks() {
 	preflight_network
 	preflight_personal_repo
 	preflight_void_repos
+	preflight_gaming
 	preflight_xlibre_repo
-	log "preflight: OK firmware=$FIRMWARE_MODE nvidia_gpu=$NVIDIA_GPU_DETECTED mirror=$VOID_REPO"
+	log "preflight: OK firmware=$FIRMWARE_MODE nvidia_gpu=$NVIDIA_GPU_DETECTED gaming=$INSTALL_GAMING mirror=$VOID_REPO"
+}
+
+write_multilib_repos() {
+	local ml mlnf
+	ml=$(multilib_repo)
+	mlnf=$(multilib_nonfree_repo)
+	mkdir -p "$TARGETDIR/etc/xbps.d"
+	printf 'repository=%s\n' "$ml" >"$TARGETDIR/etc/xbps.d/30-repository-multilib.conf"
+	printf 'repository=%s\n' "$mlnf" >"$TARGETDIR/etc/xbps.d/31-repository-multilib-nonfree.conf"
+	log "multilib repos $ml and $mlnf"
+}
+
+target_pkg_installed() {
+	xbps-query -r "$TARGETDIR" "$1" >/dev/null 2>&1
+}
+
+# Separate transactions, like NVIDIA. Enabling the multilib repos and
+# installing packages from them cannot share one xbps transaction: the
+# new indexes are not visible until void-repo-multilib is configured.
+# Failure is recorded for the result screen and does not roll back
+# the desktop. XLibre stays fatal; Steam is optional.
+install_gaming() {
+	local -a repo_args=("$@")
+	local ml mlnf p
+	GAMING_INSTALL_STATUS=skipped
+	[ "${INSTALL_GAMING:-0}" -eq 1 ] || return 0
+	GAMING_INSTALL_STATUS=failed
+	if [ ${#GAMING_REPO_PKGS[@]} -eq 0 ] || [ ${#GAMING_PKGS[@]} -eq 0 ]; then
+		log "ERROR: gaming package list is empty (${GAMING_LIST_FILE:-missing})"
+		return 0
+	fi
+	ml=$(multilib_repo)
+	mlnf=$(multilib_nonfree_repo)
+	log "xbps-install gaming repos ${GAMING_REPO_PKGS[*]}"
+	if ! xbps-install -r "$TARGETDIR" -SyU "${repo_args[@]}" "${GAMING_REPO_PKGS[@]}" 2>&1 | tee -a "$LOG"; then
+		log "ERROR: could not enable multilib repositories"
+		return 0
+	fi
+	for p in "${GAMING_REPO_PKGS[@]}"; do
+		if ! target_pkg_installed "$p"; then
+			log "ERROR: $p is not installed after the multilib repo transaction"
+			return 0
+		fi
+	done
+	write_multilib_repos
+	log "xbps-install gaming ${GAMING_PKGS[*]}"
+	if ! xbps-install -r "$TARGETDIR" -SyU "${repo_args[@]}" \
+		--repository="$ml" --repository="$mlnf" \
+		"${GAMING_PKGS[@]}" 2>&1 | tee -a "$LOG"; then
+		log "ERROR: Steam and 32-bit graphics packages failed to install"
+		return 0
+	fi
+	for p in "${GAMING_PKGS[@]}"; do
+		if ! target_pkg_installed "$p"; then
+			log "ERROR: gaming install command succeeded but xbps-query does not see $p"
+			return 0
+		fi
+	done
+	GAMING_INSTALL_STATUS=ok
+	if [ "${INSTALL_NVIDIA:-0}" -ne 1 ]; then
+		log "gaming packages installed"
+		return 0
+	fi
+	if [ ${#GAMING_NVIDIA_PKGS[@]} -eq 0 ]; then
+		log "ERROR: no NVIDIA gaming packages in the list"
+		GAMING_INSTALL_STATUS=partial
+		return 0
+	fi
+	if ! target_pkg_installed nvidia; then
+		log "ERROR: skipping ${GAMING_NVIDIA_PKGS[*]} because nvidia is not installed"
+		GAMING_INSTALL_STATUS=partial
+		return 0
+	fi
+	log "xbps-install gaming nvidia ${GAMING_NVIDIA_PKGS[*]}"
+	if ! xbps-install -r "$TARGETDIR" -SyU "${repo_args[@]}" \
+		--repository="$ml" --repository="$mlnf" \
+		"${GAMING_NVIDIA_PKGS[@]}" 2>&1 | tee -a "$LOG"; then
+		log "ERROR: 32-bit NVIDIA libraries failed to install"
+		GAMING_INSTALL_STATUS=partial
+		return 0
+	fi
+	for p in "${GAMING_NVIDIA_PKGS[@]}"; do
+		if ! target_pkg_installed "$p"; then
+			log "ERROR: $p is not installed after the gaming NVIDIA transaction"
+			GAMING_INSTALL_STATUS=partial
+			return 0
+		fi
+	done
+	log "gaming packages installed, including ${GAMING_NVIDIA_PKGS[*]}"
 }
 
 # $@ is the xbps --repository arguments for Void, nonfree, and the personal repo.
@@ -2337,7 +2649,25 @@ xbps-reconfigure -a failed.
 Packages may be unpacked but not configured.
 See /var/log/atelier-install.log"
 	fi
-	ui_info "$done_msg"
+	case ${GAMING_INSTALL_STATUS:-} in
+	failed)
+		done_msg="$done_msg
+
+Steam was not installed. The rest of the install was kept.
+After reboot, with the network up:
+sudo xbps-install -S void-repo-multilib void-repo-multilib-nonfree
+sudo xbps-install -S steam
+See /var/log/atelier-install.log"
+		;;
+	partial)
+		done_msg="$done_msg
+
+Steam was installed, but 32-bit NVIDIA libraries were not.
+After reboot: sudo xbps-install -S nvidia-libs-32bit
+See /var/log/atelier-install.log"
+		;;
+	esac
+	ui_result "$done_msg"
 	if ui_confirm "Reboot now?"; then
 		sync
 		reboot || telinit 6 2>/dev/null || true
@@ -2346,7 +2676,7 @@ See /var/log/atelier-install.log"
 
 usage() {
 	cat <<EOF
-Atelier installer v${VERSION} (whole-disk, optional LUKS2, optional swapfile)
+Atelier installer v${VERSION} (whole-disk, optional LUKS2, swapfile, Steam)
 
 Usage: atelier-install [options]
 
@@ -2417,6 +2747,7 @@ main() {
 		apply_nvidia_policy || die "Invalid NVIDIA mode '$NVIDIA_MODE'"
 		set_mirror "$VOID_REPO"
 	fi
+	load_gaming_list
 
 	# Disk, hostname and username unless the preset set them, one user
 	# password, LUKS only when encryption is on, then summary.

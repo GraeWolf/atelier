@@ -1,0 +1,34 @@
+# Steam and 32-bit graphics. Read when the preset GAMING is yes.
+# This is an install-time list for the target system, not a live ISO list.
+#
+# One package per line. A # starts a comment.
+#   repo <name>     install first, from the Void main repository
+#   nvidia <name>   install only when proprietary NVIDIA is installed
+#   <name>          install after multilib has been synced
+#
+# Checked against https://repo-default.voidlinux.org/current on 2026-10-31
+# (filenames in the repository indexes):
+#   void-repo-multilib-6_4
+#   void-repo-multilib-nonfree-6_4
+#   steam-1.0.0.87_1 in nonfree (the client; not multilib's steam-32bit)
+#   mesa-dri-32bit-26.2.6_1
+#   vulkan-loader-32bit-1.4.363.0_1
+#   libglvnd-32bit-1.7.0_1
+#     There is no libgl-32bit package. libglvnd-32bit provides 32-bit libGL.
+#   nvidia-libs-32bit-595.112.07_1 in multilib/nonfree
+#     Same version as nvidia-595.112.07_1 in nonfree.
+# libgcc-32bit, libstdc++-32bit, libdrm-32bit, and libva-32bit are the
+# generic 32-bit runtime from Void's Steam README. The steam package
+# itself does not depend on them.
+
+repo void-repo-multilib
+repo void-repo-multilib-nonfree
+steam
+libgcc-32bit
+libstdc++-32bit
+libdrm-32bit
+libglvnd-32bit
+libva-32bit
+mesa-dri-32bit
+vulkan-loader-32bit
+nvidia nvidia-libs-32bit

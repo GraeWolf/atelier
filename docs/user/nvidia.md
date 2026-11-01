@@ -16,6 +16,12 @@ sudo atelier-setup-nvidia
 sudo reboot
 ```
 
+On the RTX 4060 Ti desktop the installer preset also installs Steam. That step adds `nvidia-libs-32bit` so 32-bit games can use the proprietary driver. If the result screen says those libraries were skipped:
+
+```bash
+sudo xbps-install -S nvidia-libs-32bit
+```
+
 Check the driver:
 
 ```bash

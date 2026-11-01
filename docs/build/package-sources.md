@@ -121,6 +121,21 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | `atelier-windows-vm` | Optional Windows VM (Docker + FreeRDP + dockur image) | **personal** (post-MVP; opt-in) |
 | `atelier-asus` | Optional ASUS ROG keyboard backlight restore (`atelier-kbd` + udev) | **personal** (post-MVP; opt-in) |
 
+### Optional Steam (`installer/gaming.txt`)
+
+Installed by `atelier-install` when `GAMING=yes`. Not a dependency of `atelier-desktop`. Not on the live ISO lists. `nvidia-libs-32bit` is installed only when the proprietary NVIDIA package is installed.
+
+| Role | XBPS name | Repository |
+|------|-----------|------------|
+| Enable multilib | `void-repo-multilib` | void main |
+| Enable multilib nonfree | `void-repo-multilib-nonfree` | void main |
+| Steam client | `steam` | void nonfree |
+| 32-bit libGL | `libglvnd-32bit` | void multilib |
+| 32-bit Mesa | `mesa-dri-32bit` | void multilib |
+| 32-bit Vulkan loader | `vulkan-loader-32bit` | void multilib |
+| 32-bit C/C++ runtime, drm, va | `libgcc-32bit`, `libstdc++-32bit`, `libdrm-32bit`, `libva-32bit` | void multilib |
+| 32-bit NVIDIA userspace | `nvidia-libs-32bit` | void multilib/nonfree |
+
 Config sources live under `configs/`; sync into the package with `scripts/sync-atelier-config-files.sh`.
 
 ### Optional Windows VM (`atelier-windows-vm`)
