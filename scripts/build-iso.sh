@@ -92,9 +92,12 @@ check_host_tools() {
 	fi
 }
 
-# Mirror base used for official Void packages (overridable for offline mirrors)
-VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
-VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-${VOID_REPO%/}/nonfree}"
+# Mirror base used for official Void packages (overridable for offline mirrors).
+# SummitHQ. repo-default.voidlinux.org has been timing out.
+VOID_REPO="${VOID_REPO:-https://mirrors.summithq.com/voidlinux/current}"
+VOID_REPO="${VOID_REPO%/}"
+VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-${VOID_REPO}/nonfree}"
+export VOID_REPO VOID_NONFREE_REPO
 
 check_packages_resolvable() {
 	# Best-effort: ensure atelier packages exist in local repo

@@ -1,7 +1,7 @@
 # Template file for 'atelier-installer'
 # Dialog (TUI) whole-disk installer for Atelier live images.
 pkgname=atelier-installer
-version=0.5.12
+version=0.5.13
 revision=1
 create_wrksrc=yes
 short_desc="Atelier dialog TUI installer (whole-disk, optional LUKS2, swapfile, Steam)"

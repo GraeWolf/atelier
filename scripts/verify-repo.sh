@@ -19,7 +19,7 @@ ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 REPO_OUT="$ROOT/repo/out"
 TARGET_ROOT=""
 KEEP_ROOT=0
-VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
+VOID_REPO="${VOID_REPO:-https://mirrors.summithq.com/voidlinux/current}"
 
 while [ $# -gt 0 ]; do
 	case "$1" in

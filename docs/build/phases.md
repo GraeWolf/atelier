@@ -32,7 +32,7 @@ Themed bspwm stack configs shipped as `atelier-config` (`atelier-theme`; Tokyo N
 void-mklive wrappers; personal repo embedded; themed live desktop path.
 
 ### Step 5 — Custom dialog installer
-`atelier-install` whole-disk dialog TUI (0.5.12). Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). No graphical front end.
+`atelier-install` whole-disk dialog TUI (0.5.13). Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). Default Void mirror is SummitHQ (0.5.13). No graphical front end.
 
 ### Step 6 — NVIDIA proprietary support
 `atelier-nvidia`, `atelier-xlibre-repo`, installer options, setup scripts.

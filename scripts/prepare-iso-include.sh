@@ -26,6 +26,26 @@ mkdir -p "$DST"
 # Copy static live overlay
 cp -a "$SRC"/. "$DST/"
 
+# Same filenames as /usr/share/xbps.d from the xbps and void-repo-* packages.
+# /etc/xbps.d is preferred, so the live image does not keep repo-default.
+# VOID_REPO is exported by build-iso.sh. Running this script alone uses SummitHQ.
+VOID_REPO="${VOID_REPO:-https://mirrors.summithq.com/voidlinux/current}"
+VOID_REPO="${VOID_REPO%/}"
+write_void_repo_conf() {
+	_name=$1
+	_url=$2
+	{
+		printf '# Overrides /usr/share/xbps.d/%s\n' "$_name"
+		printf 'repository=%s\n' "$_url"
+	} >"$DST/etc/xbps.d/$_name"
+}
+mkdir -p "$DST/etc/xbps.d"
+write_void_repo_conf 00-repository-main.conf "$VOID_REPO"
+write_void_repo_conf 10-repository-nonfree.conf "${VOID_REPO}/nonfree"
+write_void_repo_conf 10-repository-multilib.conf "${VOID_REPO}/multilib"
+write_void_repo_conf 10-repository-multilib-nonfree.conf "${VOID_REPO}/multilib/nonfree"
+atelier_info "Live Void mirror: $VOID_REPO"
+
 # Embed personal repository for live system updates / reinstall of Atelier pkgs
 if [ ! -d "$REPO_OUT" ] || ! ls "$REPO_OUT"/*.xbps >/dev/null 2>&1; then
 	atelier_info "repo/out empty — running build-repo.sh"

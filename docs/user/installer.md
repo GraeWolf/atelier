@@ -12,7 +12,7 @@
 
    This runs a **dialog** TUI wizard (similar spirit to Void’s installer). There is no graphical installer.
 
-4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, mirror, NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, and Steam.
+4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, the SummitHQ Void mirror (`https://mirrors.summithq.com/voidlinux/current`), NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, Steam, and the mirror (`MIRROR=` in the preset does the same).
 5. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 6. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 

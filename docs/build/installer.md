@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.12** |
+| XBPS package | `atelier-installer` **0.5.13** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Preset | `/etc/atelier/install.conf` |
 
@@ -26,7 +26,7 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 | `atelier-install --preset FILE` | Load settings from FILE |
 | `atelier-install --dry-run` | Stop after the summary; do not partition |
 
-The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: `America/New_York`, `en_US.UTF-8`, keymap `us`, the default Void mirror, NVIDIA `auto`, encryption off, swapfile off, GRUB on, Steam on (`GAMING=yes`), and extra package `dropbox`. `HOSTNAME` and `USERNAME` are empty in that file, so the wizard asks. A private `--preset` file may set them, and a value set there is not asked. Built-in defaults match the shipped file when it is absent. Omitting `GAMING` keeps the built-in default, which is yes.
+The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: `America/New_York`, `en_US.UTF-8`, keymap `us`, mirror `https://mirrors.summithq.com/voidlinux/current` (SummitHQ), NVIDIA `auto`, encryption off, swapfile off, GRUB on, Steam on (`GAMING=yes`), and extra package `dropbox`. `HOSTNAME` and `USERNAME` are empty in that file, so the wizard asks. A private `--preset` file may set them, and a value set there is not asked. `MIRROR=` in that file, or Edit → Mirror, selects another Void mirror. Built-in defaults match the shipped file when it is absent. Omitting `GAMING` keeps the built-in default, which is yes.
 
 Flow (whole-disk only):
 
@@ -49,7 +49,7 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 
 | Variable | Effect |
 |----------|--------|
-| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos from the preset mirror. Nonfree is still configured. `dropbox` is installed only when listed in preset `PACKAGES` |
+| `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos from the preset mirror. Default `https://mirrors.summithq.com/voidlinux/current`. Nonfree, multilib, and multilib/nonfree are that URL plus the suffix. `dropbox` is installed only when listed in preset `PACKAGES` |
 | `INSTALL_NVIDIA` | `NVIDIA=auto` (default) installs proprietary drivers only when a GPU is detected. `yes` / `no` force it. Separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
 | `INSTALL_GAMING` | `GAMING=yes` (shipped preset and built-in default) or `no`. Separate transactions: `void-repo-multilib` + `void-repo-multilib-nonfree`, then Steam and the 32-bit stack from `installer/gaming.txt`, then `nvidia-libs-32bit` only when NVIDIA packages are actually installed. Failure is non-fatal and is named on the result screen. Steam is not a dependency of `atelier-desktop` |
 | `INSTALL_XLIBRE` | always `1`. `atelier-xlibre-repo` + `xlibre` + `xlibre-xserver`. No X.Org fallback. Missing repo, failed install, or no `/usr/bin/Xorg` aborts the install |
@@ -74,7 +74,7 @@ After the summary is confirmed, and before `parted` / `wipefs`, the installer ch
 | Tools (`parted`, `mkfs.ext4`, `xbps-install`, `xbps-query`, `lsblk`, `blkid`, `mount`, `umount`, `wipefs`; `mkfs.vfat` on UEFI; `cryptsetup` / `mkswap` when those options are on) | Stop. Disk unchanged |
 | Firmware (`/sys/firmware` → UEFI or BIOS) | Stop if `/sys/firmware` is missing |
 | NVIDIA GPU (`lspci` or `/sys/bus/pci`) | Stop if the PCI bus cannot be inspected. No GPU is a successful detection, not an error |
-| Network to the chosen mirror's `x86_64-repodata` | Stop. "Network unreachable" vs "mirror index" are separate messages |
+| Network to the chosen mirror's `x86_64-repodata`, and each later `xbps-query -M`, with a 30s deadline (`MIRROR_TIMEOUT`) | Stop. The message names the mirror URL. A hang is reported as a timeout |
 | Personal repo (`atelier-desktop`, `atelier-xlibre-repo`) | Stop |
 | Void main (`base-system`, `linux`), each preset package (shipped preset: `dropbox` from nonfree), and `nvidia` / `linux-headers` when NVIDIA will be installed | Stop |
 | Gaming, when `GAMING=yes`: `void-repo-multilib` and `void-repo-multilib-nonfree` on the main mirror, each package in `installer/gaming.txt`, and `nvidia-libs-32bit` on `…/multilib/nonfree` when NVIDIA will be installed. `xbps-query -M` fetches the remote index (same as the XLibre check). 32-bit names are queried on `…/multilib` | Stop. The disk is not modified |
@@ -94,7 +94,16 @@ Steam is the same kind of failure as NVIDIA, not the same kind as XLibre. The de
 
 The list is `installer/gaming.txt`, installed as `/usr/share/atelier/installer/gaming.txt`. It is not under `iso/package-lists/` (those lists are the live image) and it is not an `atelier-gaming` metapackage.
 
-A metapackage would record the names, but Void cannot enable `void-repo-multilib` and install from that repo in one transaction: the new index is visible only after the repo package is configured. `nvidia-libs-32bit` is also conditional. The installer therefore does three transactions when gaming and NVIDIA are both on: repo enablers, Steam plus the common 32-bit stack, then `nvidia-libs-32bit` if `nvidia` is actually installed. It writes `/etc/xbps.d/30-repository-multilib.conf` and `31-repository-multilib-nonfree.conf` for the chosen mirror. `void-repo-multilib` still drops its own file pointing at `repo-default`, which is the same pattern as `void-repo-nonfree`.
+A metapackage would record the names, but Void cannot enable `void-repo-multilib` and install from that repo in one transaction: the new index is visible only after the repo package is configured. `nvidia-libs-32bit` is also conditional. The installer therefore does three transactions when gaming and NVIDIA are both on: repo enablers, Steam plus the common 32-bit stack, then `nvidia-libs-32bit` if `nvidia` is actually installed.
+
+`void-repo-nonfree`, `void-repo-multilib`, and the `xbps` package install repository files under `/usr/share/xbps.d` that point at `repo-default.voidlinux.org`. XBPS reads `/etc/xbps.d` first and skips a system file whose name it has already seen. The installer writes the same names with the chosen mirror:
+
+| `/etc/xbps.d` file | Replaces |
+|--------------------|----------|
+| `00-repository-main.conf` | `/usr/share/xbps.d/00-repository-main.conf` |
+| `10-repository-nonfree.conf` | `void-repo-nonfree` |
+| `10-repository-multilib.conf` | `void-repo-multilib` |
+| `10-repository-multilib-nonfree.conf` | `void-repo-multilib-nonfree` |
 
 Names were checked against `https://repo-default.voidlinux.org/current` on 2026-10-31. There is no `libgl-32bit` package; `libglvnd-32bit` provides 32-bit libGL. The client package is nonfree `steam` (`1.0.0.87_1`), not multilib's `steam-32bit`. `nvidia-libs-32bit` and `nvidia` were both `595.112.07_1`. `libgcc-32bit`, `libstdc++-32bit`, `libdrm-32bit`, and `libva-32bit` are included because Void's Steam README lists them as the generic 32-bit runtime and the `steam` package does not depend on them.
 
@@ -148,7 +157,9 @@ dialog (TUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.5.12 and names the preset file
+- [ ] Welcome screen says v0.5.13 and names the preset file
+- [ ] Summary mirror is `https://mirrors.summithq.com/voidlinux/current` unless the preset changed it
+- [ ] Installed system `/etc/xbps.d/00-repository-main.conf`, `10-repository-nonfree.conf`, `10-repository-multilib.conf`, and `10-repository-multilib-nonfree.conf` use that mirror
 - [ ] Summary shows Gaming. Edit → Steam toggles it, and the summary line changes. On an 80x24 console the menu still shows Start installation, Edit a field, and Quit
 - [ ] `GAMING=yes` with the network up: preflight log shows multilib packages found via `xbps-query -M` before the disk is partitioned. `GAMING=no` does not query them
 - [ ] Installed system with gaming on has `steam`, `mesa-dri-32bit`, `vulkan-loader-32bit`, `libglvnd-32bit`, and (when NVIDIA installed) `nvidia-libs-32bit`. `xbps-query -l | grep 32bit` shows them

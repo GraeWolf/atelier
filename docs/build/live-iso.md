@@ -59,7 +59,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 3. Clones **void-mklive** into `iso/void-mklive/` (gitignored) if missing
 4. Embeds **void-installer** from void-mklive’s `installer.sh` (emergency fallback)
 5. Runs `mklive.sh` with:
-   - official Void **main** + **nonfree** (the default install preset lists `dropbox`)
+   - official Void **main** + **nonfree** from SummitHQ (`https://mirrors.summithq.com/voidlinux/current`, override with `VOID_REPO`). The default install preset lists `dropbox`
    - local `repo/out` (Atelier packages)
    - GraeWolf void-repo URL (optional packages such as brave-origin)
    - packages from `iso/package-lists/live.txt` (includes `atelier-desktop`)
@@ -68,7 +68,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
    - bootloader title: **Atelier Linux**
    - postsetup: `iso/scripts/postsetup.sh`
 
-`build-iso.sh` queries `dropbox` on the nonfree mirror before mklive runs, because the default install preset installs it. A failure there means the nonfree URL is missing or unreachable.
+`build-iso.sh` queries `dropbox` on the nonfree mirror before mklive runs, because the default install preset installs it. A failure there means that mirror (`$VOID_REPO/nonfree`, SummitHQ unless `VOID_REPO` is set) is missing or unreachable.
 
 ## Live session (expected)
 
@@ -80,6 +80,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 | Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
 | XLibre repo key | `atelier-xlibre-repo` is on the live image (`live.txt`). Installer preflight trusts that key before syncing XLibre |
 | GraeWolf void-repo | `/etc/xbps.d/20-repository-graewolf.conf` + public key (brave-origin, etc.) |
+| Void mirror | `/etc/xbps.d/00-repository-main.conf` and the nonfree / multilib files. These replace the `repo-default` URLs shipped by the `xbps` and `void-repo-*` packages |
 
 ## Package lists
 

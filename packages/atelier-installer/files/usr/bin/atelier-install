@@ -25,12 +25,17 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.12"
+VERSION="0.5.13"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
-VOID_REPO="${VOID_REPO:-https://repo-default.voidlinux.org/current}"
-VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-https://repo-default.voidlinux.org/current/nonfree}"
+# SummitHQ. repo-default.voidlinux.org has been timing out. A preset
+# MIRROR= line, or Edit → Mirror, replaces this.
+VOID_REPO="${VOID_REPO:-https://mirrors.summithq.com/voidlinux/current}"
+VOID_REPO="${VOID_REPO%/}"
+VOID_NONFREE_REPO="${VOID_NONFREE_REPO:-${VOID_REPO}/nonfree}"
+# Preflight gives up after this many seconds and names the mirror.
+MIRROR_TIMEOUT="${MIRROR_TIMEOUT:-30}"
 ATELIER_REPO_LIVE="${ATELIER_REPO_LIVE:-/usr/share/atelier/repo}"
 XLIBRE_REPO="${XLIBRE_REPO:-https://github.com/xlibre-void/xlibre/releases/latest/download/}"
 XLIBRE_KEY_NAME="00:ca:42:57:c9:c0:9a:ec:94:b4:7d:97:e5:a9:aa:1e.plist"
@@ -981,7 +986,8 @@ pick_keymap() {
 pick_mirror() {
 	local pick
 	pick=$(ui_list_pick "Select Void mirror:" \
-		"https://repo-default.voidlinux.org/current" "Default (repo-default)" \
+		"https://mirrors.summithq.com/voidlinux/current" "SummitHQ (default)" \
+		"https://repo-default.voidlinux.org/current" "repo-default" \
 		"https://repo-fastly.voidlinux.org/current" "Fastly CDN" \
 		"https://mirrors.servercentral.com/voidlinux/current" "ServerCentral" \
 		"https://mirror.ps.kz/voidlinux/current" "ps.kz" \
@@ -1796,9 +1802,9 @@ install_packages() {
 
 	# Primary + nonfree mirrors. void-repo-nonfree is always installed.
 	# dropbox is not in the base list; the preset PACKAGES line adds it.
-	mkdir -p "$TARGETDIR/etc/xbps.d"
-	printf 'repository=%s\n' "$VOID_REPO" >"$TARGETDIR/etc/xbps.d/00-repository-main.conf"
-	printf 'repository=%s\n' "$VOID_NONFREE_REPO" >"$TARGETDIR/etc/xbps.d/10-repository-nonfree.conf"
+	# /etc/xbps.d files with the same names replace the repo-default URLs
+	# that the xbps and void-repo-* packages install under /usr/share/xbps.d.
+	write_mirror_repos
 	REPO_ARGS+=(--repository="$VOID_NONFREE_REPO")
 
 	# GraeWolf personal packages (brave-origin, ...) - live medium + package ship conf+key
@@ -2139,6 +2145,7 @@ preflight_nvidia() {
 
 # curl and wget are not on the live ISO. timeout(1) is (coreutils in
 # base-system). The TCP fallback is what a stock live image uses.
+# Every failure names VOID_REPO. A hang becomes a timeout (MIRROR_TIMEOUT).
 preflight_network() {
 	local url host hostport port rc tool rest
 	url="${VOID_REPO%/}/x86_64-repodata"
@@ -2164,43 +2171,34 @@ preflight_network() {
 	case $port in
 	''|*[!0-9]*) die "Invalid mirror port in $VOID_REPO" ;;
 	esac
-	log "preflight: network check $url"
+	log "preflight: network check $url (timeout ${MIRROR_TIMEOUT}s)"
 	rc=0
 	if have curl; then
 		tool=curl
-		curl -fsI --max-time 20 -o /dev/null "$url" >>"$LOG" 2>&1 || rc=$?
+		curl -fsI --max-time "$MIRROR_TIMEOUT" -o /dev/null "$url" >>"$LOG" 2>&1 || rc=$?
 	elif have wget; then
 		tool=wget
-		wget -q --spider --timeout=20 "$url" >>"$LOG" 2>&1 || rc=$?
+		wget -q --spider --timeout="$MIRROR_TIMEOUT" "$url" >>"$LOG" 2>&1 || rc=$?
 	elif have timeout; then
 		tool=tcp
-		timeout 20 bash -c "echo >/dev/tcp/${host}/${port}" >>"$LOG" 2>&1 || rc=$?
+		timeout "$MIRROR_TIMEOUT" bash -c "echo >/dev/tcp/${host}/${port}" >>"$LOG" 2>&1 || rc=$?
 	else
-		die "Network check needs curl, wget, or timeout(1)."
+		die "Network check needs curl, wget, or timeout(1).
+Void mirror: $VOID_REPO"
 	fi
 	if [ "$rc" -eq 0 ]; then
-		log "preflight: network OK ($host via $tool)"
+		log "preflight: network OK ($VOID_REPO via $tool)"
 		return 0
 	fi
-	case $tool in
-	curl)
-		case $rc in
-		6|7|28) die "Network unreachable (could not contact $host, curl status $rc)." ;;
-		*) die "Could not reach the Void mirror index:
-$url
-(curl status $rc)." ;;
-		esac
-		;;
-	wget)
-		case $rc in
-		4) die "Network unreachable (could not contact $host, wget status $rc)." ;;
-		*) die "Could not reach the Void mirror index:
-$url
-(wget status $rc)." ;;
-		esac
-		;;
-	*) die "Network unreachable (could not open $host:$port)." ;;
-	esac
+	if [ "$rc" -eq 124 ] || { [ "$tool" = curl ] && [ "$rc" -eq 28 ]; }; then
+		die "Timed out after ${MIRROR_TIMEOUT}s contacting the Void mirror:
+$VOID_REPO
+Index: $url"
+	fi
+	die "Could not reach the Void mirror:
+$VOID_REPO
+Index: $url
+($tool status $rc, host $host)"
 }
 
 repo_has() {
@@ -2214,7 +2212,19 @@ repo_has() {
 	# through to the installed atelier-xlibre-repo package.
 	# -i uses only this repository. -p pkgver avoids logging the
 	# whole package record (that was flooding the failure tail).
-	ver=$(xbps-query -M -i --repository="$repo" -R -p pkgver "$pkg" 2>>"$LOG") || rc=$?
+	# timeout(1) so a dead mirror cannot hang preflight. 124 is timeout's
+	# status. The message names the repository that did not answer.
+	if have timeout; then
+		ver=$(timeout "$MIRROR_TIMEOUT" xbps-query -M -i --repository="$repo" -R -p pkgver "$pkg" 2>>"$LOG") || rc=$?
+	else
+		log "preflight: timeout(1) missing; xbps-query has no deadline"
+		ver=$(xbps-query -M -i --repository="$repo" -R -p pkgver "$pkg" 2>>"$LOG") || rc=$?
+	fi
+	if [ "$rc" -eq 124 ]; then
+		die "Timed out after ${MIRROR_TIMEOUT}s contacting this repository:
+$repo
+The check was for package '$pkg'."
+	fi
 	if [ "$rc" -ne 0 ] || [ -z "$ver" ]; then
 		log "preflight: $pkg is not in $repo (xbps-query status ${rc})"
 		return 1
@@ -2353,9 +2363,9 @@ $VOID_REPO"
 	log "preflight: Void main and nonfree repositories synced"
 }
 
-# Mirror-relative multilib URLs. void-repo-multilib itself hardcodes
-# repo-default; the installer also writes these so the chosen mirror is used,
-# the same way main and nonfree are written into /etc/xbps.d.
+# Mirror-relative multilib URLs. void-repo-multilib hardcodes
+# repo-default in /usr/share/xbps.d. write_mirror_repos puts the chosen
+# mirror in /etc/xbps.d under the same filenames, which XBPS prefers.
 multilib_repo() {
 	printf '%s\n' "${VOID_REPO%/}/multilib"
 }
@@ -2464,14 +2474,32 @@ preflight_checks() {
 	log "preflight: OK firmware=$FIRMWARE_MODE nvidia_gpu=$NVIDIA_GPU_DETECTED gaming=$INSTALL_GAMING mirror=$VOID_REPO"
 }
 
-write_multilib_repos() {
-	local ml mlnf
+# Same basenames as /usr/share/xbps.d from the xbps package and from
+# void-repo-nonfree / void-repo-multilib / void-repo-multilib-nonfree.
+# XBPS reads /etc/xbps.d first and skips a system file it has already seen.
+write_mirror_repos() {
+	local ml mlnf dir
 	ml=$(multilib_repo)
 	mlnf=$(multilib_nonfree_repo)
-	mkdir -p "$TARGETDIR/etc/xbps.d"
-	printf 'repository=%s\n' "$ml" >"$TARGETDIR/etc/xbps.d/30-repository-multilib.conf"
-	printf 'repository=%s\n' "$mlnf" >"$TARGETDIR/etc/xbps.d/31-repository-multilib-nonfree.conf"
-	log "multilib repos $ml and $mlnf"
+	dir="$TARGETDIR/etc/xbps.d"
+	mkdir -p "$dir"
+	{
+		printf '# Overrides /usr/share/xbps.d/00-repository-main.conf\n'
+		printf 'repository=%s\n' "$VOID_REPO"
+	} >"$dir/00-repository-main.conf"
+	{
+		printf '# Overrides /usr/share/xbps.d/10-repository-nonfree.conf\n'
+		printf 'repository=%s\n' "$VOID_NONFREE_REPO"
+	} >"$dir/10-repository-nonfree.conf"
+	{
+		printf '# Overrides /usr/share/xbps.d/10-repository-multilib.conf\n'
+		printf 'repository=%s\n' "$ml"
+	} >"$dir/10-repository-multilib.conf"
+	{
+		printf '# Overrides /usr/share/xbps.d/10-repository-multilib-nonfree.conf\n'
+		printf 'repository=%s\n' "$mlnf"
+	} >"$dir/10-repository-multilib-nonfree.conf"
+	log "mirror repos main=$VOID_REPO nonfree=$VOID_NONFREE_REPO multilib=$ml nonfree-multilib=$mlnf"
 }
 
 target_pkg_installed() {
@@ -2506,7 +2534,7 @@ install_gaming() {
 			return 0
 		fi
 	done
-	write_multilib_repos
+	write_mirror_repos
 	log "xbps-install gaming ${GAMING_PKGS[*]}"
 	if ! xbps-install -r "$TARGETDIR" -SyU "${repo_args[@]}" \
 		--repository="$ml" --repository="$mlnf" \
