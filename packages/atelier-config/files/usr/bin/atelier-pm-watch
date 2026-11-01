@@ -4,8 +4,9 @@
 # system-sleep hooks run only after delay inhibitors release, or after
 # InhibitDelayMaxSec. This signal is the start of that wait.
 #
-# Logs: $XDG_RUNTIME_DIR/atelier-prepare-sleep.log
-#       and /var/log/atelier-pm.log when that file is writable.
+# Logs: /tmp/atelier-prepare-sleep.log (always)
+#       $XDG_RUNTIME_DIR/atelier-prepare-sleep.log when that dir exists
+#       /var/log/atelier-pm.log when it is writable
 set -eu
 
 # elogind's loginctl has no list-inhibitors. busctl is what the desktop has.
@@ -14,11 +15,17 @@ if ! command -v busctl >/dev/null 2>&1 && ! command -v dbus-monitor >/dev/null 2
 	exit 0
 fi
 
-runtime=${XDG_RUNTIME_DIR:-/tmp}
-mkdir -p "$runtime" 2>/dev/null || true
-log=$runtime/atelier-prepare-sleep.log
-pidfile=$runtime/atelier-pm-watch.pid
+# Always /tmp so the file is findable even when the session's
+# XDG_RUNTIME_DIR is unset or different from the shell that reads it.
+# Also the runtime dir and the system pm log when those are writable.
+log=/tmp/atelier-prepare-sleep.log
+pidfile=/tmp/atelier-pm-watch.pid
 syslog=/var/log/atelier-pm.log
+runtime_log=""
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+	mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+	runtime_log=$XDG_RUNTIME_DIR/atelier-prepare-sleep.log
+fi
 
 if [ -f "$pidfile" ]; then
 	old=$(cat "$pidfile" 2>/dev/null || true)
@@ -31,6 +38,9 @@ printf '%s\n' "$$" >"$pidfile"
 logline() {
 	ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)
 	printf '%s atelier-pm-watch: %s\n' "$ts" "$*" >>"$log" 2>/dev/null || true
+	if [ -n "$runtime_log" ]; then
+		printf '%s atelier-pm-watch: %s\n' "$ts" "$*" >>"$runtime_log" 2>/dev/null || true
+	fi
 	printf '%s atelier-pm-watch: %s\n' "$ts" "$*" >>"$syslog" 2>/dev/null || true
 }
 

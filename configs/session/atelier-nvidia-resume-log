@@ -53,12 +53,20 @@ if command -v busctl >/dev/null 2>&1; then
 else
 	note "busctl not installed"
 fi
-prep=${XDG_RUNTIME_DIR:-/tmp}/atelier-prepare-sleep.log
-if [ -r "$prep" ]; then
-	note "--- $prep (PrepareForSleep, from atelier-pm-watch) ---"
-	tail -n 80 "$prep"
-else
-	note "(no $prep yet; start a new X session so atelier-pm-watch is running)"
+for prep in /tmp/atelier-prepare-sleep.log \
+	"${XDG_RUNTIME_DIR:-}/atelier-prepare-sleep.log"
+do
+	[ -n "$prep" ] || continue
+	if [ -r "$prep" ]; then
+		note "--- $prep (PrepareForSleep, from atelier-pm-watch) ---"
+		tail -n 40 "$prep"
+	else
+		note "(no $prep)"
+	fi
+done
+if [ -r /tmp/atelier-pm-watch.out ]; then
+	note "--- /tmp/atelier-pm-watch.out ---"
+	tail -n 20 /tmp/atelier-pm-watch.out
 fi
 
 section "kernel command line"

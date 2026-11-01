@@ -54,8 +54,10 @@ fi
 
 # Timestamp elogind PrepareForSleep and who is holding a sleep inhibitor.
 # The system-sleep hooks run only after that wait.
-if [ -x /usr/bin/atelier-pm-watch ] && command -v dbus-monitor >/dev/null 2>&1; then
-	pgrep -u "$(id -u)" -x atelier-pm-watch >/dev/null 2>&1 || atelier-pm-watch &
+# busctl is on this system; dbus-monitor often is not. The script no-ops
+# if neither exists. Do not pgrep -x: a shell script's comm is sh.
+if [ -x /usr/bin/atelier-pm-watch ]; then
+	atelier-pm-watch >/tmp/atelier-pm-watch.out 2>&1 &
 fi
 
 # Wallpaper: themed copy from atelier-theme, else stock, else solid

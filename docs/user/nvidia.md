@@ -98,7 +98,7 @@ sudo reboot
 
 If xbps asks whether to replace `/etc/modprobe.d/atelier-nvidia.conf` or `/etc/elogind/system-sleep/atelier-nvidia`, take the new package file. Check the versions with `xbps-query atelier-nvidia atelier-config`.
 
-`0.3.13_5` still left about a minute between `loginctl suspend` and the first sleep hook, which is longer than `InhibitDelayMaxSec` (10s). The NVIDIA handshake itself was one second, so that gap is not the VRAM save or `chvt`. `atelier-config` 0.3.13_6 writes the kernel `PM:` / `Freezing` lines (with `dmesg -T`) into the post snapshot, and `atelier-pm-watch` uses `busctl` so it runs without `dbus-monitor`.
+On `0.3.13_6` the hooks started 1s after `loginctl suspend`, and `PM: suspend entry` was ~110s after `atelier-nvidia` `pre: done`. `atelier-wifi` logged no `pre` line, so it never started. The stall is inside the NVIDIA hook after that line (`sync`) or inside `atelier-pm-log`. `0.3.13_7` caps `sync` at 5s, caps `modprobe -r` at 3s, skips the MediaTek unload when no mt7921/mt7925 PCI device is bound, and logs `enter` / `sync: begin` / `leave` on each hook. The prepare-sleep log is `/tmp/atelier-prepare-sleep.log` (the watcher was not started when `dbus-monitor` was missing).
 
 Time one cycle. The first timestamp is when you press enter. Compare it with `PrepareForSleep` (elogind accepted the call) and with `atelier-nvidia pre` (hooks started). The piece before `PrepareForSleep` is outside the inhibitor cap (often polkit). The piece from `PrepareForSleep` to `pre` is the delay locks, and should be under 10s. The piece from `pre` to `PM: suspend entry` is the hooks after `atelier-pm-log` (including `atelier-wifi`) and the kernel.
 

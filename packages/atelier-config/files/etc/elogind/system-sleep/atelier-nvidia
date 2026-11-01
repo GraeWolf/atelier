@@ -44,6 +44,24 @@ log() {
 		>>"$LOG" 2>/dev/null || true
 }
 
+# sync(1) can sit in the kernel for minutes. elogind will not write
+# /sys/power/state until this hook returns, which looked like a ~110s gap
+# after "pre: done" (that line is logged before the sync).
+bounded_sync() {
+	_s0=$(date +%s 2>/dev/null || echo 0)
+	log "sync: begin"
+	if command -v timeout >/dev/null 2>&1; then
+		timeout -k 2 5 sync >/dev/null 2>&1 || log "WARN: sync timed out or failed"
+	else
+		sync >/dev/null 2>&1 || true
+	fi
+	log "sync: end elapsed=$(( $(date +%s 2>/dev/null || echo 0) - _s0 ))s"
+}
+
+_leave() {
+	log "$1: leave elapsed=$(( $(date +%s 2>/dev/null || echo 0) - ${2:-0} ))s"
+}
+
 have_mod() {
 	grep -q "^$1 " /proc/modules 2>/dev/null
 }
@@ -212,6 +230,7 @@ reload_hybrid() {
 }
 
 nv_pre() {
+	_t0=$(date +%s 2>/dev/null || echo 0)
 	log "pre: start overall=${2:-} systemd_action=${SYSTEMD_SLEEP_ACTION:-}"
 	vendor_was=0
 	if vendor_hook_active; then
@@ -221,7 +240,8 @@ nv_pre() {
 	if [ "$vendor_was" -eq 1 ]; then
 		: >"$FLAG_VENDOR"
 		log "WARN: vendor hook already ran nvidia-sleep.sh hibernate this cycle; not calling it again. Resume runs on post."
-		sync >/dev/null 2>&1 || true
+		bounded_sync
+		_leave pre "$_t0"
 		return 0
 	fi
 	if hybrid; then
@@ -229,14 +249,16 @@ nv_pre() {
 		unload_hybrid
 		if ! have_mod nvidia; then
 			log "pre: hybrid unload done; skip procfs"
-			sync >/dev/null 2>&1 || true
+			bounded_sync
+			_leave pre "$_t0"
 			return 0
 		fi
 		log "WARN: hybrid unload left nvidia loaded; using procfs"
 	fi
 	if ! have_mod nvidia && [ ! -e /proc/driver/nvidia/suspend ]; then
 		log "pre: nvidia not loaded; nothing to do"
-		sync >/dev/null 2>&1 || true
+		bounded_sync
+		_leave pre "$_t0"
 		return 0
 	fi
 	log_pm_context
@@ -248,10 +270,12 @@ nv_pre() {
 	else
 		log "WARN: suspend handshake failed; resume will not be sent"
 	fi
-	sync >/dev/null 2>&1 || true
+	bounded_sync
+	_leave pre "$_t0"
 }
 
 nv_post() {
+	_t0=$(date +%s 2>/dev/null || echo 0)
 	log "post: start"
 	if [ -f "$FLAG_VENDOR" ] || [ -f "$FLAG_OURS" ]; then
 		run_nv resume
@@ -261,7 +285,8 @@ nv_post() {
 	fi
 	reload_hybrid
 	log "post: done"
-	sync >/dev/null 2>&1 || true
+	bounded_sync
+	_leave post "$_t0"
 }
 
 phase=${1:-}
