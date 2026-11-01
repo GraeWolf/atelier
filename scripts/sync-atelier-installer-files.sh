@@ -14,6 +14,10 @@ dst="$root/packages/atelier-installer/files"
 	printf 'error: missing %s/install.conf\n' "$src" >&2
 	exit 1
 }
+[ -f "$src/gaming.txt" ] || {
+	printf 'error: missing %s/gaming.txt\n' "$src" >&2
+	exit 1
+}
 
 if [ -d "$dst" ]; then
 	if ! rm -rf "$dst" 2>/dev/null; then
@@ -23,9 +27,10 @@ if [ -d "$dst" ]; then
 		}
 	fi
 fi
-mkdir -p "$dst/usr/bin" "$dst/etc/atelier"
+mkdir -p "$dst/usr/bin" "$dst/etc/atelier" "$dst/usr/share/atelier/installer"
 
 install -m 755 "$src/atelier-install" "$dst/usr/bin/atelier-install"
 install -m 644 "$src/install.conf" "$dst/etc/atelier/install.conf"
+install -m 644 "$src/gaming.txt" "$dst/usr/share/atelier/installer/gaming.txt"
 
 printf 'Synced %s → %s\n' "$src" "$dst"

@@ -10,6 +10,8 @@ Flat package lists for documentation and void-mklive.
 | `live.txt` | Full mklive `-p` list (`atelier-desktop` + live extras) |
 | `nvidia.txt` | Optional proprietary NVIDIA-oriented package set (not default live) |
 
+Steam is not in these lists. The installer installs it on the target when `GAMING=yes`, from `installer/gaming.txt`.
+
 Authoritative source notes and gaps: [docs/build/package-sources.md](../../docs/build/package-sources.md)
 
 Metapackage equivalents (personal repo):

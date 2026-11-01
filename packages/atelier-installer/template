@@ -1,10 +1,10 @@
 # Template file for 'atelier-installer'
 # Dialog (TUI) whole-disk installer for Atelier live images.
 pkgname=atelier-installer
-version=0.5.11
+version=0.5.13
 revision=1
 create_wrksrc=yes
-short_desc="Atelier dialog TUI installer (whole-disk, optional LUKS2, optional swapfile)"
+short_desc="Atelier dialog TUI installer (whole-disk, optional LUKS2, swapfile, Steam)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
 homepage="https://github.com/GraeWolf/atelier"
@@ -28,4 +28,5 @@ depends="
 do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-install" 755 usr/bin
 	vinstall "${FILESDIR}/etc/atelier/install.conf" 644 etc/atelier
+	vinstall "${FILESDIR}/usr/share/atelier/installer/gaming.txt" 644 usr/share/atelier/installer
 }

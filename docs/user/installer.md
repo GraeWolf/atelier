@@ -12,7 +12,7 @@
 
    This runs a **dialog** TUI wizard (similar spirit to Void’s installer). There is no graphical installer.
 
-4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, mirror, NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname and username.
+4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, the SummitHQ Void mirror (`https://mirrors.summithq.com/voidlinux/current`), NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, Steam, and the mirror (`MIRROR=` in the preset does the same).
 5. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 6. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
@@ -34,7 +34,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | LUKS | Only when encryption is enabled |
 | Summary | **Start installation**, **Edit** a field, or **Quit**. Escape returns to this menu |
 
-Timezone, locale, keymap, mirror, NVIDIA, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
+Timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
 
 Another preset file: `sudo atelier-install --preset /path/to/install.conf`
 
@@ -80,6 +80,19 @@ If resume works for about a minute and then the machine reboots, see [desktop.md
 - Custom partitions / dual-boot
 - RAID / LVM / swap *partition*
 - Automatic dual-GPU (Optimus) polish
+
+## Steam (optional)
+
+The shipped preset sets `GAMING=yes`. The summary line says so. **Edit → Steam** turns it off or on before anything is erased.
+
+When it stays on, the new system gets:
+
+- Void's multilib and multilib-nonfree repositories
+- Steam
+- 32-bit graphics libraries (Mesa, Vulkan, libglvnd, and the small 32-bit runtime Steam needs)
+- `nvidia-libs-32bit` when the proprietary NVIDIA driver is installed (the desktop RTX 4060 Ti path)
+
+Steam is not required for the desktop. If that step fails, the result screen says so and the rest of the install is kept. After reboot, the screen's `xbps-install` command is the retry. To skip Steam on a VM, set it to No on the summary, or put `GAMING=no` in a preset file.
 
 ## Graphics
 
