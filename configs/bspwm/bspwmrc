@@ -41,12 +41,23 @@ if command -v xss-lock >/dev/null 2>&1; then
 			break
 		fi
 	done
+	# --transfer-sleep-lock (-l): elogind's delay inhibitor is handed to the
+	# locker as XSS_SLEEP_LOCK_FD. atelier-lock closes it once xsecurelock
+	# is up. Without that close, sleep waits until InhibitDelayMaxSec.
 	if [ -n "$_dimmer" ]; then
-		xss-lock -n "$_dimmer" -l -- "$_locker" --as-locker &
+		xss-lock -n "$_dimmer" --transfer-sleep-lock -- "$_locker" --as-locker &
 	else
-		xss-lock -l -- "$_locker" --as-locker &
+		xss-lock --transfer-sleep-lock -- "$_locker" --as-locker &
 	fi
 	unset _locker _dimmer _d
+fi
+
+# Timestamp elogind PrepareForSleep and who is holding a sleep inhibitor.
+# The system-sleep hooks run only after that wait.
+# busctl is on this system; dbus-monitor often is not. The script no-ops
+# if neither exists. Do not pgrep -x: a shell script's comm is sh.
+if [ -x /usr/bin/atelier-pm-watch ]; then
+	atelier-pm-watch >/tmp/atelier-pm-watch.out 2>&1 &
 fi
 
 # Wallpaper: themed copy from atelier-theme, else stock, else solid

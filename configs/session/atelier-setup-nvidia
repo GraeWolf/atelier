@@ -67,7 +67,17 @@ elif [ -x /usr/bin/xbps-reconfigure ]; then
 	xbps-reconfigure -f linux 2>/dev/null || true
 fi
 
+if [ -x /usr/bin/atelier-nvidia-grub ]; then
+	log "adding NVIDIA parameters to the kernel command line"
+	/usr/bin/atelier-nvidia-grub || log "warning: GRUB command line was not updated"
+fi
+
 log "done"
+log "suspend needs nvidia.NVreg_PreserveVideoMemoryAllocations=1 on the kernel command line"
+log "modprobe.d alone does not reach the early boot insert; /proc/driver/nvidia/params stays at 2 until reboot after grub-mkconfig"
+log "elogind hook /etc/elogind/system-sleep/atelier-nvidia drives nvidia-sleep.sh (Void's nvidia.sh is disabled)"
+log "reboot required, then: grep NVreg /proc/cmdline && loginctl suspend"
+log "if wake stays black: sudo atelier-nvidia-resume-log"
 log "reboot recommended, then confirm: lsmod | grep nvidia && nvidia-smi"
 if xbps-query xlibre-xserver >/dev/null 2>&1 || xbps-query xlibre >/dev/null 2>&1; then
 	log "Xlibre is installed: Atelier uses the modesetting DDX, not nvidia_drv.so"

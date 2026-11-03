@@ -67,6 +67,8 @@ atelier-theme set catppuccin-mocha
 
 Or **Super+Alt+Space → Style → Theme** (direct: **Super+Ctrl+Shift+Space**).
 
+`bat` has no built-in theme named `tokyonight`. Atelier ships Folke's Tokyo Night `.tmTheme` and the shell copies it into `~/.config/bat/themes/` on the next interactive bash (then `bat cache --build`). Open a new terminal after updating `atelier-config`; `cat` should stop warning about an unknown theme.
+
 Build a palette from an image (does **not** replace the wallpaper photo; it recolors the stock image):
 
 ```bash

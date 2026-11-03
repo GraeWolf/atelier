@@ -46,16 +46,29 @@ if ! command -v xsecurelock >/dev/null 2>&1; then
 	exit 1
 fi
 
+# This invocation is xss-lock's sleep locker (loginctl suspend / lid).
+# elogind will not run system-sleep hooks until XSS_SLEEP_LOCK_FD is closed.
+# xsecurelock closes that fd only after its saver window maps, which can sit
+# for a long time. Do not also arm the post-lock suspend timer: sleep is
+# already in progress, and a second loginctl from the waiter is wrong.
+_sleep_lock=0
+case ${XSS_SLEEP_LOCK_FD:-} in
+'' | *[!0-9]*) ;;
+*) _sleep_lock=1 ;;
+esac
+
 # Suspend shortly after lock while still locked (manual lock or idle lock).
 _suspend_sec=${ATELIER_LOCK_SUSPEND_SEC:-120}
-if [ -n "${ATELIER_SKIP_LOCK_SUSPEND:-}" ]; then
+if [ -n "${ATELIER_SKIP_LOCK_SUSPEND:-}" ] || [ "$_sleep_lock" -eq 1 ]; then
 	_suspend_sec=0
 fi
 
 # Pidfile so a restored/orphaned waiter from a previous lock cannot fire after
 # unlock. Do not exec xsecurelock: dash runs EXIT traps on exec, bash does not.
-# xss-lock -l passes XSS_SLEEP_LOCK_FD; only xsecurelock may hold it. The
-# waiter and this parent must close their copies or lid-sleep waits on them.
+# xss-lock --transfer-sleep-lock passes XSS_SLEEP_LOCK_FD. elogind will not
+# run sleep hooks until every copy of that fd is closed. On a sleep lock we
+# keep the fd here and close it once xsecurelock is up; the idle/manual path
+# has no fd.
 _uid=$(id -u)
 _pidfile="${XDG_RUNTIME_DIR:-/tmp}/atelier-lock-suspend.${_uid}.pid"
 _waiter=""
@@ -129,9 +142,32 @@ if [ "$_suspend_sec" -gt 0 ] 2>/dev/null; then
 	printf '%s\n' "$_waiter" >"$_pidfile"
 fi
 
-# Fork the locker first so it inherits XSS_SLEEP_LOCK_FD, then drop our copy.
-xsecurelock &
-_lockpid=$!
-_close_sleep_fd
-wait "$_lockpid" || true
+if [ "$_sleep_lock" -eq 1 ]; then
+	# xsecurelock closes XSS_SLEEP_LOCK_FD only after its saver window maps.
+	# Under the modesetting driver that map can stall, and elogind then waits
+	# until InhibitDelayMaxSec before the system-sleep hooks run. Do not pass
+	# the fd to xsecurelock. Cover the screen, then close it ourselves.
+	(
+		_close_sleep_fd
+		exec xsecurelock
+	) &
+	_lockpid=$!
+	_i=0
+	while [ "$_i" -lt 20 ]; do
+		if pgrep -u "$(id -u)" -x xsecurelock >/dev/null 2>&1; then
+			break
+		fi
+		sleep 0.1
+		_i=$((_i + 1))
+	done
+	# One beat for the window to map, then release elogind either way.
+	sleep 0.5
+	_close_sleep_fd
+	wait "$_lockpid" || true
+else
+	xsecurelock &
+	_lockpid=$!
+	_close_sleep_fd
+	wait "$_lockpid" || true
+fi
 

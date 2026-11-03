@@ -24,7 +24,9 @@ fi
 mkdir -p \
 	"$dst/etc/modprobe.d" \
 	"$dst/etc/modules-load.d" \
+	"$dst/etc/dracut.conf.d" \
 	"$dst/etc/X11/xorg.conf.d" \
+	"$dst/usr/bin" \
 	"$dst/usr/share/doc/atelier"
 
 install -m 644 "$src/modprobe.d/atelier-blacklist-nouveau.conf" \
@@ -35,6 +37,10 @@ install -m 644 "$src/modules-load.d/atelier-nvidia.conf" \
 	"$dst/etc/modules-load.d/atelier-nvidia.conf"
 install -m 644 "$src/X11/xorg.conf.d/20-nvidia.conf" \
 	"$dst/etc/X11/xorg.conf.d/20-nvidia.conf"
+install -m 644 "$src/dracut.conf.d/atelier-nvidia.conf" \
+	"$dst/etc/dracut.conf.d/atelier-nvidia.conf"
+install -m 755 "$helpers/atelier-nvidia-grub" \
+	"$dst/usr/bin/atelier-nvidia-grub"
 # atelier-setup-nvidia ships in atelier-config so the command exists
 # when NVIDIA was skipped at install time.
 install -m 644 "$helpers/nvidia-README.txt" \

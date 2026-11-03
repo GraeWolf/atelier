@@ -22,7 +22,10 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-setup-swap` | `/usr/bin/atelier-setup-swap` | Swapfile + hibernation resume (ext4 root) |
 | `elogind/system-sleep/atelier-pm-log` | `/etc/elogind/system-sleep/atelier-pm-log` | Sleep/hibernate pre/post snapshot (`/var/log/atelier-pm.log`) |
 | `elogind/system-sleep/atelier-wifi` | `/etc/elogind/system-sleep/atelier-wifi` | Unload MediaTek mt7921e around sleep (PCI restore -110) |
-| `elogind/system-sleep/atelier-nvidia` | `/etc/elogind/system-sleep/atelier-nvidia` | nvidia-sleep.sh + unload dGPU on hybrid S4 |
+| `elogind/system-sleep/atelier-nvidia` | `/etc/elogind/system-sleep/atelier-nvidia` | Discrete GPU: `nvidia-sleep.sh` suspend/resume. Hybrid: unload dGPU |
+| `elogind/sleep.conf.d/atelier-nvidia.conf` | `/etc/elogind/sleep.conf.d/atelier-nvidia.conf` | `HandleNvidiaSleep=no` (one caller of the procfs interface) |
+| `session/atelier-nvidia-resume-log` | `/usr/bin/atelier-nvidia-resume-log` | Logs to collect after a black screen on wake |
+| `bat/tokyonight.tmTheme` | `/usr/share/atelier/bat/tokyonight.tmTheme` | bat theme `tokyonight` (not a built-in name) |
 | `modprobe.d/atelier-wifi.conf` | `/etc/modprobe.d/atelier-wifi.conf` | `mt7921e.disable_aspm=1` |
 | `modprobe.d/atelier-hid-asus.conf` | `/etc/modprobe.d/atelier-hid-asus.conf` | Blacklist `hid_asus` so ROG N-KEY stays on hid-generic at TTY login |
 | `runit/core-services/90-atelier-resume.sh` | `/etc/runit/core-services/90-atelier-resume.sh` | Apply swapfile `resume=` to sysfs so elogind CanHibernate works |
