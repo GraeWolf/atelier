@@ -162,7 +162,21 @@ Package revisions: `atelier-nvidia` 0.2.0_4, `atelier-config` 0.3.13_4. See [use
 
 ### Logs after a failed resume
 
-`atelier-pm-log` appends a pre snapshot (including a dmesg tail and the NVIDIA parameters) before the machine sleeps, and a post snapshot plus `still-alive` lines if userspace runs after wake. `atelier-nvidia` appends the verb, `/var/tmp` free space, and the `nvidia-sleep.sh` exit code to the same file.
+`atelier-pm-log` appends a small pre snapshot (time, kernel, uptime, `mem_sleep`, cmdline) before the machine sleeps, and the full snapshot (watchdog and GPU modules, NVIDIA parameters, elogind drop-ins, a filtered dmesg) after wake, plus `still-alive` lines if userspace keeps running. `atelier-nvidia` appends the verb, `/var/tmp` free space, and the `nvidia-sleep.sh` exit code to the same file.
+
+#### Two-minute delay before suspend (atelier-config 0.3.13_8)
+
+elogind runs the hooks in `/etc/elogind/system-sleep/` one after another (`atelier-nvidia`, `atelier-pm-log`, `atelier-wifi`) and writes `/sys/power/state` only after the last pre hook returns. On 0.3.13_7, `atelier-pm-log` logged `enter pre suspend` and never `leave pre`; `PM: suspend entry` came ~119s later and `atelier-wifi` never ran.
+
+Cause: `atelier-nvidia` has already written `suspend` to `/proc/driver/nvidia/suspend`. From then until `resume` is written on post, `nvidia.ko` holds `nv_system_pm_lock` for writing. Every NVRM procfs read, `/proc/driver/nvidia/params` included, takes that lock for reading (`nv_down_read_interruptible` in `nv-procfs-utils.h`). The pre snapshot grepped `params`, then `cat` it as a fallback, and both blocked until elogind's hook timeout killed the script. In 0.3.13_8:
+
+- pre never opens `/proc/driver/nvidia/*`; the NVIDIA parameters are read on post, and only after `atelier-nvidia` has removed its suspend flag.
+- lsmod, watchdog, drop-ins, and dmesg moved to post.
+- Every external command (and every sysfs write in `atelier-wifi`) runs under `timeout -k 1 N`; `sync` is capped at 3s.
+- pre logs `step <name> elapsed=Ns` for each step and always ends with `leave pre elapsed=Ns` (also on TERM/INT/HUP). `atelier-wifi` logs `pre: start` and `pre: leave elapsed=Ns`.
+- Stale still-alive pids are only killed if they are still `atelier-pm-log`.
+
+Do not add a read of any `/proc/driver/nvidia` file to a pre hook that runs after `atelier-nvidia`.
 
 ```bash
 sudo atelier-nvidia-resume-log
@@ -174,7 +188,7 @@ Atelier does not install a persistent syslog. After a power-cycle, `dmesg` is on
 
 A `0.2.0_3` cycle on the desktop (Preserve still `2`) did resume to the lock screen and the desktop after `loginctl suspend`. The GRUB tokens remain the documented way to pin the parameters; they may not be required for resume on this GPU. The multi-minute pause before the hooks was xss-lock's sleep/delay inhibitor, not the driver. See `atelier-lock` and `InhibitDelayMaxSec=10`.
 
-Real suspend was not run in the build environment. Check scripts with `bash -n` and `shellcheck -s sh`.
+Real suspend was not run in the build environment. Check scripts with `bash -n` and `shellcheck -s sh`. The hooks can be run as a normal user with `ATELIER_PM_LOG`, `ATELIER_PM_RUNDIR`, and `ATELIER_WIFI_RUNDIR` pointing at a temporary directory; `pre suspend` should return in well under a second.
 
 ## Risks / notes
 

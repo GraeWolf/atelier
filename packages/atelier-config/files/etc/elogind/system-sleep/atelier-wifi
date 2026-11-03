@@ -9,14 +9,49 @@
 #
 # Called as: atelier-wifi <pre|post> <suspend|hibernate|...>
 # Always exit 0.
-STASH=/run/atelier-wifi.mod
-SVLIST=/run/atelier-wifi.sv
-LOG=/var/log/atelier-pm.log
+#
+# elogind does not suspend until this pre hook returns. Every external
+# command and every sysfs write is bounded by timeout(1), and pre always
+# logs "pre: start" first and "pre: leave elapsed=Ns" last.
+#
+# Test aid: ATELIER_PM_LOG and ATELIER_WIFI_RUNDIR override the log file
+# and the directory for the state files.
+_run=${ATELIER_WIFI_RUNDIR:-/run}
+STASH=$_run/atelier-wifi.mod
+SVLIST=$_run/atelier-wifi.sv
+LOG=${ATELIER_PM_LOG:-/var/log/atelier-pm.log}
+_t0=$(date +%s 2>/dev/null || echo 0)
 
 log() {
 	printf '%s atelier-wifi: %s\n' \
 		"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" "$*" \
 		>>"$LOG" 2>/dev/null || true
+}
+
+# bounded SECS CMD...: run CMD, killed after SECS (KILL one second later).
+if command -v timeout >/dev/null 2>&1; then
+	bounded() {
+		_secs=$1
+		shift
+		timeout -k 1 "$_secs" "$@"
+	}
+else
+	bounded() {
+		shift
+		"$@"
+	}
+fi
+
+# sysfs_write VALUE FILE: a driver unbind/remove can block in the kernel;
+# a shell builtin redirect cannot be timed out, so write from a child.
+sysfs_write() {
+	# shellcheck disable=SC2016 # $1/$2 expand in the child shell
+	bounded 3 sh -c 'printf "%s\n" "$1" >"$2"' sh "$1" "$2" >/dev/null 2>&1
+}
+
+# shellcheck disable=SC2120 # optional note; the signal trap passes one
+_leave_pre() {
+	log "pre: leave elapsed=$(( $(date +%s 2>/dev/null || echo 0) - _t0 ))s${1:+ $1}"
 }
 
 have_mod() {
@@ -33,11 +68,7 @@ modprobe_r_bounded() {
 	have_mod "$mod" || return 0
 	printf '%s\n' "$mod" >>"$STASH"
 	log "pre: modprobe -r $mod (3s cap)"
-	if command -v timeout >/dev/null 2>&1; then
-		timeout -k 1 3 modprobe -r "$mod" >/dev/null 2>&1 || true
-	else
-		modprobe -r "$mod" >/dev/null 2>&1 || true
-	fi
+	bounded 3 modprobe -r "$mod" >/dev/null 2>&1 || true
 	if have_mod "$mod"; then
 		log "WARN: $mod still loaded; not retrying"
 	else
@@ -57,28 +88,28 @@ mt_pci_bound() {
 }
 
 wifi_down() {
-	_t0=$(date +%s 2>/dev/null || echo 0)
 	log "pre: start $*"
-	: >"$STASH"
-	: >"$SVLIST"
+	trap '_leave_pre "(signal)"; exit 0' TERM INT HUP
+	if [ -w /sys/power/pm_async ]; then
+		sysfs_write 0 /sys/power/pm_async || true
+	fi
+	# Not ": >file": a failed redirect on a special builtin exits sh.
+	true >"$STASH" 2>/dev/null || log "WARN: cannot write $STASH"
+	true >"$SVLIST" 2>/dev/null || log "WARN: cannot write $SVLIST"
 
 	if command -v nmcli >/dev/null 2>&1; then
-		if command -v timeout >/dev/null 2>&1; then
-			timeout -k 1 2 nmcli radio wifi off >/dev/null 2>&1 || true
-		else
-			nmcli radio wifi off >/dev/null 2>&1 || true
-		fi
+		bounded 2 nmcli radio wifi off >/dev/null 2>&1 || log "pre: nmcli radio wifi off failed or timed out"
 	fi
 	if command -v rfkill >/dev/null 2>&1; then
-		rfkill block wifi >/dev/null 2>&1 || true
-		rfkill block bluetooth >/dev/null 2>&1 || true
+		bounded 2 rfkill block wifi >/dev/null 2>&1 || true
+		bounded 2 rfkill block bluetooth >/dev/null 2>&1 || true
 	fi
 	for iface in /sys/class/net/*; do
 		[ -e "$iface/device/driver" ] || continue
 		drv=$(basename "$(readlink "$iface/device/driver" 2>/dev/null)" 2>/dev/null) || continue
 		case $drv in
 		mt7921e | mt7925e)
-			ip link set "$(basename "$iface")" down >/dev/null 2>&1 || true
+			bounded 2 ip link set "$(basename "$iface")" down >/dev/null 2>&1 || true
 			;;
 		esac
 	done
@@ -86,16 +117,12 @@ wifi_down() {
 	for svc in bluetoothd bluetooth bluez; do
 		if [ -e "/var/service/$svc" ]; then
 			printf '%s\n' "$svc" >>"$SVLIST"
-			# -w: do not wait the default 7s forever if the service ignores down.
-			sv -w 2 down "$svc" >/dev/null 2>&1 || true
+			# -w 2: sv's own wait; timeout is the backstop if sv itself hangs.
+			bounded 3 sv -w 2 down "$svc" >/dev/null 2>&1 || true
 		fi
 	done
 	if command -v bluetoothctl >/dev/null 2>&1; then
-		if command -v timeout >/dev/null 2>&1; then
-			timeout -k 1 2 bluetoothctl power off >/dev/null 2>&1 || true
-		else
-			bluetoothctl power off >/dev/null 2>&1 || true
-		fi
+		bounded 2 bluetoothctl power off >/dev/null 2>&1 || true
 	fi
 
 	for drv in mt7925e mt7921e; do
@@ -105,9 +132,9 @@ wifi_down() {
 			[ -e "$link" ] || continue
 			bdf=$(basename "$link")
 			log "pre: unbind+remove $bdf ($drv)"
-			printf '%s\n' "$bdf" >"$drvdir/unbind" 2>/dev/null || true
+			sysfs_write "$bdf" "$drvdir/unbind" || log "WARN: unbind $bdf failed or timed out"
 			if [ -w "/sys/bus/pci/devices/$bdf/remove" ]; then
-				echo 1 >"/sys/bus/pci/devices/$bdf/remove" 2>/dev/null || true
+				sysfs_write 1 "/sys/bus/pci/devices/$bdf/remove" || log "WARN: remove $bdf failed or timed out"
 			fi
 		done
 	done
@@ -122,7 +149,7 @@ wifi_down() {
 	else
 		log "pre: no mt7921e/mt7925e PCI device; skip module unload"
 	fi
-	log "pre: done elapsed=$(( $(date +%s 2>/dev/null || echo 0) - _t0 ))s"
+	_leave_pre ''
 }
 
 wifi_up() {
@@ -175,13 +202,14 @@ wifi_up() {
 	) >/dev/null 2>&1 &
 }
 
-if [ -w /sys/power/pm_async ]; then
-	echo 0 >/sys/power/pm_async 2>/dev/null || true
-fi
-
 case ${1:-} in
 pre) wifi_down "$@" ;;
-post) wifi_up ;;
+post)
+	if [ -w /sys/power/pm_async ]; then
+		sysfs_write 0 /sys/power/pm_async || true
+	fi
+	wifi_up
+	;;
 esac
 
 exit 0
