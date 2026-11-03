@@ -5,47 +5,113 @@
 # Snapshots enough state to diagnose a delayed reboot after resume. Atelier
 # has no persistent syslog; a hard reset wipes dmesg unless it is on disk.
 #
+# elogind runs the hooks in this directory one after another and does not
+# write /sys/power/state until every pre hook has returned. Anything slow
+# here delays the suspend itself, so:
+#
+#   * pre is a small, cheap snapshot. The full snapshot (lsmod, watchdog,
+#     NVIDIA parameters, dmesg) is taken on post, after the GPU has resumed.
+#   * Every external command runs under timeout(1) with a kill fallback.
+#   * pre never opens /proc/driver/nvidia/*. atelier-nvidia runs before this
+#     hook and writes "suspend" to /proc/driver/nvidia/suspend. nvidia.ko
+#     then holds nv_system_pm_lock for writing until "resume" is written on
+#     post. Reading /proc/driver/nvidia/params takes that lock for reading,
+#     so the read blocks until elogind's hook timeout kills this script
+#     (about two minutes). That was the suspend delay in 0.3.13_7.
+#   * Each step is logged with its elapsed time, and "leave <phase>" is
+#     always written (also when a TERM/INT/HUP arrives mid-step).
+#
 # Always exit 0. A non-zero hook can abort sleep if interrupts are enabled.
-LOG=/var/log/atelier-pm.log
-RUNDIR=/run/atelier-pm
+#
+# Test aid: ATELIER_PM_LOG and ATELIER_PM_RUNDIR override the log file and
+# the run directory, so the hook can be run as an ordinary user.
+LOG=${ATELIER_PM_LOG:-/var/log/atelier-pm.log}
+RUNDIR=${ATELIER_PM_RUNDIR:-/run/atelier-pm}
 PIDFILE=$RUNDIR/still-alive.pids
+# Written by atelier-nvidia between its "suspend" and "resume" writes.
+NV_FLAG=/run/atelier-nvidia.procfs
+NV_FLAG_VENDOR=/run/atelier-nvidia.vendor-pre
 
 phase=${1:-unknown}
 action=${2:-unknown}
-ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)
-_t0=$(date +%s 2>/dev/null || echo 0)
+
+now() { date +%s 2>/dev/null || echo 0; }
+stamp() { date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date; }
+
+ts=$(stamp)
+_t0=$(now)
+_step=start
+_step_t0=$_t0
 
 mark() {
-	printf '%s atelier-pm-log: %s\n' \
-		"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" "$*" \
-		>>"$LOG" 2>/dev/null || true
+	printf '%s atelier-pm-log: %s\n' "$(stamp)" "$*" >>"$LOG" 2>/dev/null || true
 }
 
-_kill_still_alive() {
-	if [ -f "$PIDFILE" ]; then
-		while read -r pid; do
-			[ -n "$pid" ] || continue
-			kill "$pid" 2>/dev/null || true
-		done <"$PIDFILE"
-		rm -f "$PIDFILE"
+# bounded SECS CMD...: run CMD, killed after SECS (KILL one second later).
+if command -v timeout >/dev/null 2>&1; then
+	bounded() {
+		_secs=$1
+		shift
+		timeout -k 1 "$_secs" "$@"
+	}
+else
+	bounded() {
+		shift
+		"$@"
+	}
+fi
+
+# step NAME: start timing NAME. step_end: log how long the current step took.
+# On pre every step is logged. On post only steps that took 1s or more.
+step() {
+	_step=$1
+	_step_t0=$(now)
+}
+step_end() {
+	_el=$(( $(now) - _step_t0 ))
+	if [ "$phase" = pre ] || [ "$_el" -ge 1 ]; then
+		mark "step $_step elapsed=${_el}s"
 	fi
+	_step=none
+}
+
+leave() {
+	mark "leave $phase elapsed=$(( $(now) - _t0 ))s${1:+ $1}"
+}
+
+# shellcheck disable=SC2329 # invoked by trap
+on_signal() {
+	leave "(signal during step $_step)"
+	exit 0
+}
+trap on_signal TERM INT HUP
+
+# Only kill our own still-alive children. A stale pid file can name a pid
+# that has since been reused by an unrelated process.
+_kill_still_alive() {
+	[ -f "$PIDFILE" ] || return 0
+	while read -r pid; do
+		[ -n "$pid" ] || continue
+		case $(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null) in
+		*atelier-pm-log*) kill "$pid" 2>/dev/null || true ;;
+		esac
+	done <"$PIDFILE"
+	rm -f "$PIDFILE"
 }
 
 _start_still_alive() {
 	mkdir -p "$RUNDIR" 2>/dev/null || return 0
-	: >"$PIDFILE"
+	true >"$PIDFILE" 2>/dev/null || return 0
 	# Bracket the 30–60s post-resume reset window reported on the laptop.
 	for sec in 15 30 45 60 90; do
 		(
 			trap '' HUP
+			trap - TERM INT
 			sleep "$sec" || exit 0
-			{
-				printf '%s still-alive %ss after %s %s\n' \
-					"$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)" \
-					"$sec" "$phase" "$action"
-			} >>"$LOG" 2>/dev/null
-			sync 2>/dev/null || true
-		) >/dev/null 2>&1 &
+			printf '%s still-alive %ss after %s %s\n' \
+				"$(stamp)" "$sec" "$phase" "$action" >>"$LOG" 2>/dev/null
+			bounded 5 sync >/dev/null 2>&1 || true
+		) </dev/null >/dev/null 2>&1 &
 		echo $! >>"$PIDFILE"
 	done
 }
@@ -59,77 +125,123 @@ _rotate_log() {
 	fi
 }
 
-_dump() {
-	{
-		printf '\n======== %s %s %s epoch=%s ========\n' "$ts" "$phase" "$action" \
-			"$(date +%s 2>/dev/null || echo unknown)"
-		printf 'argv: %s\n' "$*"
-		printf 'kernel: %s\n' "$(uname -r 2>/dev/null || echo unknown)"
-		printf 'cmdline: %s\n' "$(cat /proc/cmdline 2>/dev/null || echo unknown)"
-		printf 'uptime: %s\n' "$(cut -d' ' -f1 /proc/uptime 2>/dev/null || echo unknown)"
+# readf FILE: print a small sysfs/procfs file, bounded.
+readf() {
+	bounded 2 cat "$1" 2>/dev/null
+}
 
-		if [ -r /sys/power/mem_sleep ]; then
-			printf 'mem_sleep: %s\n' "$(cat /sys/power/mem_sleep 2>/dev/null)"
+_header() {
+	printf '\n======== %s %s %s epoch=%s ========\n' "$ts" "$phase" "$action" "$_t0"
+	printf 'argv: %s\n' "$*"
+	printf 'kernel: %s\n' "$(bounded 2 uname -r 2>/dev/null || echo unknown)"
+	up=unknown
+	read -r up _ 2>/dev/null </proc/uptime || true
+	printf 'uptime: %s\n' "$up"
+	if [ -r /sys/power/mem_sleep ]; then
+		printf 'mem_sleep: %s\n' "$(readf /sys/power/mem_sleep)"
+	fi
+}
+
+# Small and cheap. No /proc/driver/nvidia, no dmesg, no lsmod.
+_dump_pre() {
+	{
+		_header "$@"
+		printf 'cmdline: %s\n' "$(readf /proc/cmdline)"
+		if [ -f "$NV_FLAG" ] || [ -f "$NV_FLAG_VENDOR" ]; then
+			printf 'nvidia: suspend already written by atelier-nvidia; /proc/driver/nvidia not read (it blocks until resume)\n'
 		fi
+		printf '======== end %s %s ========\n' "$phase" "$action"
+	} >>"$LOG" 2>/dev/null
+}
+
+_dump_full() {
+	step header
+	{
+		_header "$@"
+		printf 'cmdline: %s\n' "$(readf /proc/cmdline)"
 		if [ -r /sys/power/disk ]; then
-			printf 'disk: %s\n' "$(cat /sys/power/disk 2>/dev/null)"
+			printf 'disk: %s\n' "$(readf /sys/power/disk)"
 		fi
 		if [ -r /sys/power/state ]; then
-			printf 'state: %s\n' "$(cat /sys/power/state 2>/dev/null)"
+			printf 'state: %s\n' "$(readf /sys/power/state)"
 		fi
-
 		if [ -r /sys/class/rtc/rtc0/wakealarm ]; then
-			printf 'rtc0 wakealarm: %s\n' "$(cat /sys/class/rtc/rtc0/wakealarm 2>/dev/null)"
+			printf 'rtc0 wakealarm: %s\n' "$(readf /sys/class/rtc/rtc0/wakealarm)"
 		fi
+	} >>"$LOG" 2>/dev/null
+	step_end
 
+	step modules
+	{
+		# lsmod is /proc/modules; read it directly, once.
+		mods=$(readf /proc/modules)
 		printf 'watchdog modules:\n'
-		lsmod 2>/dev/null | grep -iE 'wdt|tco|watchdog' || printf '(none)\n'
+		printf '%s\n' "$mods" | grep -iE 'wdt|tco|watchdog' || printf '(none)\n'
 		if [ -d /sys/class/watchdog ]; then
 			for w in /sys/class/watchdog/watchdog*; do
 				[ -e "$w" ] || continue
 				printf '  %s identity=%s state=%s timeout=%s\n' \
-					"$(basename "$w")" \
-					"$(cat "$w/identity" 2>/dev/null || echo ?)" \
-					"$(cat "$w/state" 2>/dev/null || echo ?)" \
-					"$(cat "$w/timeout" 2>/dev/null || echo ?)"
+					"${w##*/}" \
+					"$(readf "$w/identity" || echo ?)" \
+					"$(readf "$w/state" || echo ?)" \
+					"$(readf "$w/timeout" || echo ?)"
 			done
 		fi
-
 		printf 'gpu modules:\n'
-		lsmod 2>/dev/null | grep -iE 'nvidia|amdgpu|i915|nouveau' || printf '(none)\n'
-		if [ -r /proc/driver/nvidia/params ]; then
-			printf 'nvidia params:\n'
-			grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableS0ixPowerManagement|EnableGpuFirmware|RmWatchdog' \
-				/proc/driver/nvidia/params 2>/dev/null || cat /proc/driver/nvidia/params
-		fi
+		printf '%s\n' "$mods" | grep -iE 'nvidia|amdgpu|i915|nouveau' || printf '(none)\n'
+	} >>"$LOG" 2>/dev/null
+	step_end
 
+	step nvidia-params
+	{
+		if [ -f "$NV_FLAG" ] || [ -f "$NV_FLAG_VENDOR" ]; then
+			# atelier-nvidia has not written "resume" yet; the read would block.
+			printf 'nvidia params: skipped (GPU still suspended)\n'
+		elif [ -r /proc/driver/nvidia/params ]; then
+			printf 'nvidia params:\n'
+			readf /proc/driver/nvidia/params | grep -E 'PreserveVideoMemoryAllocations|TemporaryFilePath|UseKernelSuspendNotifiers|EnableS0ixPowerManagement|EnableGpuFirmware|RmWatchdog' \
+				|| printf '(read failed or timed out)\n'
+		fi
+	} >>"$LOG" 2>/dev/null
+	step_end
+
+	step config
+	{
 		printf 'elogind drop-ins:\n'
 		for f in /etc/elogind/sleep.conf.d/*.conf /etc/elogind/logind.conf.d/*.conf; do
 			[ -f "$f" ] || continue
-			printf '--- %s ---\n' "$f"
-			cat "$f"
+			printf '%s\n' "--- $f ---"
+			readf "$f"
 		done
-
 		for bat in /sys/class/power_supply/BAT*/uevent; do
 			[ -f "$bat" ] || continue
-			printf 'battery %s:\n' "$(dirname "$bat")"
-			grep -E 'STATUS|CAPACITY|CAPACITY_LEVEL' "$bat" 2>/dev/null || true
+			printf 'battery %s:\n' "${bat%/uevent}"
+			readf "$bat" | grep -E 'STATUS|CAPACITY|CAPACITY_LEVEL' || true
 		done
+	} >>"$LOG" 2>/dev/null
+	step_end
 
-		# Kernel suspend messages are not in a short tail: VRAM save, USB
-		# timeouts, and "PM: suspend entry" land earlier in the buffer.
-		# -T is wall-clock when the kernel was built with printk time.
-		# The post snapshot is the one that contains this cycle's entry
-		# line; pre runs before /sys/power/state is written.
+	step dmesg
+	{
+		# Post is the snapshot that contains this cycle's "PM: suspend
+		# entry" line. -T is wall-clock when the kernel has printk time.
 		printf 'dmesg PM/nvidia (filtered):\n'
-		if dmesg -T >/dev/null 2>&1; then
-			dmesg -T 2>/dev/null | grep -E 'PM:|Freezing|Filesystems sync|suspend entry|suspend exit|Waking up|nvidia|NVRM|timeout|blocked' | tail -n 120
+		_k=$(bounded 3 dmesg -T 2>/dev/null) || _k=$(bounded 3 dmesg 2>/dev/null) || _k=''
+		if [ -n "$_k" ]; then
+			printf '%s\n' "$_k" | grep -E 'PM:|Freezing|Filesystems sync|suspend entry|suspend exit|Waking up|nvidia|NVRM|timeout|blocked' | tail -n 120
 		else
-			printf '(dmesg -T unavailable)\n'
-			dmesg 2>/dev/null | grep -E 'PM:|Freezing|Filesystems sync|suspend entry|suspend exit|Waking up|nvidia|NVRM|timeout|blocked' | tail -n 120
+			printf '(dmesg unavailable or timed out)\n'
 		fi
+		unset _k
 		printf '======== end %s %s ========\n' "$phase" "$action"
 	} >>"$LOG" 2>/dev/null
+	step_end
+}
+
+bounded_sync() {
+	step sync
+	bounded 3 sync >/dev/null 2>&1 || mark "WARN: sync timed out or failed"
+	step_end
 }
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
@@ -139,25 +251,29 @@ chmod 640 "$LOG" 2>/dev/null || true
 mark "enter $phase $action"
 case $phase in
 pre)
+	step kill-still-alive
 	_kill_still_alive
+	step_end
+	step rotate
 	_rotate_log
-	_dump "$@"
+	step_end
+	step snapshot
+	_dump_pre "$@"
+	step_end
+	bounded_sync
 	;;
 post)
+	step kill-still-alive
 	_kill_still_alive
-	_dump "$@"
+	step_end
+	_dump_full "$@"
+	bounded_sync
 	_start_still_alive
 	;;
 *)
-	_dump "$@"
+	_dump_full "$@"
 	;;
 esac
 
-mark "sync: begin"
-if command -v timeout >/dev/null 2>&1; then
-	timeout -k 2 5 sync >/dev/null 2>&1 || mark "WARN: sync timed out or failed"
-else
-	sync 2>/dev/null || true
-fi
-mark "leave $phase elapsed=$(( $(date +%s 2>/dev/null || echo 0) - _t0 ))s"
+leave
 exit 0
