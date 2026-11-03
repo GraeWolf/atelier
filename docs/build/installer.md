@@ -1,11 +1,11 @@
-# Atelier dialog installer (build notes)
+# Atelier gum installer (build notes)
 
 ## Package
 
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.5.13** |
+| XBPS package | `atelier-installer` **0.6.0** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Preset | `/etc/atelier/install.conf` |
 
@@ -16,12 +16,12 @@ xbps-query --repository=$PWD/repo/out -R atelier-installer
 
 Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 
-## Modes (v0.5+)
+## Modes (v0.6+)
 
 | Command | UI |
 |---------|-----|
-| `atelier-install` | **TUI** (`dialog`) — default, for live tty |
-| `atelier-install --tui` | Force dialog |
+| `atelier-install` | **TUI** (`gum`) — default, for a live tty or a terminal emulator |
+| `atelier-install --tui` | Force the gum TUI |
 | `atelier-install --text` | Plain prompts on stdin/stderr |
 | `atelier-install --preset FILE` | Load settings from FILE |
 | `atelier-install --dry-run` | Stop after the summary; do not partition |
@@ -32,18 +32,23 @@ Flow (whole-disk only):
 
 welcome → disk (select + confirm) → hostname and username, unless the preset set them → user password → LUKS passphrase only if encryption is on → summary
 
-The summary is one dialog menu: **Start installation / Edit a field / Quit**, with the chosen settings in the prompt. The prompt is nine lines so it fits a 24-row console and Quit stays on screen. The full summary text is longer than that box: dialog exits immediately (`Can't make sub-window`) and the choice is never captured. Twelve lines still draws, but the menu scrolls and Quit is hidden. Escape or Cancel redisplays that menu. It does not start the install and it does not open an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
+The summary is a card plus a gum menu: **Start installation / Edit a field / Quit**. On a 24-row console the card is the short form (every field, including Gaming) so Quit stays on screen. A terminal at least 42 rows tall shows the full summary instead. The cursor starts on **Edit a field**, so Enter does not start the install. Escape or Ctrl+C redisplays that menu. Neither one starts the install, and neither one opens an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
+
+The disk-erase question highlights **No**. Enter goes back. Choosing Yes is a separate step. Other Yes/No questions highlight Yes, matching the old dialog default. Escape on any Yes/No question is not an answer; the question is shown again.
 
 Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` grants sudo. The summary says so. There is one user password (entered twice to confirm). The LUKS passphrase is separate and is not stored in the preset.
 
 ### UI rules
 
-- **dialog TUI** only. There is no graphical front end
+- **gum TUI** (Void package name `gum`, charmbracelet). There is no graphical front end. Checked against the void-packages template for gum **2.0.2**
 - **ASCII-only** UI strings
-- Explicit **Yes/No** or **Back/Next/Abort**. Escape on a Yes/No screen is not No; the question is shown again
-- dialog: `--stdout` + keys from `/dev/tty` (prevents raw `^[[A`/`^[[B` arrow garbage)
-- Wizard pages: real Next/Back/Abort buttons (`--yesno` + `--extra-button`), not a tag menu
-- `ensure_locale` + sudo/pkexec preserve `TERM` (ncurses needs it on a live TTY)
+- Colors are palette indexes, not hex: 16-color on `TERM=linux`, 256-color in a terminal emulator. Truecolor is not required. `NO_COLOR` or `FORCE_COLOR=0` turns color off
+- `TERM=linux` (and any non-UTF-8 locale) draws `+---+` borders. A UTF-8 terminal emulator gets rounded gum borders
+- Each screen has a banner: Atelier Linux, the installer version, and a step such as `Step 2/6  Disk`. Encryption adds a step, so the total is 6 or 7
+- Prompts are `gum choose`, `gum input`, and `gum input --password`. Passwords are masked and typed twice. Preflight shows `gum spin` while the mirror and repos are checked. Package transactions themselves stay on screen so xbps output is visible
+- Explicit **Yes/No** or **Next/Back/Abort**. Escape and Ctrl+C never start the install
+- gum reads the real tty. Answers are captured from stdout, so the widgets do not leak into the log
+- `ensure_locale` + sudo/pkexec preserve `TERM`
 
 ### Options wired into install phase
 
@@ -148,7 +153,7 @@ elogind drop-ins (`HibernateDelaySec=30min`, lid `suspend-then-hibernate`) are w
 
 ## Runtime dependencies
 
-dialog (TUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit (pkexec when the installer is not already root)
+gum (TUI; Void package `gum`), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*, sudo, polkit (pkexec when the installer is not already root). `dialog` is not an installer dependency. `atelier-windows-vm` still depends on `dialog` and is not on the live ISO.
 
 ## Testing checklist
 
@@ -157,15 +162,16 @@ dialog (TUI), parted, e2fsprogs, dosfstools, util-linux, cryptsetup, xbps, grub*
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.5.13 and names the preset file
+- [ ] Welcome screen says v0.6.0 and names the preset file
 - [ ] Summary mirror is `https://mirrors.summithq.com/voidlinux/current` unless the preset changed it
 - [ ] Installed system `/etc/xbps.d/00-repository-main.conf`, `10-repository-nonfree.conf`, `10-repository-multilib.conf`, and `10-repository-multilib-nonfree.conf` use that mirror
-- [ ] Summary shows Gaming. Edit → Steam toggles it, and the summary line changes. On an 80x24 console the menu still shows Start installation, Edit a field, and Quit
+- [ ] Summary shows Gaming. Edit → Steam toggles it, and the summary line changes. On an 80x24 console the card and the menu still show Start installation, Edit a field, and Quit
 - [ ] `GAMING=yes` with the network up: preflight log shows multilib packages found via `xbps-query -M` before the disk is partitioned. `GAMING=no` does not query them
 - [ ] Installed system with gaming on has `steam`, `mesa-dri-32bit`, `vulkan-loader-32bit`, `libglvnd-32bit`, and (when NVIDIA installed) `nvidia-libs-32bit`. `xbps-query -l | grep 32bit` shows them
 - [ ] A Steam transaction failure is named on the result screen and the desktop install is still there
 - [ ] Shipped preset asks for hostname and username (invalid names are re-asked). A private preset that sets them skips those questions. Both stay on Edit
-- [ ] Summary menu shows Start installation / Edit a field / Quit. Escape returns to that menu. OK on each choice does that action
+- [ ] Summary menu shows Start installation / Edit a field / Quit. The cursor starts on Edit. Escape or Ctrl+C returns to that menu and does not start the install. Enter on a choice does that action
+- [ ] The disk question highlights No. Escape does not select No. Yes is required before that disk is used
 - [ ] Root cannot log in; the created user is in `wheel` and sudo works
 - [ ] A username such as `Kevin` is rejected and re-asked (it is not stored as `evin`)
 - [ ] Timezone choices include `America/New_York`, `Pacific/*`, and `US/*` when those names exist in tzdata

@@ -7,7 +7,7 @@ How to build the Atelier live ISO (Phase 1 Step 4).
 - Bootable live ISO via **void-mklive**
 - **Personal repository** integrated (build-time install + on-medium repo)
 - Themed **bspwm** desktop from `atelier-desktop` / `atelier-config`
-- Live boots to **TTY**; install with `sudo atelier-install` (dialog TUI)
+- Live boots to **TTY**; install with `sudo atelier-install` (gum TUI)
 
 - **X.Org** for first image / VM testing (**Xlibre** comes with later NVIDIA work)
 
@@ -75,7 +75,7 @@ Do **not** burn/write the ISO to disks without explicit care; this project’s a
 | Item | Value |
 |------|--------|
 | Login | TTY; live user `anon` / `voidlinux` (void-mklive) |
-| Install | `sudo atelier-install` (dialog TUI) |
+| Install | `sudo atelier-install` (gum TUI) |
 | Desktop (optional) | `startx` → bspwm (packages still on the medium) |
 | Personal repo (Atelier) | `/usr/share/atelier/repo` + `/etc/xbps.d/10-repository-atelier.conf` |
 | XLibre repo key | `atelier-xlibre-repo` is on the live image (`live.txt`). Installer preflight trusts that key before syncing XLibre |

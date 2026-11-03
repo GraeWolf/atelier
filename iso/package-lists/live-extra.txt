@@ -22,8 +22,8 @@ polkit
 NetworkManager
 dhcpcd
 
-# Atelier dialog installer (atelier-installer package) runtime helpers
-dialog
+# Atelier installer UI. Void package name is gum (charmbracelet).
+gum
 parted
 e2fsprogs
 dosfstools

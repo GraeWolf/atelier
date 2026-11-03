@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Atelier Linux installer (wizard, whole-disk)
-# Console installer: dialog TUI by default.
+# Console installer: gum TUI by default (Void package: gum).
 # Plain text (pipes and tests): atelier-install --text
 # ASCII-only UI strings for locale safety.
+# Colors are 16-color on a raw console and 256-color in a terminal.
+# Truecolor is not required. TERM=linux uses ASCII borders.
+# Escape and Ctrl+C never start the install.
 #
 # Settings come from a preset (/etc/atelier/install.conf, or --preset FILE).
 # Preset values are not asked. The wizard asks for the disk, one user
@@ -25,7 +28,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.5.13"
+VERSION="0.6.0"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -96,7 +99,7 @@ PART_ROOT=""
 CRYPT_NAME="cryptroot"
 
 # --- locale -------------------------------------------------------------------
-# dialog and the text prompts need a UTF-8 locale. A writable runtime
+# gum and the text prompts need a UTF-8 locale. A writable runtime
 # directory is kept for pkexec when the installer is not already root.
 ensure_locale() {
 	if [ -z "${LANG:-}" ] || [ "$LANG" = "C" ] || [ "$LANG" = "POSIX" ]; then
@@ -126,6 +129,10 @@ ensure_locale
 # During run_install the EXIT trap shows the message after cleanup.
 # Before that, show it immediately (wizard / early checks).
 die() {
+	# Stop a preflight spinner before any error screen.
+	if declare -F ui_spin_end >/dev/null 2>&1; then
+		ui_spin_end || true
+	fi
 	if [ "${INSTALL_TRAPS:-0}" -eq 1 ]; then
 		INSTALL_FAIL_TEXT="$*"
 		exit 1
@@ -149,65 +156,547 @@ read_line_to() {
 	return 2
 }
 
-# UI mode: tui (dialog, default) or text (pipes and tests).
+# UI mode: tui (gum, default) or text (pipes and tests).
 UI_MODE=tui
 UI=none
+UI_STEP=""
+UI_INTERRUPTED=0
+UI_SPIN_PID=""
+UI_SPIN_FIFO=""
+UI_SPIN_FD=""
+UI_ASCII=1
+UI_COLOR=0
+UI_ROWS=24
+UI_COLS=80
+UI_BOX=76
+UI_TEXT=72
+UI_FG=7
+UI_ACCENT=6
+UI_RED=1
+UI_GREEN=2
+UI_MUTED=7
+UI_SEL_FG=0
+UI_SEL_BG=6
+UI_SPINNER=line
+# Unit separator. It does not appear in disk names or zone paths.
+UI_DELIM=$(printf '\037')
+
+# Ctrl+C during the wizard sets a flag. During the install it stops
+# the run. It is never treated as Yes or as Start installation.
+ui_on_int() {
+	if [ "${INSTALL_TRAPS:-0}" -eq 1 ]; then
+		INSTALL_FAIL_TEXT="Interrupted. The install was stopped."
+		exit 1
+	fi
+	UI_INTERRUPTED=1
+}
+
+ui_mark() {
+	UI_STEP="$*"
+}
+
+# Forward steps. Encryption adds one screen, so the total is 6 or 7.
+ui_step_total() {
+	if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+		printf '7\n'
+	else
+		printf '6\n'
+	fi
+}
+
+ui_mark_step() {
+	local n=$1 label=$2 total
+	total=$(ui_step_total)
+	ui_mark "Step ${n}/${total}  ${label}"
+}
+
+ui_term_size() {
+	local lines=24 cols=80
+	if [ -c /dev/tty ]; then
+		lines=$(stty size </dev/tty 2>/dev/null | awk '{print $1}') || lines=24
+		cols=$(stty size </dev/tty 2>/dev/null | awk '{print $2}') || cols=80
+	fi
+	case ${lines:-} in
+	''|*[!0-9]*) lines=24 ;;
+	esac
+	case ${cols:-} in
+	''|*[!0-9]*) cols=80 ;;
+	esac
+	if [ "$lines" -lt 16 ]; then
+		lines=24
+	fi
+	if [ "$cols" -lt 60 ]; then
+		cols=80
+	fi
+	UI_ROWS=$lines
+	UI_COLS=$cols
+	UI_BOX=$((cols - 2))
+	if [ "$UI_BOX" -gt 78 ]; then
+		UI_BOX=78
+	fi
+	UI_TEXT=$((UI_BOX - 4))
+	if [ "$UI_TEXT" -lt 20 ]; then
+		UI_TEXT=20
+	fi
+}
+
+# Draw on the terminal. Never on stdout: callers capture stdout as the answer.
+ui_tty() {
+	if [ -c /dev/tty ]; then
+		"$@" >/dev/tty
+	else
+		"$@" >&2
+	fi
+}
+
+ui_clear() {
+	if [ -c /dev/tty ]; then
+		printf '\033[H\033[2J\033[H' >/dev/tty
+	else
+		printf '\033[H\033[2J\033[H' >&2
+	fi
+}
+
+# Drop keys left in the tty. A bounded loop: `read -t 0` can stay true forever.
+ui_drain_keys() {
+	local _n=0 _junk
+	[ -c /dev/tty ] || return 0
+	while [ "$_n" -lt 8 ]; do
+		_n=$((_n + 1))
+		IFS= read -r -t 0.01 _junk </dev/tty 2>/dev/null || break
+	done
+	return 0
+}
+
+ui_theme_init() {
+	local utf8=0
+	UI_ASCII=0
+	UI_COLOR=1
+	case ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} in
+	*[Uu][Tt][Ff]*8*|*[Uu][Tt][Ff]*-8*) utf8=1 ;;
+	esac
+	case ${TERM:-linux} in
+	linux|dumb|vt*|ansi|cons*|unknown) UI_ASCII=1 ;;
+	esac
+	if [ "$utf8" -ne 1 ]; then
+		UI_ASCII=1
+	fi
+	if [ -n "${NO_COLOR:-}" ] || [ "${FORCE_COLOR:-}" = 0 ]; then
+		UI_COLOR=0
+		UI_ASCII=1
+	fi
+	if [ "$UI_COLOR" -eq 0 ]; then
+		UI_FG=7
+		UI_ACCENT=7
+		UI_RED=7
+		UI_GREEN=7
+		UI_MUTED=7
+		UI_SEL_FG=7
+		UI_SEL_BG=0
+		UI_SPINNER=line
+	elif [ "$UI_ASCII" -eq 1 ]; then
+		# 16-color stand-ins for Tokyo Night. No hex, no 256-color indexes.
+		UI_FG=7
+		UI_ACCENT=6
+		UI_RED=1
+		UI_GREEN=2
+		UI_MUTED=7
+		UI_SEL_FG=0
+		UI_SEL_BG=6
+		UI_SPINNER=line
+	else
+		# 256-color Tokyo Night. These are palette indexes, not truecolor.
+		UI_FG=189
+		UI_ACCENT=111
+		UI_RED=204
+		UI_GREEN=150
+		UI_MUTED=103
+		UI_SEL_FG=235
+		UI_SEL_BG=111
+		UI_SPINNER="dot"
+	fi
+	export GUM_CHOOSE_CURSOR="> "
+	export GUM_CHOOSE_SHOW_HELP=false
+	export GUM_CHOOSE_PADDING="0 0"
+	export GUM_CHOOSE_CURSOR_FOREGROUND="$UI_ACCENT"
+	export GUM_CHOOSE_HEADER_FOREGROUND="$UI_ACCENT"
+	export GUM_CHOOSE_ITEM_FOREGROUND="$UI_FG"
+	export GUM_CHOOSE_SELECTED_FOREGROUND="$UI_SEL_FG"
+	export GUM_CHOOSE_SELECTED_BACKGROUND="$UI_SEL_BG"
+	export GUM_INPUT_PROMPT="> "
+	export GUM_INPUT_SHOW_HELP=false
+	export GUM_INPUT_PADDING="0 0"
+	export GUM_INPUT_PROMPT_FOREGROUND="$UI_ACCENT"
+	export GUM_INPUT_CURSOR_FOREGROUND="$UI_ACCENT"
+	export GUM_INPUT_HEADER_FOREGROUND="$UI_FG"
+	export GUM_INPUT_PLACEHOLDER_FOREGROUND="$UI_MUTED"
+	export GUM_INPUT_WIDTH=60
+	export GUM_SPIN_SPINNER="$UI_SPINNER"
+	export GUM_SPIN_SPINNER_FOREGROUND="$UI_ACCENT"
+	export GUM_SPIN_TITLE_FOREGROUND="$UI_FG"
+	export GUM_SPIN_PADDING="0 0"
+	export GUM_CONFIRM_SHOW_HELP=false
+	export GUM_CONFIRM_PADDING="0 0"
+	export GUM_CONFIRM_PROMPT_FOREGROUND="$UI_ACCENT"
+	export GUM_CONFIRM_SELECTED_FOREGROUND="$UI_SEL_FG"
+	export GUM_CONFIRM_SELECTED_BACKGROUND="$UI_GREEN"
+	export GUM_CONFIRM_UNSELECTED_FOREGROUND="$UI_FG"
+	if [ "$UI_ASCII" -eq 1 ]; then
+		export GUM_INPUT_CURSOR_MODE=static
+	else
+		export GUM_INPUT_CURSOR_MODE=blink
+	fi
+	ui_term_size
+	log "theme ascii=$UI_ASCII color=$UI_COLOR rows=$UI_ROWS cols=$UI_COLS spinner=$UI_SPINNER"
+}
 
 select_ui() {
+	if [ "$UI_MODE" != text ]; then
+		if [ -z "${TERM:-}" ] || [ "$TERM" = "dumb" ]; then
+			export TERM=linux
+		fi
+	fi
 	case $UI_MODE in
 	text)
 		UI=text
 		;;
 	tui|*)
-		if have dialog; then UI=dialog
-		else UI=none
+		if have gum; then
+			UI=gum
+			ui_theme_init
+		else
+			UI=none
 		fi
 		;;
 	esac
-	log "UI_MODE=$UI_MODE UI=$UI"
+	log "UI_MODE=$UI_MODE UI=$UI TERM=${TERM:-} title=$TITLE"
 }
 
-# dialog --stdout: result on stdout, UI on stderr (terminal). Avoids broken
-# 2>/tmp capture that leaves raw arrow keys (^[[A/^[[B) on the TTY.
-# Always talk to a real tty when possible.
-dialog_run() {
-	# Ensure a usable TERM for ncurses on live/console
-	if [ -z "${TERM:-}" ] || [ "$TERM" = "dumb" ]; then
-		export TERM=linux
-	fi
-	# Drop a few already-typed keys (arrow garbage from a failed dialog).
-	# Do not loop on `read -t 0`: on a tty that test can stay true forever
-	# after ncurses and the next dialog never opens.
-	local _n=0 _junk
-	while [ "$_n" -lt 8 ]; do
-		_n=$((_n + 1))
-		IFS= read -r -t 0.01 _junk 2>/dev/null || break
-	done
-	# --stdout: selection/text on stdout (capturable). UI uses /dev/tty via ncurses.
-	# Feed keys from the real tty so sudo/pipes do not break arrow navigation.
+# Capture gum's stdout in the current shell. Stdin is the real tty.
+# Ctrl+C is ignored here so the key returns from gum instead of killing
+# the installer. The caller treats a non-zero status as "no choice".
+gum_capture() {
+	local __dest=$1
+	shift
+	local __out="" __rc=0
+	ui_drain_keys || true
+	trap '' INT
 	if [ -c /dev/tty ]; then
-		dialog --stdout --backtitle "$TITLE" "$@" </dev/tty
+		__out=$("$@" </dev/tty) || __rc=$?
 	else
-		dialog --stdout --backtitle "$TITLE" "$@"
+		__out=$("$@") || __rc=$?
 	fi
+	trap ui_on_int INT
+	__out=${__out//$'\r'/}
+	printf -v "$__dest" '%s' "$__out"
+	return "$__rc"
+}
+
+# Parent-side capture. Command substitution would hide Ctrl+C from this
+# shell, so the interrupt flag is checked here after gum returns.
+ui_read() {
+	local __dest=$1
+	shift
+	local __out="" __rc=0
+	UI_INTERRUPTED=0
+	__out=$("$@") || __rc=$?
+	if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$__rc" -eq 130 ]; then
+		UI_INTERRUPTED=0
+		printf -v "$__dest" '%s' ""
+		return 1
+	fi
+	printf -v "$__dest" '%s' "$__out"
+	return "$__rc"
+}
+
+# height, header, selected (empty skips), then choices.
+gum_pick() {
+	local __var=$1 __h=$2 __header=$3 __sel=$4
+	shift 4
+	local -a __cmd
+	__cmd=(gum choose --no-show-help --height "$__h" --header "$__header")
+	if [ -n "$__sel" ]; then
+		__cmd+=(--selected "$__sel")
+	fi
+	__cmd+=(-- "$@")
+	gum_capture "$__var" "${__cmd[@]}"
+}
+
+ui_wrap_lines() {
+	local width=$1 line
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [ "${#line}" -le "$width" ]; then
+			printf '%s\n' "$line"
+			continue
+		fi
+		if have fold; then
+			printf '%s\n' "$line" | fold -w "$width"
+		else
+			printf '%s\n' "$line"
+		fi
+	done
+}
+
+# Keep the start and the end when a message is taller than the console.
+ui_fit_text() {
+	local text=$1 max=$2 width=$3
+	local wrapped n head tail i
+	local -a rows=()
+	wrapped=$(printf '%s\n' "$text" | ui_wrap_lines "$width")
+	mapfile -t rows <<< "$wrapped"
+	n=${#rows[@]}
+	if [ "$n" -gt 0 ] && [ -z "${rows[$((n - 1))]}" ]; then
+		unset 'rows[$((n - 1))]'
+		n=${#rows[@]}
+	fi
+	if [ "$n" -le "$max" ]; then
+		if [ "$n" -eq 0 ]; then
+			return 0
+		fi
+		printf '%s\n' "${rows[@]}"
+		return 0
+	fi
+	head=$((max / 3))
+	if [ "$head" -lt 2 ]; then
+		head=2
+	fi
+	tail=$((max - head - 1))
+	if [ "$tail" -lt 2 ]; then
+		tail=2
+	fi
+	i=0
+	while [ "$i" -lt "$head" ] && [ "$i" -lt "$n" ]; do
+		printf '%s\n' "${rows[$i]}"
+		i=$((i + 1))
+	done
+	printf '%s\n' "..."
+	i=$((n - tail))
+	if [ "$i" -lt 0 ]; then
+		i=0
+	fi
+	while [ "$i" -lt "$n" ]; do
+		printf '%s\n' "${rows[$i]}"
+		i=$((i + 1))
+	done
+}
+
+ui_sgr() {
+	local tone=$1
+	if [ "${UI_COLOR:-0}" -ne 1 ]; then
+		return 0
+	fi
+	case $tone in
+	error) printf '\033[31m' ;;
+	ok) printf '\033[32m' ;;
+	*) printf '\033[36m' ;;
+	esac
+}
+
+ui_ascii_card() {
+	local text=$1 tone=${2:-normal}
+	local w=$UI_BOX inner line bar esc reset
+	inner=$((w - 4))
+	if [ "$inner" -lt 10 ]; then
+		inner=10
+		w=$((inner + 4))
+	fi
+	printf -v bar '%*s' $((inner + 2)) ''
+	bar=${bar// /-}
+	esc=$(ui_sgr "$tone")
+	reset=""
+	if [ -n "$esc" ]; then
+		reset=$(printf '\033[0m')
+	fi
+	ui_tty printf '%s+%s+%s\n' "$esc" "$bar" "$reset"
+	while IFS= read -r line || [ -n "$line" ]; do
+		line=${line:0:$inner}
+		ui_tty printf '%s| %-*s |%s\n' "$esc" "$inner" "$line" "$reset"
+	done <<< "$text"
+	ui_tty printf '%s+%s+%s\n' "$esc" "$bar" "$reset"
+}
+
+ui_gum_color() {
+	case $1 in
+	error) printf '%s\n' "$UI_RED" ;;
+	ok) printf '%s\n' "$UI_GREEN" ;;
+	*) printf '%s\n' "$UI_ACCENT" ;;
+	esac
+}
+
+ui_card() {
+	local text=$1 tone=${2:-normal}
+	local wrapped color
+	wrapped=$(printf '%s\n' "$text" | ui_wrap_lines "$UI_TEXT")
+	if [ "$UI_ASCII" -eq 1 ] || [ "${UI_COLOR:-0}" -eq 0 ]; then
+		ui_ascii_card "$wrapped" "$tone"
+		return 0
+	fi
+	color=$(ui_gum_color "$tone")
+	ui_tty gum style --border rounded --border-foreground "$color" \
+		--foreground "$UI_FG" --width "$UI_BOX" --padding "0 1" \
+		"$wrapped" || ui_ascii_card "$wrapped" "$tone"
+}
+
+ui_banner() {
+	local right="v${VERSION}"
+	local left="Atelier Linux"
+	local gap spaces line
+	if [ -n "${UI_STEP:-}" ]; then
+		right="v${VERSION}  ${UI_STEP}"
+	fi
+	gap=$((UI_TEXT - ${#left} - ${#right}))
+	if [ "$gap" -lt 1 ]; then
+		gap=1
+	fi
+	printf -v spaces '%*s' "$gap" ''
+	line="${left}${spaces}${right}"
+	if [ "$UI_ASCII" -eq 1 ] || [ "${UI_COLOR:-0}" -eq 0 ]; then
+		ui_ascii_card "$line" normal
+		return 0
+	fi
+	ui_tty gum style --border rounded --border-foreground "$UI_ACCENT" \
+		--foreground "$UI_FG" --bold --width "$UI_BOX" --padding "0 1" \
+		"$line" || ui_ascii_card "$line" normal
+}
+
+ui_screen_open() {
+	[ "${UI:-none}" = gum ] || return 0
+	ui_term_size
+	ui_clear
+	ui_banner
+	ui_tty printf '\n'
+}
+
+ui_nl() {
+	[ "${UI:-none}" = gum ] || return 0
+	ui_tty printf '\n'
+}
+
+# Close the spinner by letting its command finish. Killing it leaves
+# the tty in raw mode. The fifo is held open so the write cannot block
+# when gum has already exited.
+ui_spin_end() {
+	local pid=${UI_SPIN_PID:-}
+	local fifo=${UI_SPIN_FIFO:-}
+	local i=0
+	if [ -n "$fifo" ]; then
+		printf '\n' >"$fifo" 2>/dev/null || true
+	fi
+	if [ -n "${UI_SPIN_FD:-}" ]; then
+		exec {UI_SPIN_FD}>&-
+	fi
+	UI_SPIN_PID=""
+	UI_SPIN_FIFO=""
+	UI_SPIN_FD=""
+	if [ -n "$pid" ]; then
+		while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 30 ]; do
+			sleep 0.05
+			i=$((i + 1))
+		done
+		if kill -0 "$pid" 2>/dev/null; then
+			kill "$pid" 2>/dev/null || true
+		fi
+		wait "$pid" 2>/dev/null || true
+	fi
+	if [ -n "$fifo" ]; then
+		rm -f "$fifo" 2>/dev/null || true
+	fi
+	if [ -c /dev/tty ]; then
+		printf '\033[?25h' >/dev/tty 2>/dev/null || true
+	fi
+	return 0
+}
+
+ui_spin_begin() {
+	local title=$1
+	ui_spin_end
+	[ "${UI:-none}" = gum ] || return 0
+	ui_mark "Checking"
+	ui_screen_open
+	UI_SPIN_FIFO=$(mktemp -u /tmp/atelier-spin.XXXXXX)
+	if ! mkfifo -m 600 "$UI_SPIN_FIFO"; then
+		UI_SPIN_FIFO=""
+		return 0
+	fi
+	# Read/write open: a later write still returns if the reader is gone.
+	exec {UI_SPIN_FD}<>"$UI_SPIN_FIFO"
+	if [ -c /dev/tty ]; then
+		# shellcheck disable=SC2016
+		gum spin --spinner "$UI_SPINNER" --title "$title" -- \
+			bash -c "read -r _ < \"\$1\"" _ "$UI_SPIN_FIFO" \
+			</dev/null >/dev/tty 2>/dev/tty &
+	else
+		gum spin --spinner "$UI_SPINNER" --title "$title" -- \
+			bash -c "read -r _ < \"\$1\"" _ "$UI_SPIN_FIFO" \
+			</dev/null &
+	fi
+	UI_SPIN_PID=$!
+	return 0
+}
+
+ui_phase() {
+	local name=$1
+	[ "${UI:-none}" = gum ] || return 0
+	if [ "$UI_ASCII" -eq 0 ] && [ "${UI_COLOR:-0}" -eq 1 ]; then
+		ui_tty gum style --foreground "$UI_ACCENT" --bold ">> ${name}" || \
+			ui_tty printf '>> %s\n' "$name"
+		return 0
+	fi
+	if [ "${UI_COLOR:-0}" -eq 1 ]; then
+		ui_tty printf '\033[36m>> %s\033[0m\n' "$name"
+	else
+		ui_tty printf '>> %s\n' "$name"
+	fi
+}
+
+ui_ack() {
+	local label=$1
+	local pick="" rc=0
+	gum_pick pick 1 "Enter continues." "$label" "$label" || rc=$?
+	if [ "${UI_INTERRUPTED:-0}" -eq 1 ]; then
+		UI_INTERRUPTED=0
+	fi
+	return 0
+}
+
+ui_panel() {
+	local tone=$1 msg=$2 ack=$3
+	local max fitted
+	ui_spin_end
+	ui_term_size
+	max=$((UI_ROWS - 10))
+	if [ "$max" -lt 6 ]; then
+		max=6
+	fi
+	fitted=$(ui_fit_text "$msg" "$max" "$UI_TEXT")
+	ui_screen_open
+	ui_card "$fitted" "$tone"
+	ui_nl
+	ui_ack "$ack"
 }
 
 ui_error() {
 	local msg=$1
+	local saved=${UI_STEP:-}
 	log "ERROR: $msg"
 	case $UI in
-	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 12 70 || true ;;
+	gum)
+		ui_mark "Error"
+		ui_panel error "$msg" "OK"
+		UI_STEP=$saved
+		;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
 }
 
 # Taller than ui_error so a phase name plus the log tail fit on a TTY.
-# Logging is separate: the install failure path writes the text before
-# copying the log onto the target.
 ui_show_fail() {
 	local msg=$1
 	case $UI in
-	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 24 78 || true ;;
+	gum)
+		ui_mark "Failed"
+		ui_panel error "$msg" "Close"
+		;;
 	*) printf 'ERROR: %s\n' "$msg" >&2 ;;
 	esac
 }
@@ -215,33 +704,61 @@ ui_show_fail() {
 ui_info() {
 	local msg=$1
 	case $UI in
-	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 14 70 || true ;;
+	gum)
+		ui_spin_end
+		ui_mark "Installing"
+		ui_screen_open
+		ui_card "$msg" ok
+		ui_nl
+		;;
 	*) printf '%s\n' "$msg" ;;
 	esac
 }
 
-# Completion screen. Tall enough for an NVIDIA failure and a Steam failure
-# together on a 24-row console. ui_info (14 rows) clips the second one.
+# Completion screen. The reboot question is the next screen.
 ui_result() {
 	local msg=$1
 	case $UI in
-	dialog) dialog_run --title "$TITLE" --msgbox "$msg" 22 78 || true ;;
+	gum)
+		ui_mark "Finished"
+		ui_panel ok "$msg" "Continue"
+		;;
 	*) printf '%s\n' "$msg" ;;
 	esac
 }
 
 # Returns: 0=Yes, 1=No, 2=EOF (no answer).
-# Escape is not an answer. A blank line is not No.
-# Callers must not treat a failed return as "No" unless the status is 1.
+# Escape and Ctrl+C are not answers. A blank line is not No.
+# The second argument is the highlighted choice: yes (default) or no.
+# Disk erase passes no, so Enter does not destroy the disk.
 ui_confirm() {
-	local msg=$1 rc a
+	local msg=$1 focus=${2:-yes}
+	local rc=0 pick="" sel="Yes"
+	case $focus in
+	no|No|NO) sel="No" ;;
+	esac
 	while true; do
 		rc=0
+		pick=""
 		case $UI in
-		dialog)
-			# 0=Yes 1=No 255=ESC. ESC must not fall through as No.
-			dialog_run --title "$TITLE" --yes-label "Yes" --no-label "No" \
-				--yesno "$msg" 16 72 || rc=$?
+		gum)
+			ui_screen_open
+			ui_card "$msg"
+			ui_nl
+			UI_INTERRUPTED=0
+			gum_pick pick 2 "Yes or No. Escape selects neither." "$sel" "Yes" "No" || rc=$?
+			if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+				UI_INTERRUPTED=0
+				ui_error "Choose Yes or No. Escape does not select No."
+				continue
+			fi
+			case $pick in
+			Yes) return 0 ;;
+			No) return 1 ;;
+			*)
+				ui_error "Choose Yes or No. Escape does not select No."
+				;;
+			esac
 			;;
 		*)
 			printf '%s\nYes or No [y/n]: ' "$msg" >&2
@@ -257,33 +774,29 @@ ui_confirm() {
 			esac
 			;;
 		esac
-		case $rc in
-		0) return 0 ;;
-		1) return 1 ;;
-		*)
-			ui_error "Choose Yes or No. Escape does not select No."
-			;;
-		esac
 	done
 }
 
 # Wizard page: text + Back/Next/Abort. 0=next 1=back 2=abort
 wizard_page() {
 	local msg=$1
-	local rc=0
+	local rc=0 pick=""
 	case $UI in
-	dialog)
-		# Real buttons (not a menu of "next/back/abort" tags).
-		# Exit codes: 0=Yes/Next, 1=No/Back, 3=Extra/Abort, 255=ESC
-		dialog_run --title "$TITLE" \
-			--yes-label "Next" --no-label "Back" \
-			--extra-button --extra-label "Abort" \
-			--yesno "$msg" 16 72
-		rc=$?
-		case $rc in
-		0) rc=0 ;;
-		1) rc=1 ;;
-		*) rc=2 ;;
+	gum)
+		ui_screen_open
+		ui_card "$msg"
+		ui_nl
+		UI_INTERRUPTED=0
+		gum_pick pick 3 "Next continues. Back returns. Abort leaves the disk alone." \
+			"Next" "Next" "Back" "Abort" || rc=$?
+		if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+			UI_INTERRUPTED=0
+			return 2
+		fi
+		case $pick in
+		Next) return 0 ;;
+		Back) return 1 ;;
+		*) return 2 ;;
 		esac
 		;;
 	*)
@@ -297,11 +810,25 @@ wizard_page() {
 }
 
 ui_entry() {
-	local label=$1 default=${2:-} val="" rc=0
+	local label=$1 default=${2:-} val="" rc=0 width
 	case $UI in
-	dialog)
-		val=$(dialog_run --title "$TITLE" --inputbox "$label" 10 60 "$default") || rc=$?
-		if [ "$rc" -ne 0 ]; then return 1; fi
+	gum)
+		ui_screen_open
+		ui_card "$label"
+		ui_nl
+		width=$UI_TEXT
+		if [ "$width" -gt 60 ]; then
+			width=60
+		fi
+		UI_INTERRUPTED=0
+		gum_capture val gum input --no-show-help --width "$width" \
+			--header "Enter submits. Escape goes back." \
+			--placeholder "${default:-type here}" \
+			--value "$default" --prompt "> " || rc=$?
+		if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+			UI_INTERRUPTED=0
+			return 1
+		fi
 		printf '%s\n' "${val:-$default}"
 		;;
 	*)
@@ -314,11 +841,27 @@ ui_entry() {
 }
 
 ui_password() {
-	local label=$1 val="" rc=0
+	local label=$1 val="" rc=0 width
 	case $UI in
-	dialog)
-		val=$(dialog_run --title "$TITLE" --insecure --passwordbox "$label" 10 60) || rc=$?
-		if [ "$rc" -ne 0 ]; then return 1; fi
+	gum)
+		ui_screen_open
+		ui_card "$label"
+		ui_nl
+		width=$UI_TEXT
+		if [ "$width" -gt 60 ]; then
+			width=60
+		fi
+		UI_INTERRUPTED=0
+		# char-limit 0: gum treats 0 as "no limit", so a long passphrase
+		# is not cut off. The value is masked and is not logged.
+		gum_capture val gum input --password --no-show-help --char-limit 0 \
+			--width "$width" \
+			--header "Hidden. Enter submits. Escape goes back." \
+			--placeholder "password" --prompt "> " || rc=$?
+		if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+			UI_INTERRUPTED=0
+			return 1
+		fi
 		printf '%s\n' "$val"
 		;;
 	*)
@@ -336,21 +879,60 @@ ui_password() {
 	esac
 }
 
-# List pick: returns selected first column. Args after text: pairs id detail
-# Exit status: 0 ok, 1 cancel/back
+ui_list_height() {
+	local n_items=$1
+	local reserve=${2:-8}
+	local avail=$((UI_ROWS - reserve))
+	if [ "$avail" -lt 3 ]; then
+		avail=3
+	fi
+	# 15 edit fields fit under the banner on 80x24. A longer list pages.
+	if [ "$avail" -gt 16 ]; then
+		avail=16
+	fi
+	if [ "$n_items" -lt "$avail" ]; then
+		printf '%s\n' "$n_items"
+	else
+		printf '%s\n' "$avail"
+	fi
+}
+
+# List pick: returns selected id. Args after text: pairs id detail
+# Exit status: 0 ok, 1 cancel/back, 2 EOF (text mode)
 ui_list_pick() {
-	local text=$1; shift
+	local text=$1
+	shift
 	local pick="" rc=0
 	case $UI in
-	dialog)
-		local items=()
-		while [ $# -ge 2 ]; do items+=("$1" "$2"); shift 2; done
-		# shellcheck disable=SC2034
-		pick=$(dialog_run --title "$TITLE" --menu "$text" 20 72 12 "${items[@]}") || rc=$?
-		if [ "$rc" -ne 0 ]; then return 1; fi
-		# Reject empty or control/escape garbage (raw arrow keys, etc.).
-		# A grep range that starts at NUL is truncated and prints
-		# "Invalid regular expression" on every successful menu.
+	gum)
+		local -a opts=()
+		local id detail h n=0
+		while [ $# -ge 2 ]; do
+			id=$1
+			detail=$2
+			shift 2
+			id=${id//"$UI_DELIM"/}
+			detail=${detail//"$UI_DELIM"/}
+			if [ -n "$detail" ] && [ "$detail" != "$id" ]; then
+				opts+=("${id}  ${detail}${UI_DELIM}${id}")
+			else
+				opts+=("${id}${UI_DELIM}${id}")
+			fi
+			n=$((n + 1))
+		done
+		if [ "$n" -eq 0 ]; then
+			return 1
+		fi
+		ui_screen_open
+		h=$(ui_list_height "$n" 8)
+		UI_INTERRUPTED=0
+		gum_capture pick gum choose --no-show-help --height "$h" \
+			--label-delimiter "$UI_DELIM" --header "$text" \
+			-- "${opts[@]}" || rc=$?
+		if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+			UI_INTERRUPTED=0
+			return 1
+		fi
 		if [ -z "$pick" ] || [ "$pick" != "${pick//[[:cntrl:]]/}" ]; then
 			return 1
 		fi
@@ -379,21 +961,41 @@ ui_list_pick() {
 }
 
 # Checklist: print selected tags one per line. Args: TAG "Label" on/off ...
+# Not used by the wizard. Kept so a caller does not need dialog.
 ui_checklist() {
-	local text=$1; shift
+	local text=$1
+	shift
 	case $UI in
-	dialog)
-		local items=() t l s out rc=0
+	gum)
+		local -a opts=() presel=()
+		local t l s out="" rc=0 joined=""
 		while [ $# -ge 3 ]; do
-			t=$1; l=$2; s=$3; shift 3
-			items+=("$t" "$l" "$s")
+			t=$1
+			l=$2
+			s=$3
+			shift 3
+			opts+=("$t  $l")
+			if [ "$s" = on ]; then
+				presel+=("$t  $l")
+			fi
 		done
-		out=$(dialog_run --title "$TITLE" --checklist "$text" 18 72 8 "${items[@]}") || rc=$?
-		if [ "$rc" -ne 0 ]; then return 1; fi
-		# dialog --stdout prints quoted tags: "extra_cli" "media"
-		# shellcheck disable=SC2046
-		eval "set -- $out"
-		for t in "$@"; do printf '%s\n' "$t"; done
+		ui_screen_open
+		if [ "${#presel[@]}" -gt 0 ]; then
+			joined=$(IFS=,; printf '%s' "${presel[*]}")
+			gum_capture out gum choose --no-limit --no-show-help --height 8 \
+				--header "$text" --selected "$joined" \
+				--cursor-prefix "> " --selected-prefix "[x] " \
+				--unselected-prefix "[ ] " -- "${opts[@]}" || rc=$?
+		else
+			gum_capture out gum choose --no-limit --no-show-help --height 8 \
+				--header "$text" \
+				--cursor-prefix "> " --selected-prefix "[x] " \
+				--unselected-prefix "[ ] " -- "${opts[@]}" || rc=$?
+		fi
+		if [ "$rc" -ne 0 ]; then
+			return 1
+		fi
+		printf '%s\n' "$out"
 		;;
 	*)
 		printf ''
@@ -404,7 +1006,7 @@ ui_checklist() {
 ensure_root() {
 	if [ "$(id -u)" -eq 0 ]; then return 0; fi
 	# pkexec (polkit) first, then sudo. Locale and TERM must survive so
-	# dialog still draws on the live TTY. Display-session variables are
+	# gum still draws on the live TTY. Display-session variables are
 	# not forwarded: this installer has no graphical front end.
 	if have pkexec; then
 		exec pkexec env \
@@ -413,7 +1015,7 @@ ensure_root() {
 			"$0" "$@"
 	fi
 	if have sudo; then
-		# TERM is required for dialog/ncurses on a live TTY
+		# TERM is required for gum on a live TTY
 		exec sudo --preserve-env=LANG,LC_ALL,TERM,COLORTERM \
 			"$0" "$@"
 	fi
@@ -845,8 +1447,9 @@ load_preset() {
 
 prompt_hostname() {
 	local h
+	ui_mark_step 3 Hostname
 	while true; do
-		h=$(ui_entry "Hostname:" "$HOSTNAME") || return 1
+		ui_read h ui_entry "Hostname:" "$HOSTNAME" || return 1
 		h=${h// /}
 		if valid_hostname "$h"; then
 			HOSTNAME=$h
@@ -861,8 +1464,9 @@ prompt_hostname() {
 # turned 'Kevin' into 'evin' and accepted it with no error.
 prompt_username() {
 	local u
+	ui_mark_step 4 Username
 	while true; do
-		u=$(ui_entry "Username (lowercase):" "$USERNAME") || return 1
+		ui_read u ui_entry "Username (lowercase):" "$USERNAME" || return 1
 		if valid_username "$u"; then
 			USERNAME=$u
 			log "USERNAME=$USERNAME"
@@ -877,13 +1481,14 @@ Characters are not removed; type a valid name."
 
 prompt_user_password() {
 	local p1 p2
+	ui_mark_step 5 Password
 	while true; do
-		p1=$(ui_password "Password for $USERNAME.
+		ui_read p1 ui_password "Password for $USERNAME.
 
 Root is locked. This user is in the wheel group
 and can run commands with sudo.
-This is the only login password.") || return 1
-		p2=$(ui_password "Confirm password for $USERNAME:") || return 1
+This is the only login password." || return 1
+		ui_read p2 ui_password "Confirm password for $USERNAME:" || return 1
 		if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then
 			USERPASS=$p1
 			log "user password set for $USERNAME"
@@ -895,9 +1500,10 @@ This is the only login password.") || return 1
 
 prompt_luks_passphrase() {
 	local p1 p2
+	ui_mark_step 6 Encryption
 	while true; do
-		p1=$(ui_password "LUKS passphrase (required at every boot):") || return 1
-		p2=$(ui_password "Confirm LUKS passphrase:") || return 1
+		ui_read p1 ui_password "LUKS passphrase (required at every boot):" || return 1
+		ui_read p2 ui_password "Confirm LUKS passphrase:" || return 1
 		if [ -z "$p1" ]; then
 			ui_error "Passphrase cannot be empty."
 			continue
@@ -934,7 +1540,7 @@ pick_timezone() {
 		ui_error "No timezones found under $ZONEINFO_DIR."
 		return 1
 	fi
-	pick=$(ui_list_pick "Select timezone:" "${args[@]}") || return 1
+	ui_read pick ui_list_pick "Select timezone:" "${args[@]}" || return 1
 	if ! valid_timezone "$pick"; then
 		ui_error "Invalid timezone: $pick"
 		return 1
@@ -945,7 +1551,7 @@ pick_timezone() {
 
 pick_locale() {
 	local pick
-	pick=$(ui_list_pick "Select locale:" \
+	ui_read pick ui_list_pick "Select locale:" \
 		en_US.UTF-8 "English (US)" \
 		en_GB.UTF-8 "English (UK)" \
 		C.UTF-8 "C.UTF-8 (minimal)" \
@@ -954,7 +1560,7 @@ pick_locale() {
 		es_ES.UTF-8 "Spanish" \
 		pt_BR.UTF-8 "Portuguese (Brazil)" \
 		ja_JP.UTF-8 "Japanese" \
-		zh_CN.UTF-8 "Chinese (Simplified)") || return 1
+		zh_CN.UTF-8 "Chinese (Simplified)" || return 1
 	if ! valid_locale "$pick"; then
 		ui_error "Invalid locale: $pick"
 		return 1
@@ -965,7 +1571,7 @@ pick_locale() {
 
 pick_keymap() {
 	local pick
-	pick=$(ui_list_pick "Select console keymap:" \
+	ui_read pick ui_list_pick "Select console keymap:" \
 		us "US QWERTY" \
 		uk "UK" \
 		de "German" \
@@ -974,7 +1580,7 @@ pick_keymap() {
 		it "Italian" \
 		se "Swedish" \
 		no "Norwegian" \
-		dvorak "Dvorak") || return 1
+		dvorak "Dvorak" || return 1
 	if ! valid_keymap "$pick"; then
 		ui_error "Invalid keymap: $pick"
 		return 1
@@ -985,13 +1591,13 @@ pick_keymap() {
 
 pick_mirror() {
 	local pick
-	pick=$(ui_list_pick "Select Void mirror:" \
+	ui_read pick ui_list_pick "Select Void mirror:" \
 		"https://mirrors.summithq.com/voidlinux/current" "SummitHQ (default)" \
 		"https://repo-default.voidlinux.org/current" "repo-default" \
 		"https://repo-fastly.voidlinux.org/current" "Fastly CDN" \
 		"https://mirrors.servercentral.com/voidlinux/current" "ServerCentral" \
 		"https://mirror.ps.kz/voidlinux/current" "ps.kz" \
-		"https://void.webconverger.org/current" "Webconverger") || return 1
+		"https://void.webconverger.org/current" "Webconverger" || return 1
 	if ! set_mirror "$pick"; then
 		ui_error "Invalid mirror: $pick"
 		return 1
@@ -1001,10 +1607,10 @@ pick_mirror() {
 
 edit_nvidia() {
 	local pick
-	pick=$(ui_list_pick "NVIDIA proprietary drivers:" \
+	ui_read pick ui_list_pick "NVIDIA proprietary drivers:" \
 		auto "Install only when a GPU is detected" \
 		yes "Always install" \
-		no "Do not install") || return 0
+		no "Do not install" || return 0
 	case $pick in
 	auto|yes|no) NVIDIA_MODE=$pick ;;
 	*)
@@ -1092,8 +1698,8 @@ edit_packages() {
 	if [ ${#PKG_EXTRA[@]} -gt 0 ]; then
 		cur="${PKG_EXTRA[*]}"
 	fi
-	next=$(ui_entry "Extra packages, space-separated.
-Blank keeps the list. A single - clears it." "$cur") || return 0
+	ui_read next ui_entry "Extra packages, space-separated.
+Blank keeps the list. A single - clears it." "$cur" || return 0
 	if [ "$next" = "-" ]; then
 		next=""
 	fi
@@ -1130,7 +1736,8 @@ edit_menu() {
 	if [ "$CREATE_SWAP" -eq 1 ]; then sw=yes; else sw=no; fi
 	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then grub=yes; else grub=no; fi
 	if [ "$INSTALL_GAMING" -eq 1 ]; then gs=yes; else gs=no; fi
-	field=$(ui_list_pick "Edit a field. Cancel returns to the summary." \
+	ui_mark "Edit"
+	ui_read field ui_list_pick "Edit a field. Cancel returns to the summary." \
 		disk "Disk (${DISK:-none})" \
 		hostname "Hostname ($HOSTNAME)" \
 		username "Username ($USERNAME)" \
@@ -1145,7 +1752,7 @@ edit_menu() {
 		swap "Swapfile ($sw)" \
 		grub "GRUB ($grub)" \
 		packages "Extra packages ($pkgs)" \
-		back "Back to summary") || return 0
+		back "Back to summary" || return 0
 	case $field in
 	disk) step_disk || true ;;
 	hostname) prompt_hostname || true ;;
@@ -1166,7 +1773,7 @@ edit_menu() {
 	esac
 }
 
-# Short label for the dialog summary. The full sentence is summary_text.
+# Short label for the summary card. The full sentence is summary_text.
 gaming_label() {
 	if [ "${INSTALL_GAMING:-0}" -eq 1 ]; then
 		if [ "${INSTALL_NVIDIA:-0}" -eq 1 ]; then
@@ -1239,11 +1846,9 @@ Install starts the copy. Edit changes one field. Quit leaves the disk alone.
 EOF
 }
 
-# Nine lines. The full summary_text does not fit a 24-row console: dialog
-# exits at once with "Can't make sub-window", the choice is empty, and an
-# error box would loop forever. Twelve lines still draws, but Quit scrolls
-# off the menu. Nine keeps Start / Edit / Quit on screen. Every field is
-# still here. Gaming is its own line.
+# Nine lines. The full summary_text plus the choice list does not fit a
+# 24-row console. This card keeps every field, and Start / Edit / Quit
+# stay on screen under it. Gaming is its own line.
 summary_menu_prompt() {
 	local mode=BIOS ns enc sw bl pkgs pw gs
 	is_efi && mode=UEFI
@@ -1301,62 +1906,59 @@ summary_menu_prompt() {
 		"Preset: ${PRESET_FILE:-built-in defaults}"
 }
 
-# Summary choices. 0 and the tag on stdout. 1 = Escape/Cancel (not an error).
-dialog_summary_choice() {
-	local pick="" rc=0 lines=24 cols=80 h=20 w=74
-	if [ -c /dev/tty ]; then
-		lines=$(stty size </dev/tty 2>/dev/null | awk '{print $1}') || lines=24
-		cols=$(stty size </dev/tty 2>/dev/null | awk '{print $2}') || cols=80
+# Summary choices. Prints install, edit, or quit. 1 = Escape/Ctrl+C.
+# The cursor starts on Edit, so Enter does not start the install.
+# A tall terminal gets the full summary. A 24-row console gets the short card.
+gum_summary_choice() {
+	local pick="" rc=0
+	ui_screen_open
+	if [ "$UI_ROWS" -ge 42 ]; then
+		ui_card "$(summary_text)"
+	else
+		ui_card "$(summary_menu_prompt)"
 	fi
-	if [ "${lines:-0}" -ge 8 ] && [ "$h" -ge "$lines" ]; then
-		h=$((lines - 4))
-	fi
-	if [ "${cols:-0}" -ge 40 ] && [ "$w" -ge "$cols" ]; then
-		w=$((cols - 6))
-	fi
-	[ "$h" -lt 16 ] && h=16
-	[ "$w" -lt 60 ] && w=60
-	pick=$(dialog_run --no-collapse --no-tags \
-		--title "Install summary" \
-		--menu "$(summary_menu_prompt)" "$h" "$w" 3 \
-		install "Start installation" \
-		edit "Edit a field" \
-		quit "Quit") || rc=$?
-	if [ "$rc" -ne 0 ]; then
+	ui_nl
+	UI_INTERRUPTED=0
+	gum_pick pick 3 "Enter selects. Escape stays here and does not install." \
+		"Edit a field" \
+		"Start installation" "Edit a field" "Quit" || rc=$?
+	if [ "${UI_INTERRUPTED:-0}" -eq 1 ] || [ "$rc" -ne 0 ]; then
+		UI_INTERRUPTED=0
 		return 1
 	fi
-	if [ -z "$pick" ] || [ "$pick" != "${pick//[[:cntrl:]]/}" ]; then
-		return 1
-	fi
-	printf '%s\n' "$pick"
+	case $pick in
+	"Start installation") printf 'install\n' ;;
+	"Edit a field") printf 'edit\n' ;;
+	"Quit") printf 'quit\n' ;;
+	*) return 1 ;;
+	esac
 }
 
 step_welcome() {
 	local preset
+	ui_mark_step 1 Welcome
 	if [ -n "$PRESET_FILE" ]; then
 		preset=$PRESET_FILE
 	else
 		preset="built-in defaults"
 	fi
+	# Ten lines so the card, the banner, and Next/Back/Abort fit on 80x24.
 	wizard_page "Welcome to Atelier Linux installer v${VERSION}.
-
-WHOLE-DISK install (erases one selected disk).
+Whole-disk install. The selected disk is erased.
 XLibre is always installed (no X.Org fallback).
 
-Most settings come from the preset:
-$preset
+Preset: $preset
 
-Disk, hostname, and username are asked here.
-Root is locked; the user has sudo.
-Names set in a private preset are not asked.
-LUKS only if encryption is on. Other fields
-are changed from the summary (Edit).
-
-Next to continue."
+Asks for the disk, hostname, username, and password.
+Root is locked. The user has sudo. A private preset
+that sets the names skips those questions. LUKS is
+asked only when encryption is on. Edit other fields
+from the summary."
 }
 
 step_disk() {
 	local args=() path size model rc=0 pick crc=0
+	ui_mark_step 2 Disk
 	while IFS='|' read -r path size model; do
 		[ -n "$path" ] || continue
 		args+=("$path" "$size  $model")
@@ -1366,21 +1968,22 @@ step_disk() {
 		return 2
 	fi
 
-	pick=$(ui_list_pick "Select disk to ERASE:" "${args[@]}") || rc=$?
+	ui_read pick ui_list_pick "Select disk to ERASE:" "${args[@]}" || rc=$?
 	if [ "$rc" -eq 1 ]; then return 1; fi
 	if [ "$rc" -ge 2 ]; then return 2; fi
 	DISK=${pick//|/}
 	DISK=$(printf '%s' "$DISK" | tr -d '\r' | awk 'NF{print $1; exit}')
 	case $DISK in
 	/dev/*) ;;
-	*) ui_error "Invalid disk selection (got: ${DISK:-empty}). Use arrow keys inside the dialog, then Enter."; return 1 ;;
+	*) ui_error "Invalid disk selection (got: ${DISK:-empty}). Use the arrow keys, then Enter."; return 1 ;;
 	esac
 	[ -b "$DISK" ] || { ui_error "Invalid disk: $DISK"; return 1; }
 
+	# Highlight No. Enter does not erase the disk; Yes has to be chosen.
 	ui_confirm "ALL DATA on $DISK will be DESTROYED.
 
 Yes = use this disk
-No  = go back" || crc=$?
+No  = go back" no || crc=$?
 	case $crc in
 	0) ;;
 	1) return 1 ;;
@@ -1425,18 +2028,23 @@ step_summary() {
 	local choice rc
 	while true; do
 		rc=0
-		# dialog cannot put the full summary in the menu prompt on a
-		# 24-row console. Use a short prompt there. Text mode keeps the
-		# full summary in the prompt (pipes and --dry-run).
-		if [ "$UI" = dialog ]; then
-			choice=$(dialog_summary_choice) || rc=$?
+		choice=""
+		if [ "${ENCRYPT_DISK:-0}" -eq 1 ]; then
+			ui_mark_step 7 Summary
 		else
-			choice=$(ui_list_pick "$(summary_text)" \
+			ui_mark_step 6 Summary
+		fi
+		# gum draws a short card on a 24-row console so Quit stays on
+		# screen. Text mode keeps the full summary in the prompt.
+		if [ "$UI" = gum ]; then
+			ui_read choice gum_summary_choice || rc=$?
+		else
+			ui_read choice ui_list_pick "$(summary_text)" \
 				install "Start installation" \
 				edit "Edit a field" \
-				quit "Quit") || rc=$?
+				quit "Quit" || rc=$?
 		fi
-		# EOF in text mode. Escape on the dialog menu is rc 1: show it again.
+		# EOF in text mode. Escape on the gum menu is rc 1: show it again.
 		if [ "$rc" -ge 2 ]; then
 			return 2
 		fi
@@ -2022,6 +2630,10 @@ release_target() {
 begin_phase() {
 	INSTALL_PHASE=$1
 	log "=== phase: $1 ==="
+	# Preflight has its own spinner. Later phases stay on screen with xbps.
+	if [ "$1" != preflight ]; then
+		ui_phase "$1"
+	fi
 }
 
 # why is the human reason. cmd is the failing command, or empty when die()
@@ -2060,9 +2672,10 @@ on_install_err() {
 on_install_exit() {
 	local st=$?
 	local phase cmd why text
-	trap - EXIT ERR
+	trap - EXIT ERR INT
 	set +e
 	INSTALL_TRAPS=0
+	ui_spin_end
 	if [ "$st" -eq 0 ]; then
 		exit 0
 	fi
@@ -2463,6 +3076,7 @@ preflight_checks() {
 	if [ "${INSTALL_XLIBRE:-0}" -ne 1 ]; then
 		die "XLibre is required and there is no X.Org fallback."
 	fi
+	ui_spin_begin "Checking mirror, tools, and repositories"
 	preflight_tools
 	preflight_firmware
 	preflight_nvidia
@@ -2471,6 +3085,7 @@ preflight_checks() {
 	preflight_void_repos
 	preflight_gaming
 	preflight_xlibre_repo
+	ui_spin_end
 	log "preflight: OK firmware=$FIRMWARE_MODE nvidia_gpu=$NVIDIA_GPU_DETECTED gaming=$INSTALL_GAMING mirror=$VOID_REPO"
 }
 
@@ -2708,9 +3323,9 @@ Atelier installer v${VERSION} (whole-disk, optional LUKS2, swapfile, Steam)
 
 Usage: atelier-install [options]
 
-  (default)       TUI with dialog (Void-like; works on a live tty)
-  --tui           Force dialog TUI
-  --text          Plain prompts on stdin/stderr (no dialog)
+  (default)       TUI with gum (live tty and terminal emulators)
+  --tui           Force the gum TUI
+  --text          Plain prompts on stdin/stderr (no gum)
   --preset FILE   Read settings from FILE instead of /etc/atelier/install.conf
   --dry-run       Walk the prompts, then exit before the disk is touched
   -h, --help      This help
@@ -2759,11 +3374,12 @@ main() {
 		have xbps-install || die "xbps-install is required"
 	fi
 	have lsblk || die "util-linux (lsblk) is required"
-	if [ "$UI" = "dialog" ]; then
-		have dialog || die "dialog is required for TUI mode"
+	if [ "$UI" = "gum" ]; then
+		have gum || die "gum is required for TUI mode (Void package: gum)"
+		trap ui_on_int INT
 	fi
 	if [ "$UI" = "none" ]; then
-		die "No UI backend (install dialog for TUI mode)"
+		die "No UI backend (install gum for TUI mode, or pass --text)"
 	fi
 
 	if [ -n "$PRESET_PATH" ]; then

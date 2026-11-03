@@ -114,7 +114,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | `atelier-base` | Fonts available today + light session glue | **personal** |
 | `atelier-config` | Themed configs + `atelier-theme` + `atelier-webapp` + `atelier-setup-nvidia` + `atelier-setup-swap` + `atelier-setup-keyring` | **personal** |
 | `atelier-desktop` | Full PLAN desktop stack + apps + `atelier-config` | **personal** |
-| `atelier-installer` | Whole-disk dialog TUI installer (`atelier-install`) | **personal** |
+| `atelier-installer` | Whole-disk gum TUI installer (`atelier-install`) | **personal** |
 | `atelier-nvidia` | Proprietary NVIDIA configs + depends on `nvidia` | **personal** |
 | `atelier-xlibre-repo` | Xlibre external repo key + xbps.d | **personal** |
 | `atelier-void-repo` | GraeWolf void-repo public key + xbps.d | **personal** |

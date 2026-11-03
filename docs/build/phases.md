@@ -11,7 +11,7 @@ Phase 1 (MVP) is split into small, reviewable steps.
 | 2 | Desktop config packages (theme engine) | Complete (Tokyo Night default; switchable palettes) |
 | 3 | Local personal XBPS repository | Complete |
 | 4 | First bootable live ISO | Complete |
-| 5 | Custom dialog installer | Complete |
+| 5 | Custom installer | Complete |
 | 6 | NVIDIA proprietary support | Complete |
 | 7 | Documentation polish | Complete |
 
@@ -31,8 +31,8 @@ Themed bspwm stack configs shipped as `atelier-config` (`atelier-theme`; Tokyo N
 ### Step 4 — First bootable live ISO
 void-mklive wrappers; personal repo embedded; themed live desktop path.
 
-### Step 5 — Custom dialog installer
-`atelier-install` whole-disk dialog TUI (0.5.13). Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). Default Void mirror is SummitHQ (0.5.13). No graphical front end.
+### Step 5 — Custom installer
+`atelier-install` whole-disk TUI. Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). Default Void mirror is SummitHQ (0.5.13). The UI is gum as of 0.6.0 (dialog before that). No graphical front end.
 
 ### Step 6 — NVIDIA proprietary support
 `atelier-nvidia`, `atelier-xlibre-repo`, installer options, setup scripts.
@@ -45,7 +45,7 @@ User guides + end-to-end build docs; README status updated.
 | Criterion | Delivery |
 |-----------|----------|
 | Bootable live ISO | `scripts/build-iso.sh` + docs |
-| Dialog installer | `atelier-installer` / `atelier-install` |
+| gum installer | `atelier-installer` / `atelier-install` |
 | NVIDIA proprietary support | nonfree + `atelier-nvidia` + setup/installer |
 | Personal extra repository | `repo/out`, embedded on ISO |
 | Fully themed bspwm desktop | `atelier-desktop` + `atelier-config` |

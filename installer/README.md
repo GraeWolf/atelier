@@ -1,6 +1,6 @@
 # Installer
 
-Atelier whole-disk installer: **dialog TUI** only.
+Atelier whole-disk installer: **gum TUI** only.
 
 ## Scope
 
@@ -23,7 +23,7 @@ Atelier whole-disk installer: **dialog TUI** only.
 
 | Path | Role |
 |------|------|
-| `atelier-install` | Main installer (dialog TUI; `--text` for pipes and tests) |
+| `atelier-install` | Main installer (gum TUI; `--text` for pipes and tests) |
 | `install.conf` | Desktop preset, installed as `/etc/atelier/install.conf` |
 
 Packaged as **`atelier-installer`** in the personal XBPS repo (`packages/atelier-installer/`).
@@ -45,7 +45,7 @@ Log: `/tmp/atelier-install.log`
 
 ## Dependencies (runtime)
 
-- `dialog` (the installer UI)
+- `gum` (the installer UI; Void package name `gum`)
 - `parted`, `e2fsprogs`, `dosfstools` (EFI), `util-linux`, `cryptsetup` (optional LUKS2)
 - `xbps`, `grub` / `grub-x86_64-efi`, `sudo`
 - `polkit` (pkexec when the installer is not already root; the live path is `sudo atelier-install`)
