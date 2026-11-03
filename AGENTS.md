@@ -1,44 +1,38 @@
-# Atelier Linux — Agent Rules
+# AGENTS.md — Atelier Linux
 
-## Core Principles
-- Always start non-trivial work in Plan Mode. Never write or edit files until a plan is approved.
-- Prefer small, reviewable changes. No large refactors without an explicit plan.
-- Never touch signing keys, private keys, secrets, or credential files.
-- Never run destructive package/ISO build commands without explicit approval.
-- Keep the working tree clean. Prefer feature branches.
+Atelier is a custom Linux distribution built on a Void Linux base. It is a systemd-free system focused on a clean, minimal desktop with custom tooling and TUI integrations.
 
-## Forbidden / High-Risk
-- Do not edit or read any files matching: **/*.key, **/*.pem, **/*secret*, **/.env*, **/private/, **/keys/
-- Do not run `rm -rf`, full system package operations, or ISO burning/writing without asking.
-- Do not push to main or tag releases automatically.
+## Stack
 
-## Preferred Workflow
-1. Explore / understand current state
-2. Produce a clear plan (what files change, why, risks, verification steps)
-3. Wait for approval
-4. Implement in small steps
-5. Verify (build scripts, package checks, lint where applicable)
+- **Base**: Void Linux
+- **Init**: runit
+- **Graphics**: NVIDIA RTX 4060 Ti (DKMS packages)
+- **Window manager**: bspwm (started via `startx` / `.xinitrc`)
+- **Package manager**: xbps
+- **Primary language/tools**: Shell scripts, occasional C++ or other languages for custom tools, package templates
 
-## Project Conventions
-- Follow existing packaging style and directory layout.
-- Document any new packages or significant changes.
-- Prefer reproducible, declarative approaches where possible.
+## How to work in this repository
 
-# AGENTS.md – Atelier Linux
+1. **Prefer minimal, targeted changes.** Fix the specific problem with the smallest set of changes that are likely to work. Avoid large refactors unless explicitly requested.
+2. **Show a plan first** for non-trivial changes (config tweaks, new scripts, package changes, suspend/resume fixes, etc.). Wait for approval before writing files.
+3. **Create a branch and open a draft pull request.** Do not merge. The maintainer will test on hardware and merge if the change works.
+4. In every PR description include:
+   - What changed and why
+   - How to test it
+   - Any known limitations or follow-up steps
+5. Document non-obvious changes with short comments or notes in the relevant files.
+6. When researching issues (NVIDIA suspend/resume, runit services, xbps packaging, bspwm behavior, etc.), cite relevant sources or known-good approaches from Void/Arch documentation when useful.
 
-This file gives Grok Build consistent instructions when working on the Atelier project.
+## Common task patterns
 
-## Project Summary
-Atelier is a personal, opinionated Linux distribution based on Void Linux.
-Primary goals: extreme minimalism, simplicity, elegant Tokyo Night theming, and a ready-to-use bspwm desktop.
+- System configuration fixes (kernel parameters, modprobe options, runit services, power management)
+- Packaging work (xbps templates, custom packages)
+- Window manager and desktop configuration (bspwm, `.xinitrc`, autostart)
+- Scripts for setup, maintenance, or TUI tools
+- Investigating hardware-specific issues (especially NVIDIA) and proposing testable fixes
 
-## Key Rules
-- Always follow the current PLAN.md as the source of truth.
-- Prefer extreme minimalism — do not add packages or features unless they are explicitly listed in the plan or requested.
-- Keep configurations clean, readable, and easy to understand/modify.
-- Maintain consistent theming via `atelier-theme` (Tokyo Night dark is the default palette) across GTK, Qt, terminals, TUIs, rofi, polybar, etc.
-- Use pure XBPS + the personal extra repository. Do not introduce other package formats unless asked.
-- Init system is runit. Display server is Xlibre. Window manager is bspwm (single fixed setup).
+## Constraints
+
 
 ## Current Focus (MVP)
 - Bootable live ISO with gum (TUI) installer
@@ -46,12 +40,11 @@ Primary goals: extreme minimalism, simplicity, elegant Tokyo Night theming, and 
 - Personal repository integrated
 - Fully themed bspwm desktop with the exact application list from PLAN.md
 - Basic user documentation + detailed build documentation
+- This is a real system the maintainer runs. Changes that affect boot, suspend/resume, graphics, or package installation must be conservative and easy to revert.
+- Prefer solutions that stay within Void’s conventions (runit, xbps, etc.) rather than introducing systemd units or foreign package managers.
+- Do not assume a display manager is present; the system uses `startx` + bspwm.
+d423d6f (Adding the AGENTS.md for Grok Build)
 
-## Working Style
-- Make small, focused changes.
-- Explain what you are doing and why when making non-trivial decisions.
-- When creating or editing configuration files, keep them well-commented.
-- Prefer clarity over cleverness.
+## Testing expectation
 
-## Multi-machine Note
-This repository is used on two machines via Git. Always assume the local clone may have been updated by the other machine. Prefer reading PLAN.md and existing files before making assumptions.
+Most system-level changes (especially graphics, suspend, input, or boot-related) cannot be fully verified in a generic environment. Provide clear test steps so the maintainer can validate on the actual hardware.
