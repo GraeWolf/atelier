@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.6.1** |
+| XBPS package | `atelier-installer` **0.6.2** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Preset | `/etc/atelier/install.conf` |
 
@@ -55,7 +55,7 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 | Variable | Effect |
 |----------|--------|
 | `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos from the preset mirror. Default `https://mirrors.summithq.com/voidlinux/current`. Nonfree, multilib, and multilib/nonfree are that URL plus the suffix. `dropbox` is installed only when listed in preset `PACKAGES` |
-| `INSTALL_NVIDIA` | `NVIDIA=auto` (default) installs proprietary drivers only when a GPU is detected. `yes` / `no` force it. Separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
+| `INSTALL_NVIDIA` | `NVIDIA=auto` (default) installs proprietary drivers only when a GPU is detected. `yes` / `no` force it. Separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too). After reconfigure, `atelier-nvidia-dkms` runs in the target. A missing module sets `dkms-failed` and names `sudo xbps-reconfigure -f nvidia-dkms`. Void's DKMS trigger exits 0 on a failed build, so the package install alone is not the check |
 | `INSTALL_GAMING` | `GAMING=yes` (shipped preset and built-in default) or `no`. Separate transactions: `void-repo-multilib` + `void-repo-multilib-nonfree`, then Steam and the 32-bit stack from `installer/gaming.txt`, then `nvidia-libs-32bit` only when NVIDIA packages are actually installed. Failure is non-fatal and is named on the result screen. Steam is not a dependency of `atelier-desktop` |
 | `INSTALL_AI` | `AI=yes` (shipped preset and built-in default) or `no`. After the user account exists, the live system downloads `https://x.ai/cli/install.sh` and runs it with `HOME` set to the new user's home on the target and `PATH` prefixed with that user's `~/.grok/bin` (so the script does not symlink the live `/usr/local/bin`). A 300s timeout. Files are `chown`ed with the target's passwd. Failure is non-fatal, is named on the result screen, and does not abort preflight. No API key is written |
 | `INSTALL_XLIBRE` | always `1`. `atelier-xlibre-repo` + `xlibre` + `xlibre-xserver`. No X.Org fallback. Missing repo, failed install, or no `/usr/bin/Xorg` aborts the install |
@@ -65,7 +65,7 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 | `CREATE_SWAP` | preset `SWAP` (default no). `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
 | (always) | `xdg-user-dirs`, `xdg-user-dirs-gtk`, `void-repo-nonfree` |
 
-After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then the optional Grok Build install (`install_ai`), then `atelier-setup-keyring` so TTY login unlocks gnome-keyring.
+After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then the optional Grok Build install (`install_ai`), then `atelier-setup-keyring` so TTY login unlocks gnome-keyring. NVIDIA's DKMS check runs earlier, at the end of the package phase, after `xbps-reconfigure -a`.
 
 The live log `/tmp/atelier-install.log` is copied to the target as
 `/var/log/atelier-install.log` before unmount (including failed installs
@@ -163,7 +163,7 @@ gum (TUI; Void package `gum`), parted, e2fsprogs, dosfstools, util-linux, crypts
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.6.1 and names the preset file
+- [ ] Welcome screen says v0.6.2 and names the preset file
 - [ ] Summary mirror is `https://mirrors.summithq.com/voidlinux/current` unless the preset changed it
 - [ ] Installed system `/etc/xbps.d/00-repository-main.conf`, `10-repository-nonfree.conf`, `10-repository-multilib.conf`, and `10-repository-multilib-nonfree.conf` use that mirror
 - [ ] Summary shows Gaming. Edit → Steam toggles it, and the summary line changes. On an 80x24 console the card and the menu still show Start installation, Edit a field, and Quit
@@ -192,3 +192,4 @@ gum (TUI; Void package `gum`), parted, e2fsprogs, dosfstools, util-linux, crypts
 - [ ] A command failure inside an install function shows the phase and the log tail, then unmounts and closes LUKS
 - [ ] Installed system has `xlibre-xserver` and `/usr/bin/Xorg` (or `/usr/bin/X`); no X.Org-only install
 - [ ] NVIDIA package or `xbps-reconfigure -a` failure is visible on the result screen
+- [ ] When the packages install but `nvidia.ko` is missing, the result screen says `dkms-failed` and shows `sudo atelier-nvidia-dkms` and `sudo xbps-reconfigure -f nvidia-dkms`

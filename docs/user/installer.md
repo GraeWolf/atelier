@@ -102,7 +102,7 @@ When it stays on, the installer runs the official Grok Build install script and 
 
 ## Graphics
 
-- **NVIDIA:** the preset default is `auto`. A detected GPU (the desktop RTX 4060 Ti) gets the proprietary driver. A VM with no NVIDIA GPU does not. Change it from the summary if you need to force yes or no. The driver is a separate package transaction; a driver failure does not undo the rest of the install. The result screen reports a failed install and a failed `xbps-reconfigure -a`.
+- **NVIDIA:** the preset default is `auto`. A detected GPU (the desktop RTX 4060 Ti) gets the proprietary driver. A VM with no NVIDIA GPU does not. Change it from the summary if you need to force yes or no. The driver is a separate package transaction; a driver failure does not undo the rest of the install. The result screen reports a failed install, a failed `xbps-reconfigure -a`, and a missing kernel module (`sudo atelier-nvidia-dkms`).
 - **No NVIDIA (typical VM):** drivers skipped; later: `sudo atelier-setup-nvidia` (always installed with the desktop)
 - **XLibre:** always installed. There is no X.Org fallback. If the XLibre repo or package is missing, the installer stops. With NVIDIA, Atelier uses modesetting + `prime-run` on hybrid laptops.
 
