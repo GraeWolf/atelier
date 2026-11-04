@@ -143,7 +143,7 @@ This was not tested on real hardware here. Suspend needs the desktop.
 | Black screen on boot | TTY login (`Ctrl+Alt+F2`), check `dmesg \| grep -i nvidia`. Installer log: `/var/log/atelier-install.log` |
 | `atelier-setup-nvidia` not found | Update `atelier-config` from the personal repo (helper lives there, not in `atelier-nvidia`) |
 | nouveau still loading | Confirm `/etc/modprobe.d/atelier-blacklist-nouveau.conf` exists; rebuild initramfs / reboot |
-| DKMS errors / nvidia-smi cannot talk to the driver | `sudo xbps-install -Sy linux-headers` matching `uname -r`; reinstall `nvidia-dkms`; reboot into that kernel |
+| DKMS errors / nvidia-smi cannot talk to the driver | `sudo atelier-nvidia-dkms` (exit 0 means this kernel has the module). Then `sudo xbps-install -S linux-headers` and `sudo xbps-reconfigure -f nvidia-dkms`. Reboot into that kernel |
 | Hybrid laptop, black screen after NVIDIA | Do not set `PrimaryGPU`. Display should stay on the iGPU; offload with `prime-run` |
 | Black screen after suspend, until reboot | See [Black screen after suspend](#black-screen-after-suspend). Reboot after the package update, then `loginctl suspend`. Still broken: `sudo atelier-nvidia-resume-log` |
 | Hibernate on hybrid NVIDIA does not resume | The Atelier hook unloads the dGPU when `amdgpu` is also loaded, and disables Void’s hook (that script always calls `nvidia-sleep.sh hibernate`). Swap/resume is separate (`atelier-setup-swap`). Firmware can still fail; suspend-to-RAM is the fallback |

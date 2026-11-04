@@ -32,7 +32,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.6.1"
+VERSION="0.6.2"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -2556,6 +2556,26 @@ XLibre is required and there is no X.Org fallback."
 			log "ERROR: NVIDIA packages are installed but xbps-reconfigure -a failed"
 		fi
 	fi
+
+	# Void's DKMS trigger exits 0 when the build fails or headers are
+	# missing, so xbps-reconfigure -a is not proof nvidia.ko exists.
+	# The check looks at the target's /usr/lib/modules, not the live uname.
+	if [ "${INSTALL_NVIDIA:-0}" -eq 1 ] && \
+		{ [ "$NVIDIA_INSTALL_STATUS" = ok ] || [ "$NVIDIA_INSTALL_STATUS" = reconfigure-failed ]; }; then
+		if [ -x "$TARGETDIR/usr/bin/atelier-nvidia-dkms" ]; then
+			log "checking nvidia-dkms in the target"
+			if ! chroot "$TARGETDIR" /usr/bin/atelier-nvidia-dkms >>"$LOG" 2>&1; then
+				log "ERROR: NVIDIA kernel module was not built"
+				if [ "$NVIDIA_INSTALL_STATUS" = ok ]; then
+					NVIDIA_INSTALL_STATUS=dkms-failed
+				fi
+			else
+				log "nvidia-dkms check OK"
+			fi
+		else
+			log "WARN: atelier-nvidia-dkms not on the target; DKMS result was not checked"
+		fi
+	fi
 }
 
 enable_sv() {
@@ -3415,6 +3435,14 @@ See /var/log/atelier-install.log"
 NVIDIA packages were installed, but xbps-reconfigure -a failed.
 The kernel module may not be built.
 After reboot: sudo atelier-setup-nvidia
+See /var/log/atelier-install.log"
+	elif [ "${NVIDIA_INSTALL_STATUS:-}" = dkms-failed ]; then
+		done_msg="$done_msg
+
+NVIDIA packages were installed, but the kernel module was not built.
+After reboot:
+sudo atelier-nvidia-dkms
+sudo xbps-reconfigure -f nvidia-dkms
 See /var/log/atelier-install.log"
 	fi
 	if [ "${RECONFIGURE_STATUS:-}" = failed ] && [ "${NVIDIA_INSTALL_STATUS:-}" != reconfigure-failed ]; then

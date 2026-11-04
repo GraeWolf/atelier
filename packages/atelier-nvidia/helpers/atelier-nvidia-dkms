@@ -1,0 +1,112 @@
+#!/bin/sh
+# Report whether nvidia-dkms built a module for the kernel that will boot.
+# Prints one line per kernel. Exit 1 on a miss. Does not install or rebuild.
+#
+# The running kernel is required when it exists under the module tree.
+# In an installer chroot, uname -r is the live kernel and is not in that
+# tree. Then every installed kernel (modules.dep) is required. A leftover
+# directory with no headers is a warning, unless it is the only kernel.
+set -eu
+
+log() { printf 'atelier-nvidia-dkms: %s\n' "$*"; }
+
+if [ -d /usr/lib/modules ]; then
+	root=/usr/lib/modules
+elif [ -d /lib/modules ]; then
+	root=/lib/modules
+else
+	log "no kernel module directory"
+	exit 1
+fi
+
+running=$(uname -r)
+fail=0
+count=0
+
+headers_ok() {
+	[ -e "$1/build/include" ]
+}
+
+module_ok() {
+	find "$1" -type f \( \
+		-name 'nvidia.ko' -o -name 'nvidia.ko.xz' -o \
+		-name 'nvidia.ko.zst' -o -name 'nvidia.ko.gz' \
+		\) -print -quit 2>/dev/null | grep -q .
+}
+
+dkms_ok() {
+	kver=$1
+	out=$(dkms status -m nvidia 2>/dev/null || true)
+	printf '%s\n' "$out" | grep -F ", ${kver}," | grep -q 'installed'
+}
+
+# Required kernel: headers, dkms status installed, and nvidia.ko on disk.
+check_required() {
+	dir=$1
+	kver=$2
+	if ! headers_ok "$dir"; then
+		log "kernel $kver: missing headers (install linux-headers)"
+		return 1
+	fi
+	if ! command -v dkms >/dev/null 2>&1; then
+		log "kernel $kver: dkms is not installed"
+		return 1
+	fi
+	if ! dkms_ok "$kver"; then
+		log "kernel $kver: nvidia is not installed in dkms"
+		return 1
+	fi
+	if ! module_ok "$dir"; then
+		log "kernel $kver: nvidia.ko is missing under $dir"
+		return 1
+	fi
+	log "kernel $kver: installed"
+	return 0
+}
+
+for dir in "$root"/*; do
+	[ -d "$dir" ] || continue
+	count=$((count + 1))
+done
+
+if [ "$count" -eq 0 ]; then
+	log "no kernels under $root"
+	exit 1
+fi
+
+if [ -d "$root/$running" ]; then
+	check_required "$root/$running" "$running" || fail=1
+	for dir in "$root"/*; do
+		[ -d "$dir" ] || continue
+		kver=$(basename "$dir")
+		[ "$kver" = "$running" ] && continue
+		if ! headers_ok "$dir"; then
+			log "kernel $kver: warning: no headers (leftover)"
+		elif ! dkms_ok "$kver" || ! module_ok "$dir"; then
+			log "kernel $kver: warning: nvidia module not installed"
+		else
+			log "kernel $kver: installed"
+		fi
+	done
+elif [ "$count" -eq 1 ]; then
+	dir=$(echo "$root"/*)
+	check_required "$dir" "$(basename "$dir")" || fail=1
+else
+	for dir in "$root"/*; do
+		[ -d "$dir" ] || continue
+		kver=$(basename "$dir")
+		if [ -f "$dir/modules.dep" ]; then
+			check_required "$dir" "$kver" || fail=1
+		elif ! headers_ok "$dir"; then
+			log "kernel $kver: warning: no headers (leftover)"
+		else
+			check_required "$dir" "$kver" || fail=1
+		fi
+	done
+fi
+
+if [ "$fail" -ne 0 ]; then
+	log "retry: sudo xbps-install -S linux-headers && sudo xbps-reconfigure -f nvidia-dkms"
+	exit 1
+fi
+exit 0

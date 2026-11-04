@@ -32,7 +32,7 @@ Themed bspwm stack configs shipped as `atelier-config` (`atelier-theme`; Tokyo N
 void-mklive wrappers; personal repo embedded; themed live desktop path.
 
 ### Step 5 — Custom installer
-`atelier-install` whole-disk TUI. Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). Default Void mirror is SummitHQ (0.5.13). The UI is gum as of 0.6.0 (dialog before that). Optional Grok Build CLI (`AI=yes`) as of 0.6.1. No graphical front end.
+`atelier-install` whole-disk TUI. Optional LUKS2 added post-MVP (0.4.0). Optional Steam with multilib (0.5.12). Default Void mirror is SummitHQ (0.5.13). The UI is gum as of 0.6.0 (dialog before that). Optional Grok Build CLI (`AI=yes`) as of 0.6.1. The NVIDIA DKMS check (`atelier-nvidia-dkms`) is reported by the installer as of 0.6.2. No graphical front end.
 
 ### Step 6 — NVIDIA proprietary support
 `atelier-nvidia`, `atelier-xlibre-repo`, installer options, setup scripts.

@@ -41,6 +41,8 @@ install -m 644 "$src/dracut.conf.d/atelier-nvidia.conf" \
 	"$dst/etc/dracut.conf.d/atelier-nvidia.conf"
 install -m 755 "$helpers/atelier-nvidia-grub" \
 	"$dst/usr/bin/atelier-nvidia-grub"
+install -m 755 "$helpers/atelier-nvidia-dkms" \
+	"$dst/usr/bin/atelier-nvidia-dkms"
 # atelier-setup-nvidia ships in atelier-config so the command exists
 # when NVIDIA was skipped at install time.
 install -m 644 "$helpers/nvidia-README.txt" \

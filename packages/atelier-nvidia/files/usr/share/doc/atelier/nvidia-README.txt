@@ -14,6 +14,24 @@ Quick setup (installed system)
   sudo atelier-setup-nvidia
   sudo reboot
 
+DKMS
+----
+Void builds nvidia.ko for every kernel under /usr/lib/modules that has
+headers. The DKMS trigger still exits 0 when that build fails or the
+headers are missing, so a successful package install is not proof the
+module exists.
+
+  sudo atelier-nvidia-dkms
+
+Exit 0 means the booted kernel (or, in the installer chroot, each
+installed kernel) has headers, dkms status "installed", and nvidia.ko.
+On a miss it prints the kernel and suggests:
+
+  sudo xbps-install -S linux-headers
+  sudo xbps-reconfigure -f nvidia-dkms
+
+atelier-setup-nvidia runs the check and retries that reconfigure once.
+
 Xlibre
 ------
 Xlibre's video ABI does not match nvidia_drv.so. Atelier's 20-nvidia.conf

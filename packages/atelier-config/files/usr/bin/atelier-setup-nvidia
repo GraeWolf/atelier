@@ -60,6 +60,27 @@ else
 	xbps-install -Sy "$@"
 fi
 
+# The package install can succeed while the DKMS trigger skips or fails
+# (it exits 0 either way). Check, and rebuild once if the module is missing.
+dkms_bad=0
+log "checking the NVIDIA kernel module"
+if [ -x /usr/bin/atelier-nvidia-dkms ]; then
+	if ! /usr/bin/atelier-nvidia-dkms; then
+		log "warning: module missing; reconfiguring nvidia-dkms once"
+		if xbps-reconfigure -f nvidia-dkms; then
+			if ! /usr/bin/atelier-nvidia-dkms; then
+				log "warning: nvidia module is still missing"
+				dkms_bad=1
+			fi
+		else
+			log "warning: xbps-reconfigure -f nvidia-dkms failed"
+			dkms_bad=1
+		fi
+	fi
+else
+	log "warning: atelier-nvidia-dkms not installed; module was not checked"
+fi
+
 log "rebuilding initramfs (best-effort) for nouveau blacklist"
 if command -v dracut >/dev/null 2>&1; then
 	dracut --force --regenerate-all || log "warning: dracut failed; reboot may still work"
@@ -85,3 +106,6 @@ if xbps-query xlibre-xserver >/dev/null 2>&1 || xbps-query xlibre >/dev/null 2>&
 fi
 log "optional: install Xlibre with  sudo atelier-setup-xlibre"
 log "docs: /usr/share/doc/atelier/nvidia-README.txt"
+if [ "$dkms_bad" -eq 1 ]; then
+	exit 1
+fi

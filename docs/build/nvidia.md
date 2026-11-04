@@ -61,6 +61,12 @@ screen says so and points at `sudo atelier-setup-nvidia`. A failing
 `xbps-reconfigure -a` is also shown there (it used to be hidden with
 `|| true`). The log is `/var/log/atelier-install.log`.
 
+Void's DKMS trigger exits 0 when the build fails or the kernel has no
+headers, so a successful reconfigure is not proof that `nvidia.ko` exists.
+After that reconfigure, the installer runs `atelier-nvidia-dkms` in the
+target. A miss sets `dkms-failed` on the result screen (still non-fatal)
+and names `sudo atelier-nvidia-dkms` and `sudo xbps-reconfigure -f nvidia-dkms`.
+
 When the preset `GAMING` is yes and NVIDIA packages were installed, a
 later transaction installs `nvidia-libs-32bit` from multilib/nonfree
 (same driver version as `nvidia`). If the NVIDIA transaction failed,
@@ -99,6 +105,7 @@ xbps-query --repository=$PWD/repo/out -Rs 'atelier-nvidia|atelier-xlibre'
 - [ ] Install from live ISO (or run setup scripts on existing install)
 - [ ] `lspci -nn \| grep -i nvidia`
 - [ ] After reboot: `lsmod \| grep nvidia`
+- [ ] `sudo atelier-nvidia-dkms` exits 0 for the booted kernel (`dkms status` shows `nvidia` installed for `uname -r`)
 - [ ] `cat /proc/driver/nvidia/version` or `nvidia-smi`
 - [ ] `startx` → bspwm / polybar / ghostty
 - [ ] Optional: Xlibre session after `atelier-setup-xlibre`
