@@ -1,0 +1,69 @@
+#!/bin/sh
+# Atelier — open Grok Build with the installed-system context.
+# Bind: Super+Shift+A    CLI: atelier-ask
+# The context file is /usr/share/atelier/AGENTS.md. Grok loads it from a
+# directory that contains only a symlink to that file, so another project's
+# rules are not the session.
+set -eu
+
+CONTEXT=/usr/share/atelier/AGENTS.md
+DIR="${XDG_DATA_HOME:-$HOME/.local/share}/atelier/diagnostics"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+grok_bin() {
+	if have grok; then
+		command -v grok
+		return 0
+	fi
+	if [ -x "$HOME/.grok/bin/grok" ]; then
+		printf '%s\n' "$HOME/.grok/bin/grok"
+		return 0
+	fi
+	return 1
+}
+
+prepare_dir() {
+	mkdir -p "$DIR"
+	if [ -f "$CONTEXT" ]; then
+		ln -sfn "$CONTEXT" "$DIR/AGENTS.md"
+	else
+		printf 'atelier-ask: %s is missing; Grok will start without it\n' "$CONTEXT" >&2
+	fi
+}
+
+missing_grok() {
+	printf '%s\n' \
+		'atelier-ask: Grok Build is not installed.' \
+		'Install, then open a new terminal:' \
+		'  curl -fsSL https://x.ai/cli/install.sh | bash' >&2
+	if [ -t 0 ]; then
+		printf 'Press Enter to close.\n' >&2
+		read -r _ || true
+	fi
+	exit 1
+}
+
+run_grok() {
+	bin=$(grok_bin || true)
+	[ -n "$bin" ] || missing_grok
+	prepare_dir
+	cd "$DIR"
+	# --trust loads AGENTS.md on the first launch of this directory.
+	exec "$bin" --cwd "$DIR" --trust
+}
+
+if [ "${1:-}" = "--here" ]; then
+	run_grok
+fi
+
+prepare_dir
+
+if have ghostty; then
+	exec ghostty -e /usr/bin/atelier-ask --here
+fi
+if have xterm; then
+	exec xterm -T "Ask AI" -e /usr/bin/atelier-ask --here
+fi
+
+run_grok

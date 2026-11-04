@@ -8,6 +8,7 @@
   Super+Space          App launcher (rofi)  [primary]
   Super+d              App launcher (alias)
   Super+Alt+Space      System menu (power, style, install, displays, …)
+  Super+Shift+A        Ask AI (Grok Build, this system's context)
   Super+Ctrl+Shift+Space  Theme picker
   Super+Shift+d        Run command (rofi)
   Super+Shift+F        File manager (nemo)  [primary]

@@ -121,13 +121,15 @@ Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
 9. Installation Experience
 
 Traditional live ISO
-gum (TUI) installer (`atelier-install` 0.6.0)
+gum (TUI) installer (`atelier-install` 0.6.1)
 Tokyo Night colors, a step banner, and gum prompts
 Raw Linux console (`TERM=linux`, 80x24) uses ASCII borders; no truecolor required
 No graphical installer
 Live environment should ideally show the final themed desktop
 NVIDIA support and personal repository must work in both live and installed systems
 Optional Steam (`GAMING=yes|no` in the installer preset). The shipped desktop preset is `yes` because this machine is the RTX 4060 Ti desktop. The summary can turn it off. When it is on, the target enables `void-repo-multilib` and `void-repo-multilib-nonfree` and installs Steam plus the 32-bit graphics stack (`installer/gaming.txt`, including `nvidia-libs-32bit` only when proprietary NVIDIA is installed). Steam is not part of `atelier-desktop` and not a live ISO package. A failure to install it is reported on the result screen and does not roll back the desktop. Preflight checks the multilib indexes before the disk is wiped.
+
+Optional Grok Build CLI (`AI=yes|no` in the installer preset; shipped default yes). The summary can turn it off. When it is on, the installer runs the official install script into the new user's `~/.grok`. A failed download is reported on the result screen and does not roll back the desktop. The desktop opens it with **Super+Shift+A** (`atelier-ask`) against `/usr/share/atelier/AGENTS.md`. See `docs/user/ai.md`.
 
 
 10. Documentation
@@ -154,7 +156,7 @@ Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-rep
 
 Later phases: Extra hardware support, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
 
-Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted. Optional `/swapfile` for hibernation (default off; no swap partition). Optional Steam with multilib (`GAMING`, default yes in the shipped preset; package list `installer/gaming.txt`).
+Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted. Optional `/swapfile` for hibernation (default off; no swap partition). Optional Steam with multilib (`GAMING`, default yes in the shipped preset; package list `installer/gaming.txt`). Optional Grok Build CLI (`AI`, default yes; non-fatal download).
 
 Post-MVP optional (not part of Phase 1 desktop meta):
 - Windows VM via package `atelier-windows-vm` (Docker + dockur/windows + FreeRDP).

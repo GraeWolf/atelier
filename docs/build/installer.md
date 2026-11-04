@@ -5,7 +5,7 @@
 | Item | Value |
 |------|--------|
 | Source | `installer/atelier-install` |
-| XBPS package | `atelier-installer` **0.6.0** |
+| XBPS package | `atelier-installer` **0.6.1** |
 | Sync | `scripts/sync-atelier-installer-files.sh` |
 | Preset | `/etc/atelier/install.conf` |
 
@@ -26,13 +26,13 @@ Live images include `atelier-installer` via `iso/package-lists/live.txt`.
 | `atelier-install --preset FILE` | Load settings from FILE |
 | `atelier-install --dry-run` | Stop after the summary; do not partition |
 
-The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: `America/New_York`, `en_US.UTF-8`, keymap `us`, mirror `https://mirrors.summithq.com/voidlinux/current` (SummitHQ), NVIDIA `auto`, encryption off, swapfile off, GRUB on, Steam on (`GAMING=yes`), and extra package `dropbox`. `HOSTNAME` and `USERNAME` are empty in that file, so the wizard asks. A private `--preset` file may set them, and a value set there is not asked. `MIRROR=` in that file, or Edit → Mirror, selects another Void mirror. Built-in defaults match the shipped file when it is absent. Omitting `GAMING` keeps the built-in default, which is yes.
+The live ISO installs `/etc/atelier/install.conf` from this package (source: `installer/install.conf`). That file is the desktop preset: `America/New_York`, `en_US.UTF-8`, keymap `us`, mirror `https://mirrors.summithq.com/voidlinux/current` (SummitHQ), NVIDIA `auto`, encryption off, swapfile off, GRUB on, Steam on (`GAMING=yes`), Grok Build on (`AI=yes`), and extra package `dropbox`. `HOSTNAME` and `USERNAME` are empty in that file, so the wizard asks. A private `--preset` file may set them, and a value set there is not asked. `MIRROR=` in that file, or Edit → Mirror, selects another Void mirror. Built-in defaults match the shipped file when it is absent. Omitting `GAMING` or `AI` keeps the built-in default, which is yes.
 
 Flow (whole-disk only):
 
 welcome → disk (select + confirm) → hostname and username, unless the preset set them → user password → LUKS passphrase only if encryption is on → summary
 
-The summary is a card plus a gum menu: **Start installation / Edit a field / Quit**. On a 24-row console the card is the short form (every field, including Gaming) so Quit stays on screen. A terminal at least 42 rows tall shows the full summary instead. The cursor starts on **Edit a field**, so Enter does not start the install. Escape or Ctrl+C redisplays that menu. Neither one starts the install, and neither one opens an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
+The summary is a card plus a gum menu: **Start installation / Edit a field / Quit**. On a 24-row console the card is the short form (every field, including Gaming and AI) so Quit stays on screen. AI shares the Gaming line on that short card. A terminal at least 42 rows tall shows the full summary instead, with AI on its own line (`AI: yes (Grok Build)`). The cursor starts on **Edit a field**, so Enter does not start the install. Escape or Ctrl+C redisplays that menu. Neither one starts the install, and neither one opens an error box. Edit can change disk, hostname, username, password, timezone, locale, keymap, mirror, NVIDIA, Steam, AI, encryption, swapfile, GRUB, and the extra package list. Mirror and GRUB are preset-only; they are not their own wizard pages.
 
 The disk-erase question highlights **No**. Enter goes back. Choosing Yes is a separate step. Other Yes/No questions highlight Yes, matching the old dialog default. Escape on any Yes/No question is not an answer; the question is shown again.
 
@@ -57,6 +57,7 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 | `VOID_REPO` / `VOID_NONFREE_REPO` | xbps repos from the preset mirror. Default `https://mirrors.summithq.com/voidlinux/current`. Nonfree, multilib, and multilib/nonfree are that URL plus the suffix. `dropbox` is installed only when listed in preset `PACKAGES` |
 | `INSTALL_NVIDIA` | `NVIDIA=auto` (default) installs proprietary drivers only when a GPU is detected. `yes` / `no` force it. Separate transaction: linux-headers + nvidia + atelier-nvidia (failure is non-fatal, shown on the result screen; `xbps-reconfigure -a` failure is shown too) |
 | `INSTALL_GAMING` | `GAMING=yes` (shipped preset and built-in default) or `no`. Separate transactions: `void-repo-multilib` + `void-repo-multilib-nonfree`, then Steam and the 32-bit stack from `installer/gaming.txt`, then `nvidia-libs-32bit` only when NVIDIA packages are actually installed. Failure is non-fatal and is named on the result screen. Steam is not a dependency of `atelier-desktop` |
+| `INSTALL_AI` | `AI=yes` (shipped preset and built-in default) or `no`. After the user account exists, the live system downloads `https://x.ai/cli/install.sh` and runs it with `HOME` set to the new user's home on the target and `PATH` prefixed with that user's `~/.grok/bin` (so the script does not symlink the live `/usr/local/bin`). A 300s timeout. Files are `chown`ed with the target's passwd. Failure is non-fatal, is named on the result screen, and does not abort preflight. No API key is written |
 | `INSTALL_XLIBRE` | always `1`. `atelier-xlibre-repo` + `xlibre` + `xlibre-xserver`. No X.Org fallback. Missing repo, failed install, or no `/usr/bin/Xorg` aborts the install |
 | `PKG_EXTRA` | preset `PACKAGES` (the shipped file lists `dropbox`) |
 | `INSTALL_BOOTLOADER` | preset `GRUB` (default yes) |
@@ -64,7 +65,7 @@ Root is locked. The user is in the `wheel` group and `/etc/sudoers.d/wheel` gran
 | `CREATE_SWAP` | preset `SWAP` (default no). `/swapfile` (RAM rounded up) + `resume=` / `resume_offset` + dracut `resume` |
 | (always) | `xdg-user-dirs`, `xdg-user-dirs-gtk`, `void-repo-nonfree` |
 
-After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then `atelier-setup-keyring` so TTY login unlocks gnome-keyring.
+After `useradd`, runs `su - $USER -c xdg-user-dirs-update`, then the optional Grok Build install (`install_ai`), then `atelier-setup-keyring` so TTY login unlocks gnome-keyring.
 
 The live log `/tmp/atelier-install.log` is copied to the target as
 `/var/log/atelier-install.log` before unmount (including failed installs
@@ -162,10 +163,11 @@ gum (TUI; Void package `gum`), parted, e2fsprogs, dosfstools, util-linux, crypts
 - [ ] Mirror appears in target `00-repository-main.conf`
 - [ ] Bootloader skip leaves system without GRUB step
 - [ ] Preset `PACKAGES` are the only extra packages (`dropbox` when the shipped preset is used; clearing `PACKAGES` skips it)
-- [ ] Welcome screen says v0.6.0 and names the preset file
+- [ ] Welcome screen says v0.6.1 and names the preset file
 - [ ] Summary mirror is `https://mirrors.summithq.com/voidlinux/current` unless the preset changed it
 - [ ] Installed system `/etc/xbps.d/00-repository-main.conf`, `10-repository-nonfree.conf`, `10-repository-multilib.conf`, and `10-repository-multilib-nonfree.conf` use that mirror
 - [ ] Summary shows Gaming. Edit → Steam toggles it, and the summary line changes. On an 80x24 console the card and the menu still show Start installation, Edit a field, and Quit
+- [ ] Summary shows AI. The tall summary has its own `AI:` line. The 80x24 card puts AI on the Gaming line. Edit → AI toggles it. `AI=yes` with the network up installs `~/.grok/bin/grok` owned by the new user. A failed download is named on the result screen and the desktop install is still there. `AI=no` does not contact x.ai
 - [ ] `GAMING=yes` with the network up: preflight log shows multilib packages found via `xbps-query -M` before the disk is partitioned. `GAMING=no` does not query them
 - [ ] Installed system with gaming on has `steam`, `mesa-dri-32bit`, `vulkan-loader-32bit`, `libglvnd-32bit`, and (when NVIDIA installed) `nvidia-libs-32bit`. `xbps-query -l | grep 32bit` shows them
 - [ ] A Steam transaction failure is named on the result screen and the desktop install is still there

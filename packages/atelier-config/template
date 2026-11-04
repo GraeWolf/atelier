@@ -2,8 +2,8 @@
 # Ships themed bspwm desktop configs into /etc/skel and system paths.
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
-version=0.3.13
-revision=7
+version=0.3.14
+revision=1
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -75,6 +75,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-scratchpad" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-btop" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-menu" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-ask" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-webapp" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-pkg" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-theme" 755 usr/bin

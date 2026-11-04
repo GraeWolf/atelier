@@ -20,6 +20,10 @@
 # Void multilib and installs the 32-bit graphics stack. Edit can turn it
 # off. A Steam failure does not roll back the desktop. Preflight still
 # requires those packages to be reachable before the disk is wiped.
+# Optional Grok Build CLI (preset AI, default yes). The official installer
+# from https://x.ai/cli/install.sh runs on the live system with HOME set
+# to the new user's home. Edit can turn it off. A failed download does
+# not roll back the desktop and does not abort preflight.
 # XLibre is always installed. xinit does not pull in an X server, and
 # there is no X.Org fallback.
 #
@@ -28,7 +32,7 @@
 # error screen, no unmount, and no LUKS close.
 set -eEuo pipefail
 
-VERSION="0.6.0"
+VERSION="0.6.1"
 TITLE="Atelier Installer"
 TARGETDIR="${TARGETDIR:-/mnt/atelier-target}"
 LOG="${LOG:-/tmp/atelier-install.log}"
@@ -51,9 +55,12 @@ INSTALL_NVIDIA=0
 NVIDIA_MODE=auto
 # Shipped preset is GAMING=yes. Built-in default matches that file.
 INSTALL_GAMING=1
+# Shipped preset is AI=yes. Built-in default matches that file.
+INSTALL_AI=1
 INSTALL_XLIBRE=1
 NVIDIA_INSTALL_STATUS=skipped
 GAMING_INSTALL_STATUS=skipped
+AI_INSTALL_STATUS=skipped
 GAMING_LIST_FILE=""
 GAMING_REPO_PKGS=()
 GAMING_PKGS=()
@@ -1428,6 +1435,10 @@ load_preset() {
 			bool=$(parse_bool "$val") || die "Preset $file:$lineno: GAMING must be yes or no"
 			if [ "$bool" = yes ]; then INSTALL_GAMING=1; else INSTALL_GAMING=0; fi
 			;;
+		AI)
+			bool=$(parse_bool "$val") || die "Preset $file:$lineno: AI must be yes or no"
+			if [ "$bool" = yes ]; then INSTALL_AI=1; else INSTALL_AI=0; fi
+			;;
 		PACKAGES)
 			if ! assign_packages "$val"; then
 				die "Preset $file:$lineno: invalid package name '${ASSIGN_PACKAGES_ERR:-}'"
@@ -1441,7 +1452,7 @@ load_preset() {
 	PRESET_FILE=$file
 	apply_nvidia_policy || die "Invalid NVIDIA mode '$NVIDIA_MODE'"
 	log "preset HOSTNAME=$HOSTNAME USERNAME=$USERNAME TIMEZONE=$TIMEZONE LOCALE=$LOCALE KEYMAP=$KEYMAP"
-	log "preset NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_GAMING=$INSTALL_GAMING ENCRYPT_DISK=$ENCRYPT_DISK CREATE_SWAP=$CREATE_SWAP INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
+	log "preset NVIDIA_MODE=$NVIDIA_MODE INSTALL_NVIDIA=$INSTALL_NVIDIA INSTALL_GAMING=$INSTALL_GAMING INSTALL_AI=$INSTALL_AI ENCRYPT_DISK=$ENCRYPT_DISK CREATE_SWAP=$CREATE_SWAP INSTALL_BOOTLOADER=$INSTALL_BOOTLOADER"
 	log "preset MIRROR=$VOID_REPO PACKAGES=${PKG_EXTRA[*]:-(none)}"
 }
 
@@ -1729,13 +1740,34 @@ No  = do not install Steam" || crc=$?
 	log "INSTALL_GAMING=$INSTALL_GAMING"
 }
 
+edit_ai() {
+	local crc=0
+	ui_confirm "Install the Grok Build CLI?
+
+This downloads the official installer from
+https://x.ai/cli/install.sh and puts the
+grok command in the new user's home (~/.grok).
+It does not sign in. A failed download is
+reported and does not undo the install.
+
+Yes = install Grok Build
+No  = do not install Grok Build" || crc=$?
+	case $crc in
+	0) INSTALL_AI=1 ;;
+	1) INSTALL_AI=0 ;;
+	*) return 0 ;;
+	esac
+	log "INSTALL_AI=$INSTALL_AI"
+}
+
 edit_menu() {
-	local field pkgs enc sw grub gs
+	local field pkgs enc sw grub gs ai
 	if [ ${#PKG_EXTRA[@]} -eq 0 ]; then pkgs="(none)"; else pkgs="${PKG_EXTRA[*]}"; fi
 	if [ "$ENCRYPT_DISK" -eq 1 ]; then enc=yes; else enc=no; fi
 	if [ "$CREATE_SWAP" -eq 1 ]; then sw=yes; else sw=no; fi
 	if [ "$INSTALL_BOOTLOADER" -eq 1 ]; then grub=yes; else grub=no; fi
 	if [ "$INSTALL_GAMING" -eq 1 ]; then gs=yes; else gs=no; fi
+	if [ "$INSTALL_AI" -eq 1 ]; then ai=yes; else ai=no; fi
 	ui_mark "Edit"
 	ui_read field ui_list_pick "Edit a field. Cancel returns to the summary." \
 		disk "Disk (${DISK:-none})" \
@@ -1748,6 +1780,7 @@ edit_menu() {
 		mirror "Mirror" \
 		nvidia "NVIDIA ($NVIDIA_MODE)" \
 		gaming "Steam ($gs)" \
+		ai "AI ($ai)" \
 		encryption "Encryption ($enc)" \
 		swap "Swapfile ($sw)" \
 		grub "GRUB ($grub)" \
@@ -1764,6 +1797,7 @@ edit_menu() {
 	mirror) pick_mirror || true ;;
 	nvidia) edit_nvidia ;;
 	gaming) edit_gaming ;;
+	ai) edit_ai ;;
 	encryption) edit_encryption ;;
 	swap) edit_swap ;;
 	grub) edit_grub ;;
@@ -1786,10 +1820,20 @@ gaming_label() {
 	fi
 }
 
+# Short label for the summary card.
+ai_label() {
+	if [ "${INSTALL_AI:-0}" -eq 1 ]; then
+		printf 'yes (Grok Build)\n'
+	else
+		printf 'no\n'
+	fi
+}
+
 summary_text() {
-	local mode=BIOS ns enc sw bl pkgs pw preset gs
+	local mode=BIOS ns enc sw bl pkgs pw preset gs ai
 	is_efi && mode=UEFI
 	gs=$(gaming_label)
+	ai=$(ai_label)
 	case $NVIDIA_MODE in
 	auto)
 		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
@@ -1838,6 +1882,7 @@ Keymap:      $KEYMAP
 NVIDIA:      $ns
 Xlibre:      yes (required, no X.Org fallback)
 Gaming:      $gs
+AI:          $ai
 Packages:    $pkgs
 Mirror:      $VOID_REPO
 GRUB:        $bl
@@ -1848,11 +1893,13 @@ EOF
 
 # Nine lines. The full summary_text plus the choice list does not fit a
 # 24-row console. This card keeps every field, and Start / Edit / Quit
-# stay on screen under it. Gaming is its own line.
+# stay on screen under it. AI shares the Gaming line so the card stays
+# nine lines.
 summary_menu_prompt() {
-	local mode=BIOS ns enc sw bl pkgs pw gs
+	local mode=BIOS ns enc sw bl pkgs pw gs ai
 	is_efi && mode=UEFI
 	gs=$(gaming_label)
+	ai=$(ai_label)
 	case $NVIDIA_MODE in
 	auto)
 		if [ "$INSTALL_NVIDIA" -eq 1 ]; then
@@ -1900,7 +1947,7 @@ summary_menu_prompt() {
 		"Root: locked (sudo via wheel)" \
 		"TZ: $TIMEZONE  Locale: $LOCALE  Key: $KEYMAP" \
 		"NVIDIA: $ns  XLibre: required" \
-		"Gaming: $gs" \
+		"Gaming: $gs  AI: $ai" \
 		"Encrypt: $enc  Swap: $sw  Packages: $pkgs" \
 		"Mirror: $VOID_REPO" \
 		"Preset: ${PRESET_FILE:-built-in defaults}"
@@ -2581,6 +2628,9 @@ configure_system() {
 		log "WARN: xdg-user-dirs-update not found on target"
 	fi
 
+	# After the home directory exists. Non-fatal; see install_ai.
+	install_ai
+
 	setup_keyring
 
 	enable_sv NetworkManager
@@ -3196,6 +3246,88 @@ install_gaming() {
 	log "gaming packages installed, including ${GAMING_NVIDIA_PKGS[*]}"
 }
 
+# Official Grok Build installer, run on the live system so DNS works.
+# HOME points at the new user's home on the target. PATH contains that
+# user's ~/.grok/bin so the script does not symlink the live /usr/local/bin.
+# Files are created as root; chown uses the target's passwd. Failure is
+# recorded for the result screen and does not roll back the desktop.
+# Unlike Steam, a missing download does not stop preflight.
+install_ai_chown() {
+	local home="/home/$USERNAME"
+	[ -d "$TARGETDIR$home" ] || return 0
+	if [ -d "$TARGETDIR$home/.grok" ]; then
+		chroot "$TARGETDIR" chown -R "$USERNAME:$USERNAME" "$home/.grok" >>"$LOG" 2>&1 || \
+			log "WARN: could not chown $home/.grok to $USERNAME"
+	fi
+	if [ -e "$TARGETDIR$home/.bashrc" ]; then
+		chroot "$TARGETDIR" chown "$USERNAME:$USERNAME" "$home/.bashrc" >>"$LOG" 2>&1 || \
+			log "WARN: could not chown $home/.bashrc to $USERNAME"
+	fi
+	# The official installer may leave a timestamped backup beside bashrc.
+	chroot "$TARGETDIR" sh -c \
+		"chown '$USERNAME:$USERNAME' $home/.bashrc.bak.* 2>/dev/null || true" \
+		>>"$LOG" 2>&1 || true
+	if [ -d "$TARGETDIR$home/.config/fish" ]; then
+		chroot "$TARGETDIR" chown -R "$USERNAME:$USERNAME" "$home/.config/fish" >>"$LOG" 2>&1 || \
+			log "WARN: could not chown $home/.config/fish to $USERNAME"
+	fi
+}
+
+install_ai() {
+	local home bin fetch rc
+	AI_INSTALL_STATUS=skipped
+	[ "${INSTALL_AI:-0}" -eq 1 ] || return 0
+	AI_INSTALL_STATUS=failed
+	home="$TARGETDIR/home/$USERNAME"
+	if [ ! -d "$home" ]; then
+		log "ERROR: AI install: no home directory at $home"
+		return 0
+	fi
+	if have curl; then
+		fetch='curl -fsSL https://x.ai/cli/install.sh'
+	elif have wget; then
+		fetch='wget -qO- https://x.ai/cli/install.sh'
+	else
+		log "ERROR: AI install needs curl or wget on the live system"
+		return 0
+	fi
+	bin="$home/.grok/bin"
+	log "Installing Grok Build for $USERNAME (timeout 300s)"
+	rc=0
+	# pipefail so a failed download is not hidden by an empty bash.
+	if have timeout; then
+		timeout 300 env \
+			HOME="$home" \
+			GROK_BIN_DIR="$bin" \
+			SHELL=/bin/bash \
+			PATH="$bin:${PATH}" \
+			bash -c "set -o pipefail; $fetch | bash" >>"$LOG" 2>&1 || rc=$?
+	else
+		log "WARN: timeout(1) missing; Grok Build install is not time-limited"
+		env \
+			HOME="$home" \
+			GROK_BIN_DIR="$bin" \
+			SHELL=/bin/bash \
+			PATH="$bin:${PATH}" \
+			bash -c "set -o pipefail; $fetch | bash" >>"$LOG" 2>&1 || rc=$?
+	fi
+	install_ai_chown
+	if [ "$rc" -eq 124 ]; then
+		log "ERROR: Grok Build install timed out after 300s"
+		return 0
+	fi
+	if [ "$rc" -ne 0 ]; then
+		log "ERROR: Grok Build installer exited $rc"
+		return 0
+	fi
+	if [ ! -x "$bin/grok" ] && [ ! -L "$bin/grok" ]; then
+		log "ERROR: $bin/grok is missing after the installer"
+		return 0
+	fi
+	AI_INSTALL_STATUS=ok
+	log "Grok Build installed for $USERNAME"
+}
+
 # $@ is the xbps --repository arguments for Void, nonfree, and the personal repo.
 install_xlibre() {
 	if [ ! -f "$TARGETDIR/etc/xbps.d/99-repository-xlibre.conf" ]; then
@@ -3310,6 +3442,14 @@ After reboot: sudo xbps-install -S nvidia-libs-32bit
 See /var/log/atelier-install.log"
 		;;
 	esac
+	if [ "${AI_INSTALL_STATUS:-}" = failed ]; then
+		done_msg="$done_msg
+
+Grok Build was not installed. The rest of the install was kept.
+After reboot, with the network up:
+curl -fsSL https://x.ai/cli/install.sh | bash
+See /var/log/atelier-install.log"
+	fi
 	ui_result "$done_msg"
 	if ui_confirm "Reboot now?"; then
 		sync
@@ -3319,7 +3459,7 @@ See /var/log/atelier-install.log"
 
 usage() {
 	cat <<EOF
-Atelier installer v${VERSION} (whole-disk, optional LUKS2, swapfile, Steam)
+Atelier installer v${VERSION} (whole-disk, optional LUKS2, swapfile, Steam, Grok Build)
 
 Usage: atelier-install [options]
 
