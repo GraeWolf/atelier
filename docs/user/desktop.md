@@ -22,6 +22,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 | Install | XBPS Package / Remove / Update (`atelier-pkg`); Web App add/remove (`atelier-webapp`) |
 | Capture | Screenshot menu |
 | Activity | Floating btop |
+| Ask AI | Grok Build with the Atelier system context (`atelier-ask`) |
 | Scratchpad | Toggle scratchpad |
 | Keybinds | Cheat sheet |
 | Session | Reload sxhkd / restart bspwm |
@@ -39,7 +40,7 @@ Several chords are **Omarchy-inspired** (launcher on Super+Space, system menu on
 
 CLI: `atelier-pkg install`, `atelier-pkg remove`, `atelier-pkg update`. Web apps: `atelier-webapp install`, `atelier-webapp remove`, `atelier-menu webapp`.
 
-CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
+CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu ask`, `atelier-menu power`, etc. Esc on a submenu returns to the main list (unless you jumped in via CLI).
 
 ### Launch & apps
 
@@ -55,6 +56,7 @@ CLI jump: `atelier-menu capture`, `atelier-menu install`, `atelier-menu power`, 
 | Super+Shift+F | File manager (nemo; primary) |
 | Super+e | File manager (alias) |
 | Super+b | Browser (Brave if packaged; falls back to chromium/xdg-open) |
+| Super+Shift+A | Ask AI (Grok Build CLI, this system's context). See [ai.md](ai.md) |
 | Super+Shift+G | Grok web app (`https://grok.com`) |
 | Super+Shift+E | Proton Mail web app (`https://mail.proton.me`) |
 | Super+Shift+X | X web app (`https://x.com`) |

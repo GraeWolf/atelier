@@ -9,8 +9,9 @@ Guides for people **using** Atelier (live session or installed system).
 3. **[desktop.md](desktop.md)** — bspwm keybindings and apps  
 4. **[customization.md](customization.md)** — where configs live and safe edits  
 5. **[nvidia.md](nvidia.md)** — proprietary NVIDIA and Xlibre  
-6. **[windows-vm.md](windows-vm.md)** — optional Windows VM (Docker + FreeRDP; post-MVP)  
-7. **[asus.md](asus.md)** — optional ASUS ROG keyboard backlight restore  
+6. **[ai.md](ai.md)** — optional Grok Build CLI (Ask AI)  
+7. **[windows-vm.md](windows-vm.md)** — optional Windows VM (Docker + FreeRDP; post-MVP)  
+8. **[asus.md](asus.md)** — optional ASUS ROG keyboard backlight restore  
 
 ## Philosophy (short)
 

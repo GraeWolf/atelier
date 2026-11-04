@@ -178,6 +178,7 @@ Default theme: Tokyo Night
 System menu: Super+Alt+Space
 App launcher: Super+Space
 Keybinds: Super+k
+Ask AI: Super+Shift+A
 Power: Super+Ctrl+Escape
 
 Docs: ~/.config/atelier/ and docs/user/"
@@ -286,6 +287,7 @@ show_main() {
 			"Install" \
 			"Capture" \
 			"Activity" \
+			"Ask AI" \
 			"Scratchpad" \
 			"Keybinds" \
 			"Style" \
@@ -344,6 +346,13 @@ go_to_menu() {
 			exec atelier-btop
 		fi
 		exec btop
+		;;
+	ask | "ask ai")
+		if have atelier-ask; then
+			exec atelier-ask
+		fi
+		printf 'atelier-menu: atelier-ask not found\n' >&2
+		exit 1
 		;;
 	scratchpad | scratch | *scratch*)
 		if have atelier-scratchpad; then

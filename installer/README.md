@@ -18,6 +18,7 @@ Atelier whole-disk installer: **gum TUI** only.
 | Personal repo when present on live media | |
 | Optional proprietary NVIDIA; XLibre always (no X.Org fallback) | Shipping full nvidia.ko on default live ISO |
 | Optional Steam + 32-bit graphics (`GAMING`, default yes; `installer/gaming.txt`) | Steam on the live ISO |
+| Optional Grok Build CLI (`AI`, default yes; official install script into the new user's `~/.grok`) | Signing in, or storing an API key |
 
 ## Components
 

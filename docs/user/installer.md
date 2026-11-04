@@ -12,7 +12,7 @@
 
    This runs a **gum** TUI wizard. There is no graphical installer. On a raw console the borders are ASCII; in a terminal they are rounded and use Tokyo Night colors. The welcome screen shows the installer version.
 
-4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, the SummitHQ Void mirror (`https://mirrors.summithq.com/voidlinux/current`), NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, Steam, and the mirror (`MIRROR=` in the preset does the same).
+4. The desktop preset (`/etc/atelier/install.conf`) sets timezone (`America/New_York`), locale, keymap, the SummitHQ Void mirror (`https://mirrors.summithq.com/voidlinux/current`), NVIDIA (install when a GPU is present), encryption off, swapfile off, GRUB on, Steam on, Grok Build on, and `dropbox`. It does not set a hostname or username. You confirm the disk, enter those names, set one user password, and review a summary. A private preset file can fill in the names so they are not asked. Encryption asks for a LUKS passphrase only when it is turned on. Edit any field from the summary, including hostname, username, Steam, AI, and the mirror (`MIRROR=` in the preset does the same).
 5. Wait for packages (needs network). Log: `/tmp/atelier-install.log` (copied to `/var/log/atelier-install.log` on the new system)
 6. Reboot; remove the live medium. On the installed system, log in and run `startx` for the desktop.
 
@@ -34,7 +34,7 @@ startx    # themed bspwm desktop is still on the ISO if you want it
 | LUKS | Only when encryption is enabled |
 | Summary | **Start installation**, **Edit** a field, or **Quit**. The cursor starts on Edit. Escape or Ctrl+C returns to this menu and does not install |
 
-Timezone, locale, keymap, mirror, NVIDIA, Steam, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
+Timezone, locale, keymap, mirror, NVIDIA, Steam, AI, encryption, swapfile, GRUB, and extra packages come from the preset. Hostname and username are asked unless that preset sets them. Change any of them with **Edit** on the summary. Mirror and GRUB are not separate questions.
 
 Another preset file: `sudo atelier-install --preset /path/to/install.conf`
 
@@ -93,6 +93,12 @@ When it stays on, the new system gets:
 - `nvidia-libs-32bit` when the proprietary NVIDIA driver is installed (the desktop RTX 4060 Ti path)
 
 Steam is not required for the desktop. If that step fails, the result screen says so and the rest of the install is kept. After reboot, the screen's `xbps-install` command is the retry. To skip Steam on a VM, set it to No on the summary, or put `GAMING=no` in a preset file.
+
+## Grok Build (optional)
+
+The shipped preset sets `AI=yes`. The summary line says so. **Edit → AI** turns it off or on before anything is erased.
+
+When it stays on, the installer runs the official Grok Build install script and puts `grok` in the new user's `~/.grok`. It does not sign in. If that download fails, the result screen says so and the rest of the install is kept. The retry command is on that screen. See [ai.md](ai.md).
 
 ## Graphics
 

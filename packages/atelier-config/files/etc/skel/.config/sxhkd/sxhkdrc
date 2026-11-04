@@ -16,6 +16,11 @@ super + space
 super + alt + space
 	atelier-menu
 
+# Ask AI. Grok Build in the Atelier diagnostic context.
+# Super+Shift+G stays the Grok web app.
+super + shift + a
+	atelier-ask
+
 # Theme picker (Omarchy-like Super+Ctrl+Shift+Space)
 super + ctrl + shift + space
 	atelier-menu theme

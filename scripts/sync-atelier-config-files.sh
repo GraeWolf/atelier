@@ -66,6 +66,7 @@ install -m 755 "$src/session/atelier-power-menu" "$dst/usr/bin/atelier-power-men
 install -m 755 "$src/session/atelier-scratchpad" "$dst/usr/bin/atelier-scratchpad"
 install -m 755 "$src/session/atelier-btop"       "$dst/usr/bin/atelier-btop"
 install -m 755 "$src/session/atelier-menu"       "$dst/usr/bin/atelier-menu"
+install -m 755 "$src/session/atelier-ask"        "$dst/usr/bin/atelier-ask"
 install -m 755 "$src/session/atelier-webapp"     "$dst/usr/bin/atelier-webapp"
 install -m 755 "$src/session/atelier-pkg"        "$dst/usr/bin/atelier-pkg"
 install -m 755 "$src/session/atelier-theme"      "$dst/usr/bin/atelier-theme"
@@ -138,6 +139,7 @@ for _icon in "$src"/webapps/icons/*.png; do
 done
 unset _desk _icon
 install -m 644 "$src/shell/bashrc.d-atelier.sh"  "$dst/etc/bash/bashrc.d/atelier.sh"
+install -m 644 "$src/share/AGENTS.md"            "$dst/usr/share/atelier/AGENTS.md"
 install -m 644 "$src/themes/tokyo-night/colors.conf" \
 	"$dst/usr/share/doc/atelier/tokyo-night-palette.conf"
 # Stock wallpaper: keep the original bytes, name the installed file by MIME

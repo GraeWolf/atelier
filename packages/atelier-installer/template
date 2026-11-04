@@ -1,10 +1,10 @@
 # Template file for 'atelier-installer'
 # gum (TUI) whole-disk installer for Atelier live images.
 pkgname=atelier-installer
-version=0.6.0
+version=0.6.1
 revision=1
 create_wrksrc=yes
-short_desc="Atelier gum TUI installer (whole-disk, optional LUKS2, swapfile, Steam)"
+short_desc="Atelier gum TUI installer (whole-disk, optional LUKS2, swapfile, Steam, Grok Build)"
 maintainer="Atelier Linux <atelier@localhost>"
 license="MIT"
 homepage="https://github.com/GraeWolf/atelier"

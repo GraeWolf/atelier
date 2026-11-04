@@ -32,6 +32,7 @@ Details: [installer.md](installer.md).
 | Open terminal | **Super+Enter** (ghostty) |
 | App launcher | **Super+Space** (rofi; Super+d also works) |
 | System menu | **Super+Alt+Space** (power, style, displays, capture, …) |
+| Ask AI | **Super+Shift+A** (Grok Build; see [ai.md](ai.md)) |
 | Theme picker | **Super+Ctrl+Shift+Space** |
 | Run command | **Super+Shift+d** |
 | File manager | **Super+Shift+F** (nemo; Super+e also works) |

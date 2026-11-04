@@ -32,6 +32,8 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-scratchpad` | `/usr/bin/atelier-scratchpad` | Sticky hidden scratchpad |
 | `session/atelier-btop` | `/usr/bin/atelier-btop` | Floating btop launcher |
 | `session/atelier-menu` | `/usr/bin/atelier-menu` | Nested system menu (Super+Alt+Space) |
+| `session/atelier-ask` | `/usr/bin/atelier-ask` | Ask AI: terminal + Grok Build (Super+Shift+A) |
+| `share/AGENTS.md` | `/usr/share/atelier/AGENTS.md` | Installed-system context for Grok Build |
 | `session/atelier-webapp` | `/usr/bin/atelier-webapp` | Chromium `--app` web apps (launch / add / remove) |
 | `webapps/` | `/usr/share/applications/` + `/usr/share/atelier/webapps/icons/` | Default web apps (Grok, Proton Mail, X) |
 | `session/atelier-pkg` | `/usr/bin/atelier-pkg` | XBPS install/remove/update (fzf; from Install menu) |

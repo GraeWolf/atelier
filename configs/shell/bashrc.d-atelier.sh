@@ -1,6 +1,14 @@
 # Atelier — bash snippet (installed under /etc/bash/bashrc.d/ or sourced from skel)
 # Safe to source multiple times.
 
+# Grok Build, installed per user under ~/.grok when the installer AI preset is on.
+if [ -d "$HOME/.grok/bin" ]; then
+	case ":$PATH:" in
+	*":$HOME/.grok/bin:"*) ;;
+	*) export PATH="$HOME/.grok/bin:$PATH" ;;
+	esac
+fi
+
 # Reuse (or start) the session ssh-agent so git/ssh do not re-prompt
 if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/ssh/agent-env.sh" ]; then
 	# shellcheck source=/dev/null
