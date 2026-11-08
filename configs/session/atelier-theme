@@ -1,5 +1,5 @@
 #!/bin/sh
-# Atelier — theme engine (named palettes + wallpaper recolor)
+# Atelier — theme engine (named palettes, still backgrounds, live retint)
 # Usage: atelier-theme list|current|set <name>|from-wallpaper <img> [--name N] [--mode dark|light]
 #        atelier-theme save <name>|wallpaper <path>
 set -eu
@@ -7,14 +7,37 @@ set -eu
 SHARE="${ATELIER_SHARE:-/usr/share/atelier}"
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}/atelier"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/atelier"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/atelier"
 CURRENT="$CFG/current"
 NEXT="$CFG/current.next"
 THEMES_USER="$CFG/themes"
 THEMES_SYS="$SHARE/themes"
 TEMPLATES_USER="$CFG/templates"
 TEMPLATES_SYS="$SHARE/templates"
+BG_STATE="$STATE/theme-backgrounds"
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+warn_retint() {
+	printf 'atelier-theme: %s\n' "$*" >&2
+}
+
+# One switch at a time. The lock covers staging through the live retint.
+lock_theme_set() {
+	if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+		_lock="$XDG_RUNTIME_DIR/atelier-theme.lock"
+	else
+		_lock="/tmp/atelier-theme.lock.$(id -u)"
+	fi
+	exec 9>"$_lock"
+	unset _lock
+	if have flock; then
+		if ! flock -w 30 9; then
+			printf 'atelier-theme: another theme switch is still running\n' >&2
+			exit 1
+		fi
+	fi
+}
 
 usage() {
 	printf 'Usage: atelier-theme list|current|set <name>|save <name>|wallpaper <path>\n' >&2
@@ -315,10 +338,138 @@ apply_wallpaper() {
 	img=$1
 	bg=${2:-#1a1b26}
 	if [ -f "$img" ] && have feh; then
-		feh --no-fehbg --bg-fill "$img" || true
+		if ! feh --no-fehbg --bg-fill "$img" >/dev/null 2>&1; then
+			warn_retint "wallpaper failed"
+		fi
 	elif have xsetroot; then
-		xsetroot -solid "$bg" || true
+		if ! xsetroot -solid "$bg" >/dev/null 2>&1; then
+			warn_retint "root color failed"
+		fi
 	fi
+}
+
+remember_theme_background() {
+	name=$1
+	token=$2
+	[ -n "$name" ] && [ -n "$token" ] || return 0
+	mkdir -p "$BG_STATE"
+	printf '%s\n' "$token" >"$BG_STATE/$name"
+}
+
+# Still images only. Symlinks are skipped: a theme file must be a regular file.
+collect_backgrounds() {
+	slug=$1
+	dest=$2
+	{
+		for dir in "$NEXT/backgrounds" "$CFG/backgrounds/$slug"; do
+			[ -d "$dir" ] || continue
+			find "$dir" -maxdepth 1 -type f \
+				\( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o \
+				-iname '*.webp' \) -print
+		done
+	} | LC_ALL=C sort -u >"$dest"
+}
+
+background_token_for() {
+	path=$1
+	case $path in
+	"$NEXT/backgrounds/"*)
+		printf 'theme:%s\n' "$(basename "$path")"
+		;;
+	*)
+		printf 'user:%s\n' "$path"
+		;;
+	esac
+}
+
+path_for_token() {
+	token=$1
+	list=$2
+	case $token in
+	theme:*)
+		base=${token#theme:}
+		while IFS= read -r p || [ -n "${p:-}" ]; do
+			[ -n "${p:-}" ] || continue
+			case $p in
+			"$NEXT/backgrounds/$base")
+				printf '%s\n' "$p"
+				return 0
+				;;
+			esac
+		done <"$list"
+		;;
+	user:*)
+		p=${token#user:}
+		if [ -f "$p" ] && grep -Fxq "$p" "$list"; then
+			printf '%s\n' "$p"
+			return 0
+		fi
+		;;
+	esac
+	return 1
+}
+
+# Same theme again: next image. A different theme: the image remembered for
+# it, or the first file. Prints the chosen path.
+choose_background_path() {
+	prev=$1
+	list=$2
+	n=$(grep -c . "$list" || true)
+	[ "${n:-0}" -gt 0 ] || return 1
+	if [ "$prev" = "$slug" ] && [ -f "$CURRENT/background.token" ]; then
+		cur=$(sed -n '1p' "$CURRENT/background.token")
+		i=0
+		found=0
+		while IFS= read -r p || [ -n "${p:-}" ]; do
+			[ -n "${p:-}" ] || continue
+			i=$((i + 1))
+			t=$(background_token_for "$p")
+			if [ "$t" = "$cur" ]; then
+				found=$i
+				break
+			fi
+		done <"$list"
+		if [ "$found" -gt 0 ]; then
+			next=$((found % n + 1))
+			sed -n "${next}p" "$list"
+			return 0
+		fi
+	fi
+	if [ "$prev" != "$slug" ] && [ -f "$BG_STATE/$slug" ]; then
+		remembered=$(sed -n '1p' "$BG_STATE/$slug")
+		if path_for_token "$remembered" "$list"; then
+			return 0
+		fi
+	fi
+	sed -n '1p' "$list"
+}
+
+# Theme backgrounds win over the recolored stock image. Returns 0 when a
+# still was linked into the staged theme.
+stage_theme_background() {
+	slug=$1
+	prev=$2
+	list=$(mktemp)
+	collect_backgrounds "$slug" "$list"
+	if ! choose_background_path "$prev" "$list" >"${list}.choice"; then
+		rm -f "$list" "${list}.choice"
+		return 1
+	fi
+	path=$(sed -n '1p' "${list}.choice")
+	rm -f "$list" "${list}.choice"
+	[ -n "$path" ] && [ -f "$path" ] || return 1
+	token=$(background_token_for "$path")
+	case $token in
+	theme:*)
+		ln -sfn "backgrounds/$(basename "$path")" "$NEXT/wallpaper.png"
+		;;
+	*)
+		ln -sfn "$path" "$NEXT/wallpaper.png"
+		;;
+	esac
+	printf '%s\n' "$token" >"$NEXT/background.token"
+	remember_theme_background "$slug" "$token"
+	return 0
 }
 
 install_symlinks() {
@@ -337,6 +488,69 @@ install_symlinks() {
 		mkdir -p "$HOME/.config/btop/themes"
 		ln -sfn "$outdir/btop.theme" "$HOME/.config/btop/themes/atelier.theme"
 	fi
+	link_fastfetch "$outdir"
+	install_dunst "$outdir"
+	ensure_picom_include
+}
+
+# Replace the stock fastfetch config with the generated palette. A file the
+# user has edited is left alone.
+link_fastfetch() {
+	outdir=$1
+	gen="$outdir/fastfetch.jsonc"
+	[ -f "$gen" ] || return 0
+	mkdir -p "$HOME/.config/fastfetch"
+	dest="$HOME/.config/fastfetch/config.jsonc"
+	stock="$SHARE/fastfetch/config.jsonc"
+	if [ -L "$dest" ]; then
+		target=$(readlink "$dest" || true)
+		case $target in
+		*/atelier/current/fastfetch.jsonc|*/atelier/current.next/fastfetch.jsonc)
+			ln -sfn "$gen" "$dest"
+			;;
+		esac
+		return 0
+	fi
+	if [ ! -e "$dest" ]; then
+		ln -sfn "$gen" "$dest"
+		return 0
+	fi
+	if [ -f "$stock" ] && cmp -s "$dest" "$stock"; then
+		ln -sfn "$gen" "$dest"
+	fi
+}
+
+# Base geometry once, then a palette file dunst reads from dunstrc.d.
+install_dunst() {
+	outdir=$1
+	[ -f "$outdir/dunst.conf" ] || return 0
+	mkdir -p "$HOME/.config/dunst/dunstrc.d"
+	dest="$HOME/.config/dunst/dunstrc"
+	stock="$SHARE/dunst/dunstrc"
+	if [ ! -e "$dest" ] && [ -f "$stock" ]; then
+		cp -f "$stock" "$dest"
+	fi
+	ln -sfn "$outdir/dunst.conf" "$HOME/.config/dunst/dunstrc.d/atelier.conf"
+}
+
+# Picom 13 includes with @include, and an absolute path is accepted.
+# The marker is written with the directive so a comment cannot skip the insert.
+ensure_picom_include() {
+	conf="$HOME/.config/picom/picom.conf"
+	colors="$CURRENT/picom-colors.conf"
+	[ -f "$conf" ] && [ -f "$colors" ] || return 0
+	if grep -q 'atelier-theme-picom' "$conf"; then
+		return 0
+	fi
+	esc=$(printf '%s' "$colors" | sed 's/\\/\\\\/g; s/"/\\"/g')
+	if ! cat >>"$conf" <<EOF
+
+# atelier-theme-picom
+@include "$esc"
+EOF
+	then
+		warn_retint "could not update picom.conf"
+	fi
 }
 
 reload_session() {
@@ -349,46 +563,92 @@ reload_session() {
 	set +a
 
 	if have bspc; then
-		bspc config normal_border_color "${color8}" 2>/dev/null || true
-		bspc config active_border_color "${accent}" 2>/dev/null || true
-		bspc config focused_border_color "${accent}" 2>/dev/null || true
-		bspc config presel_feedback_color "${magenta}" 2>/dev/null || true
+		_bsp=0
+		bspc config normal_border_color "${color8}" 2>/dev/null || _bsp=1
+		bspc config active_border_color "${accent}" 2>/dev/null || _bsp=1
+		bspc config focused_border_color "${accent}" 2>/dev/null || _bsp=1
+		bspc config presel_feedback_color "${magenta}" 2>/dev/null || _bsp=1
+		[ "$_bsp" -eq 0 ] || warn_retint "bspwm border colors failed"
+		unset _bsp
 	fi
 
 	# Polybar needs bspwm; skip during ~/.xinitrc (bspwmrc launches bars).
 	if pgrep -u "$(id -u)" -x bspwm >/dev/null 2>&1 \
 		&& [ -x "$HOME/.config/polybar/launch.sh" ]; then
-		"$HOME/.config/polybar/launch.sh" >/dev/null 2>&1 || true
+		if ! "$HOME/.config/polybar/launch.sh" >/dev/null 2>&1; then
+			warn_retint "polybar reload failed"
+		fi
 	fi
 
 	if have xrdb && [ -f "$outdir/Xresources" ]; then
 		# Keep font/dpi from ~/.Xresources, overlay palette
+		_xr=0
 		if [ -f "$HOME/.Xresources" ]; then
-			xrdb -merge "$HOME/.Xresources" || true
+			xrdb -merge "$HOME/.Xresources" >/dev/null 2>&1 || _xr=1
 		fi
-		xrdb -merge "$outdir/Xresources" || true
+		xrdb -merge "$outdir/Xresources" >/dev/null 2>&1 || _xr=1
+		[ "$_xr" -eq 0 ] || warn_retint "X resources failed"
+		unset _xr
 	fi
 
 	gtk_theme=${gtk_theme:-Yaru-dark}
 	icon_theme=${icon_theme:-Papirus-Dark}
 	color_scheme=${color_scheme:-prefer-dark}
 	if have gsettings; then
-		gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme" 2>/dev/null || true
-		gsettings set org.gnome.desktop.interface icon-theme "$icon_theme" 2>/dev/null || true
-		gsettings set org.gnome.desktop.interface color-scheme "$color_scheme" 2>/dev/null || true
-		gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || true
+		_gtk=0
+		gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme" 2>/dev/null || _gtk=1
+		gsettings set org.gnome.desktop.interface icon-theme "$icon_theme" 2>/dev/null || _gtk=1
+		gsettings set org.gnome.desktop.interface color-scheme "$color_scheme" 2>/dev/null || _gtk=1
+		gsettings set org.gnome.desktop.interface cursor-theme 'Yaru' 2>/dev/null || _gtk=1
+		[ "$_gtk" -eq 0 ] || warn_retint "GTK settings failed"
+		unset _gtk
 	fi
 
 	apply_wallpaper "$outdir/wallpaper.png" "${background}"
+	reload_picom
+	reload_dunst
 
 	# ASUS ROG Aura: follow accent (or colors.conf keyboard= override).
 	# No-op when atelier-asus is not installed.
 	_kbd=${accent:-}
 	[ -n "${keyboard:-}" ] && _kbd=$keyboard
 	if [ -n "$_kbd" ] && have atelier-kbd; then
-		atelier-kbd color "$_kbd" >/dev/null 2>&1 || true
+		if ! atelier-kbd color "$_kbd" >/dev/null 2>&1; then
+			warn_retint "keyboard color failed"
+		fi
 	fi
 	unset _kbd
+}
+
+reload_picom() {
+	[ "${ATELIER_SKIP_PICOM:-}" = 1 ] && return 0
+	if ! pgrep -u "$(id -u)" -x bspwm >/dev/null 2>&1; then
+		return 0
+	fi
+	conf="$HOME/.config/picom/picom.conf"
+	[ -f "$conf" ] && have picom || return 0
+	pkill -x picom 2>/dev/null || true
+	sleep 0.1
+	if picom --config "$conf" -b >>/tmp/atelier-picom.log 2>&1; then
+		return 0
+	fi
+	if picom --backend xrender --vsync -b >>/tmp/atelier-picom.log 2>&1; then
+		return 0
+	fi
+	warn_retint "picom reload failed"
+}
+
+reload_dunst() {
+	if ! pgrep -u "$(id -u)" -x dunst >/dev/null 2>&1; then
+		return 0
+	fi
+	if ! have dunstctl; then
+		warn_retint "dunst is running but dunstctl is missing"
+		return 0
+	fi
+	if ! dunstctl reload >/dev/null 2>&1; then
+		warn_retint "dunst reload failed"
+	fi
 }
 
 cmd_set() {
@@ -402,6 +662,15 @@ cmd_set() {
 	if [ -z "$sys" ] && [ -z "$usr" ]; then
 		printf 'atelier-theme: unknown theme: %s\n' "$slug" >&2
 		exit 1
+	fi
+
+	lock_theme_set
+	prev_name=""
+	if [ -f "$CURRENT/theme.name" ]; then
+		prev_name=$(sed -n '1p' "$CURRENT/theme.name")
+	fi
+	if [ -f "$CURRENT/background.token" ]; then
+		remember_theme_background "$prev_name" "$(sed -n '1p' "$CURRENT/background.token")"
 	fi
 
 	rm -rf "$NEXT"
@@ -445,8 +714,13 @@ cmd_set() {
 	fi
 	gtk_theme=$(read_sidecar "$NEXT/gtk.theme" "$gtk_default")
 	icon_theme=$(read_sidecar "$NEXT/icons.theme" "$icons_default")
-	printf "gtk_theme='%s'\nicon_theme='%s'\ncolor_scheme='%s'\n" \
-		"$gtk_theme" "$icon_theme" "$scheme" >>"$NEXT/palette.env"
+	if [ "$mode" = light ]; then
+		window_theme=light
+	else
+		window_theme=dark
+	fi
+	printf "gtk_theme='%s'\nicon_theme='%s'\ncolor_scheme='%s'\nwindow_theme='%s'\n" \
+		"$gtk_theme" "$icon_theme" "$scheme" "$window_theme" >>"$NEXT/palette.env"
 
 	write_sed_script "$NEXT/palette.env" "$NEXT/sed.script"
 	render_templates "$NEXT/sed.script" "$NEXT"
@@ -455,17 +729,19 @@ cmd_set() {
 
 	printf '%s\n' "$slug" >"$NEXT/theme.name"
 
-	# Wallpaper: cache by theme + palette + source
-	src=$(source_wallpaper || true)
-	mkdir -p "$CACHE/wallpapers"
-	if [ -n "$src" ] && [ -f "$src" ]; then
-		ph=$(cksum "$NEXT/colors.conf" | awk '{print $1"-"$2}')
-		sh=$(cksum "$src" | awk '{print $1"-"$2}')
-		cached="$CACHE/wallpapers/${slug}-${ph}-${sh}.png"
-		if [ ! -s "$cached" ]; then
-			recolor_wallpaper "$src" "$cached" "$NEXT/gowall.json"
+	# A theme with stills uses those. Otherwise recolor the one stock source.
+	if ! stage_theme_background "$slug" "$prev_name"; then
+		src=$(source_wallpaper || true)
+		mkdir -p "$CACHE/wallpapers"
+		if [ -n "$src" ] && [ -f "$src" ]; then
+			ph=$(cksum "$NEXT/colors.conf" | awk '{print $1"-"$2}')
+			sh=$(cksum "$src" | awk '{print $1"-"$2}')
+			cached="$CACHE/wallpapers/${slug}-${ph}-${sh}.png"
+			if [ ! -s "$cached" ]; then
+				recolor_wallpaper "$src" "$cached" "$NEXT/gowall.json"
+			fi
+			cp -f "$cached" "$NEXT/wallpaper.png"
 		fi
-		cp -f "$cached" "$NEXT/wallpaper.png"
 	fi
 
 	# BAT theme sidecar → shell-colors
@@ -484,6 +760,12 @@ cmd_set() {
 
 	install_symlinks "$CURRENT"
 	reload_session "$CURRENT" "$CURRENT/palette.env"
+	hook="$CFG/hooks/theme-set"
+	if [ -x "$hook" ]; then
+		if ! "$hook" "$slug"; then
+			warn_retint "hook theme-set failed"
+		fi
+	fi
 	printf 'atelier-theme: applied %s\n' "$slug"
 }
 

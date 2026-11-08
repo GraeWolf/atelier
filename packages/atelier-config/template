@@ -3,7 +3,7 @@
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
 version=0.3.14
-revision=2
+revision=3
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -126,6 +126,8 @@ do_install() {
 		etc/skel/.config
 	vinstall "${FILESDIR}/etc/skel/.config/fastfetch/config.jsonc" 644 \
 		etc/skel/.config/fastfetch
+	vinstall "${FILESDIR}/etc/skel/.config/dunst/dunstrc" 644 \
+		etc/skel/.config/dunst
 	vinstall "${FILESDIR}/etc/skel/.config/btop/btop.conf" 644 \
 		etc/skel/.config/btop
 	vinstall "${FILESDIR}/etc/skel/.config/gtk-3.0/settings.ini" 644 \

@@ -113,8 +113,8 @@ Default web apps (Brave/Chromium `--app` windows, via `atelier-webapp`): Grok, P
 
 8. Aesthetics
 
-Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, terminals, TUIs, rofi, polybar, neovim, the lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed.
-Wallpaper: one stock image, **recolored** to the active palette (gowall).
+Color scheme: **Tokyo Night (dark)** is the default. A small theme engine (`atelier-theme` / Style menu) can switch palettes (Nord, Catppuccin Mocha, user-generated) across GTK, Qt, ghostty, fastfetch, btop, starship, rofi, polybar, picom shadows, dunst, neovim, the lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed.
+Wallpaper: a theme may ship several still images and cycle them when selected again. A theme with none uses one stock image, **recolored** to the active palette (gowall).
 Fonts: FiraCode, JetBrains Mono, Nerd Font Symbols
 
 
