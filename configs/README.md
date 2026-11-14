@@ -57,14 +57,14 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `nvidia/` | `atelier-nvidia` package | Proprietary NVIDIA modprobe/X11 glue |
 | `xlibre/` | `atelier-xlibre-repo` package | External repo conf + public key |
 | `void-repo/` | `atelier-void-repo` package | GraeWolf personal Void repo conf + public key |
-| `wallpapers/default.png` | `/usr/share/atelier/wallpaper.png` | Stock wallpaper (recolored per theme) |
+| `wallpapers/default.png` | `/usr/share/atelier/wallpaper.png` | Stock wallpaper, recolored when a theme has no stills |
 
 ## Theming
 
 - **Engine:** `atelier-theme` — templates + `~/.config/atelier/current/`
 - **Default palette:** Tokyo Night dark (`themes/tokyo-night/`)
 - **Also shipped:** Nord, Catppuccin Mocha
-- **Wallpaper:** one stock image, recolored with **gowall**
+- **Wallpaper:** stills in a theme `backgrounds/` directory cycle on reselect; otherwise one stock image, recolored with **gowall**
 - **From image:** `atelier-theme from-wallpaper` (matugen, gowall extract fallback)
 - **Icons:** Papirus-Dark (package depend)
 - **GTK base:** Yaru-dark (Void package `yaru`) + CSS overrides using generated color defines

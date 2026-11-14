@@ -7,7 +7,7 @@
 # Does not hard-depend on: font-jetbrains-mono, xlibre package (external setup helpers).
 pkgname=atelier-desktop
 version=0.3.0
-revision=3
+revision=4
 metapackage=yes
 short_desc="Atelier desktop meta-package (bspwm stack and apps)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -27,6 +27,7 @@ depends="
  bspwm>=0
  sxhkd>=0
  picom>=0
+ dunst>=0
  polybar>=0
  rofi>=0
  ghostty>=0

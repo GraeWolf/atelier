@@ -19,6 +19,7 @@ xrdb
 bspwm
 sxhkd
 picom
+dunst
 polybar
 rofi
 ghostty

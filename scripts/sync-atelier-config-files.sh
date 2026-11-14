@@ -31,6 +31,7 @@ mkdir -p \
 	"$dst/etc/skel/.config/ghostty" \
 	"$dst/etc/skel/.config/nvim/lua" \
 	"$dst/etc/skel/.config/fastfetch" \
+	"$dst/etc/skel/.config/dunst" \
 	"$dst/etc/skel/.config/btop" \
 	"$dst/etc/skel/.config/gtk-3.0" \
 	"$dst/etc/skel/.config/gtk-4.0" \
@@ -115,6 +116,10 @@ install -m 644 "$src/nvim/lua/treesitter.lua"    "$dst/etc/skel/.config/nvim/lua
 install -m 644 "$src/nvim/lua/lsp.lua"           "$dst/etc/skel/.config/nvim/lua/lsp.lua"
 install -m 644 "$src/starship/starship.toml"     "$dst/etc/skel/.config/starship.toml"
 install -m 644 "$src/fastfetch/config.jsonc"     "$dst/etc/skel/.config/fastfetch/config.jsonc"
+mkdir -p "$dst/usr/share/atelier/fastfetch" "$dst/usr/share/atelier/dunst"
+install -m 644 "$src/fastfetch/config.jsonc"     "$dst/usr/share/atelier/fastfetch/config.jsonc"
+install -m 644 "$src/dunst/dunstrc"              "$dst/usr/share/atelier/dunst/dunstrc"
+install -m 644 "$src/dunst/dunstrc"              "$dst/etc/skel/.config/dunst/dunstrc"
 install -m 644 "$src/btop/btop.conf"             "$dst/etc/skel/.config/btop/btop.conf"
 install -m 644 "$src/gtk/gtk-3.0/settings.ini"   "$dst/etc/skel/.config/gtk-3.0/settings.ini"
 install -m 644 "$src/gtk/gtk-3.0/gtk.css"        "$dst/etc/skel/.config/gtk-3.0/gtk.css"

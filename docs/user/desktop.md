@@ -179,6 +179,7 @@ Picom starts with the session (`bspwmrc`).
 | Goal | How |
 |------|-----|
 | Less tearing / smoother video | `backend = glx`, `vsync = true`, fullscreen unredirect |
+| Shadow color | Follows the palette (`atelier-theme` appends an `@include`) |
 | Transparent terminals | Ghostty `background-opacity` + picom `opacity-rule` for ghostty/xterm |
 | Opaque browsers | picom forces opacity 100% for Firefox/Brave/Chromium/Chrome |
 
@@ -196,7 +197,8 @@ Log: `/tmp/atelier-picom.log` if picom fails to start.
 | audacity | Audio edit |
 | xfburn | CD/DVD burn |
 | ristretto | Images |
-| btop / fastfetch | System monitor / info |
+| btop / fastfetch | System monitor / info (fastfetch colors follow the palette when the config is still the stock file) |
+| dunst | Notifications (`notify-send`, screenshots, menu messages) |
 | eza, bat, tldr, yt-dlp, gcc | CLI tools |
 
 Browser: install **brave-origin** from the GraeWolf repo (`sudo xbps-install -S brave-origin`). Super+b falls back until it is installed.
@@ -395,4 +397,4 @@ Log: `~/.cache/atelier/monitors.log`
 
 - Focus follows the mouse pointer (`focus_follows_pointer` in bspwm).
 - Keep configs simple — Atelier prefers clarity over heavy automation.
-- Theme: `atelier-theme` (default Tokyo Night; see customization guide). ASUS ROG keyboard RGB follows `accent` when `atelier-asus` is installed.
+- Theme: `atelier-theme` (default Tokyo Night; see customization guide). ASUS ROG keyboard RGB follows `accent` when `atelier-asus` is installed. A theme with several still images cycles them when you select it again.

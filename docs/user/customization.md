@@ -56,7 +56,7 @@ Existing accounts pick this up after updating `atelier-config` and opening a new
 
 ## Themes
 
-Switch the whole desktop palette (terminals, GTK, Qt, polybar, rofi, neovim, btop, starship, lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed) and recolor the stock wallpaper:
+Switch the whole desktop palette (ghostty, GTK, Qt, polybar, rofi, the picom shadow, dunst, fastfetch when its config is still the stock file, neovim, btop, starship, the lock screen, and ASUS ROG keyboard RGB when `atelier-asus` is installed):
 
 ```bash
 atelier-theme list
@@ -66,6 +66,10 @@ atelier-theme set catppuccin-mocha
 ```
 
 Or **Super+Alt+Space → Style → Theme** (direct: **Super+Ctrl+Shift+Space**).
+
+Selecting the theme that is already active advances to the next still image in that theme. A later switch back to it restores the image you left on. A failing retint is printed and the palette stays applied.
+
+`~/.config/atelier/hooks/theme-set` runs after the switch when that file is executable. It is called with the theme name. Use it for an app Atelier does not theme itself. A failing hook is reported and does not undo the palette.
 
 `bat` has no built-in theme named `tokyonight`. Atelier ships Folke's Tokyo Night `.tmTheme` and the shell copies it into `~/.config/bat/themes/` on the next interactive bash (then `bat cache --build`). Open a new terminal after updating `atelier-config`; `cat` should stop warning about an unknown theme.
 
@@ -81,7 +85,7 @@ Use a different photo as the recolor source:
 atelier-theme wallpaper ~/Pictures/bar.png
 ```
 
-Hand-made themes: copy a directory from `/usr/share/atelier/themes/` to `~/.config/atelier/themes/<name>/` and edit `colors.conf`. Template overrides: `~/.config/atelier/templates/*.tpl`.
+Hand-made themes: copy a directory from `/usr/share/atelier/themes/` to `~/.config/atelier/themes/<name>/` and edit `colors.conf`. Put still images (png, jpg, jpeg, webp) in `backgrounds/` inside that directory, or in `~/.config/atelier/backgrounds/<name>/`. Template overrides: `~/.config/atelier/templates/*.tpl`.
 
 ASUS ROG keyboard colour (opt-in package `atelier-asus`) follows `accent`. Override with `keyboard=#rrggbb` in `colors.conf`. See [asus.md](asus.md).
 
@@ -174,16 +178,21 @@ Live file: `/usr/share/atelier/themes/tokyo-night/colors.conf`. Also copied to `
 
 ## Wallpaper
 
-One stock image (`/usr/share/atelier/wallpaper.png`) is **recolored** to the active palette (`gowall`) into `~/.config/atelier/current/wallpaper.png`.
+A theme with a `backgrounds/` directory of still images uses those files. `atelier-theme set` on the theme that is already current moves to the next image and remembers it. The same directories under `~/.config/atelier/backgrounds/<name>/` are included. Regular files only; a symlink is skipped.
+
+A theme with no stills keeps one stock image (`/usr/share/atelier/wallpaper.png`), **recolored** to the active palette (`gowall`) into `~/.config/atelier/current/wallpaper.png`.
 
 ```bash
 # change which photo is recolored (keeps the current colorscheme)
+# Ignored while the current theme has its own stills.
 atelier-theme wallpaper ~/Pictures/my.png
 
 # override source without the helper (then re-apply the theme)
 cp ~/Pictures/my.png ~/.config/atelier/wallpaper.png
 atelier-theme set "$(atelier-theme current)"
 ```
+
+After an update, run `atelier-theme set "$(atelier-theme current)"` once. That writes the fastfetch, picom, and dunst palette files. fastfetch is pointed at the generated config only when `~/.config/fastfetch/config.jsonc` is missing, is already that link, or still matches the stock file. A hand-edited fastfetch config is left in place. Picom gains one `@include` line. The dunst base config is copied only when `~/.config/dunst/dunstrc` is missing. Ghostty `window-theme` has to stay above the palette `config-file` line; recopy `~/.config/ghostty/config` from `/etc/skel` if you have not edited it.
 
 ## Safe first edits
 
