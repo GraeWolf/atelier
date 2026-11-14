@@ -121,7 +121,7 @@ Multi-machine: Git is the source of truth; re-read `PLAN.md` / `docs/build/phase
 |-----|--------|
 | ~~brave-origin~~ | Available from GraeWolf void-repo (`sudo xbps-install -S brave-origin`) |
 | ~~Public package hosting~~ | GraeWolf/void-repo (binaries on GitHub Releases tag `x86_64`) |
-| JetBrains Mono font package | Referenced in PLAN; not yet packaged (UI uses Fira Code today) |
+| ~~JetBrains Mono font package~~ | `font-jetbrains-mono` 2.304 in the personal repo; UI face is JetBrains Mono |
 | Full-disk encryption | Optional LUKS2 at install (`atelier-install` 0.4.0); `/boot` stays unencrypted |
 | Hardware CI | Manual test on desktop machine |
 

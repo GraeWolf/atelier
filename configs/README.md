@@ -69,7 +69,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 - **Icons:** Papirus-Dark (package depend)
 - **GTK base:** Yaru-dark (Void package `yaru`) + CSS overrides using generated color defines
 - **Qt:** Fusion + generated qt5ct/qt6ct color scheme
-- **Fonts:** Fira Code + Nerd Symbols (JetBrains Mono planned; not required yet)
+- **Fonts:** JetBrains Mono (UI) + Nerd Symbols. Fira Code stays installed and is unused by these configs.
 
 ## Editing workflow
 

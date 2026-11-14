@@ -54,7 +54,7 @@ User guides + end-to-end build docs; README status updated.
 
 **Resolved:** public package hosting and brave-origin via [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) (`atelier-void-repo` on live/ISO).
 
-Remaining gaps (JetBrains font package, extra hardware polish) are documented in [end-to-end.md](end-to-end.md) and [package-sources.md](package-sources.md).
+The JetBrains Mono font gap is closed (`font-jetbrains-mono`). Extra hardware polish stays later-phase work. See [end-to-end.md](end-to-end.md) and [package-sources.md](package-sources.md).
 
 ## Out of scope for Phase 1
 

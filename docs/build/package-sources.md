@@ -98,7 +98,7 @@ GTK / icon theming glue (not named in PLAN §7, required for consistent dark app
 | PLAN | XBPS name | Source | Notes |
 |------|-----------|--------|-------|
 | FiraCode | `font-firacode` | void | |
-| JetBrains Mono | *(none)* | **gap → personal** | Not in official Void under this name. Add personal `font-jetbrains-mono` (or similar) later. |
+| JetBrains Mono | `font-jetbrains-mono` | **personal** | Static TTFs from upstream v2.304 (OFL-1.1). UI face. Fira Code stays installed. |
 | Nerd Font Symbols | `nerd-fonts-symbols-ttf` | void | Symbols-only; prefer over full `nerd-fonts` for size |
 
 ## XDG user directories
@@ -169,8 +169,7 @@ Restores `/sys/class/leds/asus::kbd_backlight` after `hid-asus` initializes it t
 
 ## Explicit gaps (still open)
 
-1. **JetBrains Mono** — personal font package if PLAN fonts are required as-named (UI currently uses Fira Code)  
-2. ~~Full-disk encryption~~ — optional LUKS2 root in `atelier-install` 0.4.0 (`cryptsetup`; unencrypted `/boot`)  
+None. ~~**JetBrains Mono**~~ is `font-jetbrains-mono` in this repo (UI face). ~~Full-disk encryption~~ is optional LUKS2 root in `atelier-install` 0.4.0.
 
 ### GraeWolf personal Void repository (public)
 

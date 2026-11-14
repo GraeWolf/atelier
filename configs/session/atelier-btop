@@ -21,7 +21,7 @@ fi
 
 if have xterm; then
 	exec xterm -name atelier-btop -T "btop" -geometry 120x40 \
-		-fa "Fira Code" -fs 11 \
+		-fa "JetBrains Mono" -fs 11 \
 		-bg "#1a1b26" -fg "#c0caf5" \
 		-e btop
 fi

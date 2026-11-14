@@ -1,7 +1,7 @@
 # Atelier — environment for xsecurelock / xss-lock
 # Sourced from ~/.xinitrc and atelier-lock (not executed alone).
 
-export XSECURELOCK_FONT="Fira Code:style=Regular:size=14"
+export XSECURELOCK_FONT="JetBrains Mono:style=Regular:size=14"
 
 # Password feedback: do NOT use time_hex (shows changing 0x… hex on each key).
 # cursor = jumping cursor (no length leak, no hex). Alternatives: asterisks, hidden.

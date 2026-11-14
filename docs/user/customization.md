@@ -203,12 +203,12 @@ After an update, run `atelier-theme set "$(atelier-theme current)"` once. That w
 
 ## Fonts
 
-Configs use **Fira Code** (package `font-firacode`) and **Symbols Nerd Font** (`nerd-fonts-symbols-ttf`), both pulled by `atelier-base`.
+The UI face is **JetBrains Mono** (`font-jetbrains-mono`, pulled in by `atelier-base`). **Symbols Nerd Font** (`nerd-fonts-symbols-ttf`) supplies icons. **Fira Code** (`font-firacode`) stays installed and is not the face used in the shipped configs.
 
-JetBrains Mono is still a planned personal package and is **not** required for a working desktop.
+An existing home directory keeps its old font lines until those files are recopied from `/etc/skel` or edited. Then start a new session.
 
 ```bash
-sudo xbps-install -S font-firacode nerd-fonts-symbols-ttf
+fc-match "JetBrains Mono"
 ```
 
 ## Rofi will not open a second time
@@ -226,7 +226,7 @@ Current Atelier configs use `~/.config/rofi/atelier-rofi.sh` to clear stale PIDs
 
 Live ISOs are often tested in QEMU/VirtualBox. If the terminal or rofi looks empty:
 
-1. Rebuild/update with current Atelier configs (picom uses `xrender`; fonts are Fira Code).
+1. Rebuild/update with current Atelier configs (picom uses `xrender`; the UI face is JetBrains Mono).
 2. Log out and `startx` again so `~/.xinitrc` can enable software OpenGL in VMs.
 3. Emergency terminal: if `xterm` is installed, Super+Enter falls back to it when ghostty fails.
 4. On bare-metal NVIDIA, prefer real drivers (`atelier-setup-nvidia`) and do **not** set `LIBGL_ALWAYS_SOFTWARE=1` (export `ATELIER_FORCE_HW_GL=1` before `startx` if auto-detect misfires).

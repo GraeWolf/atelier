@@ -1,0 +1,12 @@
+# Template file for 'font-jetbrains-mono'
+# Static TTFs from JetBrains Mono v2.304.
+# Source zip: https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
+# fonts/ttf/JetBrainsMono-*.ttf only. No variable font, no NL cut, no Nerd Font.
+pkgname=font-jetbrains-mono
+version=2.304
+revision=1
+short_desc="JetBrains Mono monospaced typeface"
+maintainer="Atelier Linux <atelier@localhost>"
+license="OFL-1.1"
+homepage="https://github.com/JetBrains/JetBrainsMono"
+depends="fontconfig>=0"

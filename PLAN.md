@@ -154,7 +154,7 @@ User documentation: docs/user/
 
 Public package hosting: GraeWolf/void-repo (https://github.com/GraeWolf/void-repo) provides packages such as brave-origin; enabled via atelier-void-repo on live and installed systems.
 
-Later phases: Extra hardware support, further polish, remaining package gaps (e.g. JetBrains Mono), etc.
+Later phases: Extra hardware support, further polish, etc.
 
 Post-MVP installer: optional LUKS2 on the root filesystem (`atelier-install`). Dedicated unencrypted `/boot`; no LVM, no GRUB cryptodisk. Default remains unencrypted. Optional `/swapfile` for hibernation (default off; no swap partition). Optional Steam with multilib (`GAMING`, default yes in the shipped preset; package list `installer/gaming.txt`). Optional Grok Build CLI (`AI`, default yes; non-fatal download).
 

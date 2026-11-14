@@ -1,0 +1,11 @@
+#!/bin/sh
+# xbps install/remove script for font-jetbrains-mono.
+# post runs after the TTFs are unpacked, and after they are removed.
+case "${ACTION:-}" in
+post)
+	if command -v fc-cache >/dev/null 2>&1; then
+		fc-cache -fs >/dev/null 2>&1 || true
+	fi
+	;;
+esac
+exit 0

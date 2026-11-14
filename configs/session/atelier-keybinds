@@ -57,7 +57,7 @@ if command -v xterm >/dev/null 2>&1; then
 			rectangle=900x620+0+0
 	fi
 	exec xterm -name atelier-keys -T "Atelier keybinds" -geometry 100x38 \
-		-fa "Fira Code" -fs 11 \
+		-fa "JetBrains Mono" -fs 11 \
 		-bg "#1a1b26" -fg "#c0caf5" \
 		-e less -R --tilde -P "Atelier keys  q=quit" "$SHEET"
 fi
