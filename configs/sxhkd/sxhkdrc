@@ -96,7 +96,9 @@ super + equal
 	bspc node @/ -B
 
 # --- Reload configs ----------------------------------------------------------
-super + Escape
+# {Escape,grave}: QMK Grave Escape (common on 65/68% boards) sends grave
+# for the Esc key while Super is held.
+super + {Escape,grave}
 	pkill -USR1 -x sxhkd
 
 super + shift + r
@@ -114,8 +116,9 @@ super + ctrl + l
 super + shift + q
 	bspc quit
 
-# Power menu (do not steal Super+Escape — that reloads sxhkd)
-super + ctrl + Escape
+# Power menu. Super+Escape reloads sxhkd, so this chord keeps Ctrl.
+# grave is the same physical Esc key while Super is held (QMK Grave Escape).
+super + ctrl + {Escape,grave}
 	atelier-power-menu
 
 # Multi-monitor layout wizard (writes ~/.config/atelier/monitors.conf)
