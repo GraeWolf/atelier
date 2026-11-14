@@ -3,8 +3,8 @@ configuration {
 	modi: "drun,run,window";
 	show-icons: true;
 	icon-theme: "Papirus-Dark";
-	/* Fira Code is installed via atelier-base; JetBrains Mono is not yet packaged */
-	font: "Fira Code 11";
+	/* JetBrains Mono via atelier-base (font-jetbrains-mono) */
+	font: "JetBrains Mono 11";
 	drun-display-format: "{name}";
 	disable-history: false;
 	sidebar-mode: false;

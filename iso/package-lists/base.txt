@@ -4,8 +4,9 @@
 #
 # Source: official Void unless noted. See docs/build/package-sources.md
 
-# Fonts (PLAN §8 — available in Void today)
+# Fonts (PLAN §8). JetBrains Mono is the personal package; the other two are Void.
 font-firacode
+font-jetbrains-mono
 nerd-fonts-symbols-ttf
 
 # Minimal X session helpers (not listed in PLAN; required glue)

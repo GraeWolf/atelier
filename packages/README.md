@@ -33,7 +33,8 @@ Build with `./scripts/build-repo.sh` (Step 3 tooling).
 
 | Package | Type | Role |
 |---------|------|------|
-| `atelier-base` | metapackage | Fonts (FiraCode, Nerd Symbols) + xinit/xsetroot/xrdb |
+| `font-jetbrains-mono` | files | JetBrains Mono 2.304 static TTFs (OFL-1.1) |
+| `atelier-base` | metapackage | Fonts (JetBrains Mono, Fira Code, Nerd Symbols) + xinit/xsetroot/xrdb |
 | `atelier-config` | files | Themed session configs + `atelier-theme` + `atelier-webapp` + `atelier-ask` + `atelier-setup-nvidia` + `atelier-setup-swap` + `atelier-setup-keyring` |
 | `atelier-desktop` | metapackage | Full PLAN desktop stack + apps + PipeWire audio + `atelier-config` |
 | `atelier-installer` | files | `atelier-install` gum TUI + desktop preset `/etc/atelier/install.conf` (optional LUKS2, swapfile, Steam, Grok Build) + `gaming.txt` |
@@ -71,7 +72,3 @@ Flat lists for ISO tooling: [iso/package-lists/](../iso/package-lists/).
 |--------|------|
 | [GraeWolf/void-repo](https://github.com/GraeWolf/void-repo) | Public signed packages (`brave-origin`, …); enabled by `atelier-void-repo` (**resolved**) |
 | Xlibre (xlibre-void) | Display server; enabled by `atelier-xlibre-repo` |
-
-## Still open (optional)
-
-- `font-jetbrains-mono` — PLAN font name; UI currently uses Fira Code
