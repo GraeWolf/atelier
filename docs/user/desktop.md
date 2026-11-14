@@ -119,6 +119,8 @@ Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; need
 | Super+Shift+v | Volume mixer (pavucontrol) |
 | Super+Escape | Reload sxhkd |
 | Super+Shift+r | Restart bspwm |
+
+On many 65% and 68% keyboards, holding Super makes the Esc key send grave. The power menu and the sxhkd reload are bound to that grave chord as well, so Super+Ctrl+Esc and Super+Escape still work.
 | Media volume keys | Raise / lower / mute (±5%; Alt+ for ±1%) |
 | Brightness keys | Raise / lower the **panel** via `brightnessctl` when present |
 | Keyboard light keys | Raise / lower / toggle **keyboard** backlight (`atelier-kbd` on ASUS ROG, else `brightnessctl`) |
