@@ -1,0 +1,159 @@
+#!/bin/sh
+# Atelier — keep the session awake (polybar coffee cup, Super+Ctrl+i).
+#
+# A flag file turns the X screensaver off, so xss-lock does not lock on idle
+# and atelier-lock does not suspend after that lock. The flag survives logout.
+# Manual lock still uses "xset s activate". Lid close and the power menu
+# still suspend.
+#
+# State: ${XDG_STATE_HOME:-$HOME/.local/state}/atelier/keep-awake
+# Commands: status | toggle | apply
+set -eu
+
+# Idle seconds live in the session env or in xsecurelock/env.sh.
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/xsecurelock/env.sh" ]; then
+	# shellcheck source=/dev/null
+	. "${XDG_CONFIG_HOME:-$HOME/.config}/xsecurelock/env.sh"
+fi
+
+# Nerd Font Symbols (polybar font-1 via %{T2}…%{T-})
+ICON_ON='󰅶'  # nf-md-coffee          — keep awake
+ICON_OFF='󰛊' # nf-md-coffee_outline  — idle lock armed
+
+state_file() {
+	printf '%s\n' "${XDG_STATE_HOME:-$HOME/.local/state}/atelier/keep-awake"
+}
+
+is_on() {
+	[ -f "$(state_file)" ]
+}
+
+# Bar palette (yellow / disabled). Tokyo Night until a theme file exists.
+load_colors() {
+	COLOR_ON='#e0af68'
+	COLOR_OFF='#565f89'
+	_pc="${XDG_CONFIG_HOME:-$HOME/.config}/atelier/current/polybar-colors.ini"
+	[ -r "$_pc" ] || return 0
+	_on=$(awk '
+		$0 ~ /^[ \t]*yellow[ \t]*=/ {
+			sub(/^[^=]*=[ \t]*/, "")
+			gsub(/[ \t\r]+$/, "")
+			print
+			exit
+		}
+	' "$_pc" 2>/dev/null || true)
+	_off=$(awk '
+		$0 ~ /^[ \t]*disabled[ \t]*=/ {
+			sub(/^[^=]*=[ \t]*/, "")
+			gsub(/[ \t\r]+$/, "")
+			print
+			exit
+		}
+	' "$_pc" 2>/dev/null || true)
+	[ -n "${_on:-}" ] && COLOR_ON=$_on
+	[ -n "${_off:-}" ] && COLOR_OFF=$_off
+	unset _pc _on _off
+}
+
+_xset() {
+	command -v xset >/dev/null 2>&1 || return 0
+	[ -n "${DISPLAY:-}" ] || return 0
+	xset "$@" || true
+}
+
+_digits() {
+	case ${1:-} in
+	'' | *[!0-9]*) return 1 ;;
+	*) return 0 ;;
+	esac
+}
+
+apply_on() {
+	# timeout 0 and "off" both stop the MIT-SCREEN-SAVER idle path.
+	_xset s off
+	_xset s noblank
+	_xset s 0 0
+	_xset s reset
+	_xset -dpms
+}
+
+apply_off() {
+	# ATELIER_SKIP_IDLE_LOCK means the session never armed the timer.
+	if [ -n "${ATELIER_SKIP_IDLE_LOCK:-}" ]; then
+		return 0
+	fi
+	_idle=${ATELIER_LOCK_IDLE_SEC:-300}
+	_cycle=${ATELIER_LOCK_CYCLE_SEC:-30}
+	_digits "$_idle" || _idle=300
+	_digits "$_cycle" || _cycle=30
+	_xset s on
+	_xset s "$_idle" "$_cycle"
+	_xset s blank
+	_xset s reset
+	_xset -dpms
+	unset _idle _cycle
+}
+
+apply() {
+	if is_on; then
+		apply_on
+	else
+		apply_off
+	fi
+}
+
+set_on() {
+	_dir=$(dirname "$(state_file)")
+	mkdir -p "$_dir"
+	: >"$(state_file)"
+	unset _dir
+	apply_on
+}
+
+set_off() {
+	rm -f "$(state_file)"
+	apply_off
+}
+
+refresh_bar() {
+	command -v polybar-msg >/dev/null 2>&1 || return 0
+	polybar-msg action "#awake.hook.0" >/dev/null 2>&1 || true
+}
+
+notify() {
+	command -v notify-send >/dev/null 2>&1 || return 0
+	if is_on; then
+		notify-send -u low "Keep awake" "Idle lock is off" || true
+	else
+		notify-send -u low "Keep awake" "Idle lock is on" || true
+	fi
+}
+
+status() {
+	load_colors
+	if is_on; then
+		printf '%%{F%s}%%{T2}%s%%{T-}%%{F-}\n' "$COLOR_ON" "$ICON_ON"
+	else
+		printf '%%{F%s}%%{T2}%s%%{T-}%%{F-}\n' "$COLOR_OFF" "$ICON_OFF"
+	fi
+}
+
+usage() {
+	printf 'usage: atelier-awake status|toggle|apply\n' >&2
+	exit 2
+}
+
+case ${1:-status} in
+status) status ;;
+toggle)
+	if is_on; then
+		set_off
+	else
+		set_on
+	fi
+	notify
+	refresh_bar
+	;;
+apply) apply ;;
+*) usage ;;
+esac

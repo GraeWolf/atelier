@@ -113,6 +113,7 @@ Files are also saved under `~/Pictures/Screenshots/` (`atelier-screenshot`; need
 |------|--------|
 | Super+Shift+l | Lock screen (`atelier-lock` / xsecurelock) |
 | Super+Ctrl+l | Lock screen (alias) |
+| Super+Ctrl+i | Keep awake (`atelier-awake`). Same as the coffee cup left of the clock. |
 | Super+Ctrl+Escape | Power menu (lock / logout / suspend / hibernate / reboot / shutdown) |
 | Super+Shift+q | Quit bspwm (end session) |
 | Super+Shift+m | Multi-monitor layout wizard |
@@ -213,6 +214,7 @@ Mail clients that use **libsecret** (for example Melia from the GraeWolf repo) s
 |------|---------|
 | Manual lock | **Super+Shift+l** → `atelier-lock` |
 | Idle lock | After **5 minutes** idle (`xset s`; via xss-lock) |
+| Keep awake | Coffee cup left of the clock, or **Super+Ctrl+i** (`atelier-awake`). Idle lock stays off until toggled again, including the next login. State file: `~/.local/state/atelier/keep-awake`. Manual lock, the power menu, and closing the lid sleep the machine on their own. |
 | Suspend | **2 minutes after a manual or idle lock** while still locked. `loginctl suspend` itself does not wait those 2 minutes: xss-lock locks first and releases elogind's delay inhibitor once xsecurelock is up (backstop `InhibitDelayMaxSec=10`). With a swapfile, sleep is `suspend-then-hibernate` (hibernate after **30 minutes** asleep). |
 | Hibernate | Power menu (**Super+Ctrl+Escape**); needs a swapfile (`sudo atelier-setup-swap`). Immediate, not the 30-minute delay. |
 | Password feedback | Jumping **cursor** (not hex digits) |

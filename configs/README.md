@@ -19,6 +19,7 @@ These files are the **source of truth**. The `atelier-config` XBPS package insta
 | `session/atelier-keybinds` | `/usr/bin/atelier-keybinds` | Floating keybind TUI launcher |
 | `session/atelier-screenshot` | `/usr/bin/atelier-screenshot` | Region/window/full capture (clipboard) |
 | `session/atelier-power-menu` | `/usr/bin/atelier-power-menu` | Rofi lock/logout/suspend/hibernate/reboot/off |
+| `session/atelier-awake` | `/usr/bin/atelier-awake` | Polybar coffee cup: keep the session awake (no idle lock) |
 | `session/atelier-setup-swap` | `/usr/bin/atelier-setup-swap` | Swapfile + hibernation resume (ext4 root) |
 | `elogind/system-sleep/atelier-pm-log` | `/etc/elogind/system-sleep/atelier-pm-log` | Sleep/hibernate pre/post snapshot (`/var/log/atelier-pm.log`) |
 | `elogind/system-sleep/atelier-wifi` | `/etc/elogind/system-sleep/atelier-wifi` | Unload MediaTek mt7921e around sleep (PCI restore -110) |

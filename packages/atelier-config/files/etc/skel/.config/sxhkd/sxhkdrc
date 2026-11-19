@@ -113,6 +113,10 @@ super + shift + l
 super + ctrl + l
 	sh -c 'command -v atelier-lock >/dev/null 2>&1 && exec atelier-lock; exec "$HOME/bin/atelier-lock"'
 
+# Keep awake: idle lock off until toggled again (polybar coffee cup)
+super + ctrl + i
+	atelier-awake toggle
+
 super + shift + q
 	bspc quit
 
