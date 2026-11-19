@@ -53,6 +53,7 @@
  ── Session / system ──────────────────────────────────────────────────────
   Super+Shift+l        Lock screen (atelier-lock)
   Super+Ctrl+l         Lock screen (alias)
+  Super+Ctrl+i         Keep awake (coffee cup on the bar; idle lock off)
   Super+Ctrl+Escape    Power menu (lock / logout / suspend / hibernate / reboot / off)
   Super+Shift+q        Quit bspwm
   Super+Escape         Reload sxhkd

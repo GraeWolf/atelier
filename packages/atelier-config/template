@@ -3,7 +3,7 @@
 # Canonical sources: configs/  |  refresh FILESDIR: scripts/sync-atelier-config-files.sh
 pkgname=atelier-config
 version=0.3.14
-revision=5
+revision=6
 create_wrksrc=yes
 short_desc="Atelier desktop configuration (themed bspwm session)"
 maintainer="Atelier Linux <atelier@localhost>"
@@ -69,6 +69,7 @@ do_install() {
 	vinstall "${FILESDIR}/usr/bin/atelier-monitors" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-keybinds" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-lock" 755 usr/bin
+	vinstall "${FILESDIR}/usr/bin/atelier-awake" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-pm-watch" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-screenshot" 755 usr/bin
 	vinstall "${FILESDIR}/usr/bin/atelier-power-menu" 755 usr/bin

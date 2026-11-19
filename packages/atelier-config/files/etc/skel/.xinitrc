@@ -76,6 +76,12 @@ if command -v xset >/dev/null 2>&1 && [ -z "${ATELIER_SKIP_IDLE_LOCK:-}" ]; then
 	unset _idle _cycle
 fi
 
+# Keep-awake (polybar coffee cup) survives logout. Apply after the default
+# timeout so a saved "on" wins. No-op when the flag file is absent.
+if command -v atelier-awake >/dev/null 2>&1; then
+	atelier-awake apply || true
+fi
+
 # dbus session (runit / elogind systems usually already have this)
 if command -v dbus-launch >/dev/null 2>&1 && [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
 	eval "$(dbus-launch --sh-syntax --exit-with-session)"
